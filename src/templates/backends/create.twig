@@ -1,0 +1,31 @@
+{% extends "_layouts/cp.twig" %}
+{% import '_includes/forms.twig' as forms %}
+
+{% set title = "Create Backend"|t('ai') %}
+{% set fullPageForm = true %}
+
+{% block content %}
+    {{ actionInput('ai/backends/store') }}
+    {{ redirectInput('settings/plugins/ai') }}
+
+    {{ forms.hidden({
+        name: 'id',
+        value: backend.id|default()
+    }) }}
+
+    {{ forms.textField({
+        first: true,
+        label: 'Name',
+        name: 'name',
+        value: old('name', backend.name|default('')),
+        errors: [craft.app.session.getFlash('error.name')]|filter,
+    }) }}
+
+    {% include backend.settingsView %}
+{% endblock %}
+
+{#
+{% js %}
+    {% if not backend.id|default(false) %}new Craft.HandleGenerator('#name', '#handle');{% endif %}
+{% endjs %}
+#}

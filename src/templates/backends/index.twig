@@ -1,0 +1,22 @@
+{% extends "_layouts/cp.twig" %}
+{% import '_includes/forms.twig' as forms %}
+
+{% set title = "Backends"|t('ai') %}
+
+{% block content %}
+    {% if backends|length %}
+        <h2>Backends</h2>
+        {% for backend in backends %}
+            <p><a href="{{ cpUrl('ai/backend/' ~ backend.id) }}">{{ backend.name }}</a></p>
+        {% endfor %}
+
+        <hr>
+    {% endif %}
+
+    <h2>Add a new backend</h2>
+    <ul>
+        <li><a href="{{ cpUrl('ai/backend/create/openai') }}">OpenAI</a></li>
+        <li><a href="{{ cpUrl('ai/backend/create/stable-diffusion') }}">Stable Diffusion</a></li>
+        <li><a href="{{ cpUrl('ai/backend/create/google') }}">Google</a></li>
+    </ul>
+{% endblock %}

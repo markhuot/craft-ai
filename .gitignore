@@ -1,0 +1,11 @@
+/vendor
+/composer.lock
+/composer-local.lock
+/storage
+/web
+/bootstrap.php
+/craft
+/.env
+/config
+.DS_Store
+.idea

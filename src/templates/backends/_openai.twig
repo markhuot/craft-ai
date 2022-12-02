@@ -1,0 +1,24 @@
+{% import '_includes/forms.twig' as forms %}
+
+{{ forms.hidden({
+    name: 'type',
+    value: 'markhuot\\craftai\\backends\\OpenAi'
+}) }}
+
+{{ forms.autosuggestField({
+    first: true,
+    label: 'Base URL',
+    name: 'settings[baseUrl]',
+    value: old('settings.baseUrl', backend.settings.baseUrl|default('')),
+    errors: [craft.app.session.getFlash('error.settings.baseUrl')]|filter,
+    suggestEnvVars: true,
+}) }}
+
+{{ forms.autosuggestField({
+    first: true,
+    label: 'API Key',
+    name: 'settings[apiKey]',
+    value: old('settings.apiKey', backend.settings.apiKey|default('')),
+    errors: [craft.app.session.getFlash('error.settings.apiKey')]|filter,
+    suggestEnvVars: true,
+}) }}

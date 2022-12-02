@@ -1,0 +1,13 @@
+@keyframes craftai-loader {
+    from {
+        opacity: 20%;
+    }
+    to {
+        opacity: 100;
+    }
+}
+
+.craftai-loader {
+    transform-origin: 55% 45%;
+    animation: 3s infinite ease-in-out alternate craftai-loader;
+}

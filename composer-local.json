@@ -1,0 +1,32 @@
+{
+  "name": "markhuot/craft-ai",
+  "type": "craft-plugin",
+  "minimum-stability": "dev",
+  "authors": [
+    {
+      "name": "Mark Huot",
+      "email": "mark@markhuot.com"
+    }
+  ],
+  "require": {
+    "craftcms/cms": "^4.3",
+    "craftcms/redactor": "^3.0",
+    "craftcms/craft": "dev-main",
+    "guzzlehttp/guzzle": "7.5.x-dev"
+  },
+  "scripts": {
+    "post-install-cmd": [
+      "./bin/post-install.sh"
+    ]
+  },
+  "autoload": {
+    "psr-4": {
+      "markhuot\\craftai\\": "./src"
+    }
+  },
+  "extra": {
+    "name": "AI",
+    "handle": "ai",
+    "class": "markhuot\\craftai\\Ai"
+  }
+}

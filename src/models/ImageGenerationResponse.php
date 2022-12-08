@@ -6,12 +6,13 @@ use craft\base\Model;
 
 class ImageGenerationResponse extends Model
 {
-    public ?string $text = '';
+    /** @var string[] */
+    public array $paths = [];
 
     public function rules(): array
     {
         return [
-            ['text', 'required'],
+            ['paths', 'required'],
         ];
     }
 }

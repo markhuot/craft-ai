@@ -22,7 +22,10 @@
   "autoload": {
     "psr-4": {
       "markhuot\\craftai\\": "./src"
-    }
+    },
+    "files": [
+      "./src/helpers/event.php"
+    ]
   },
   "extra": {
     "name": "AI",

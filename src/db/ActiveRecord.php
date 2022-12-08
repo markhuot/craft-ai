@@ -4,8 +4,9 @@ namespace markhuot\craftai\db;
 
 class ActiveRecord extends \craft\db\ActiveRecord
 {
+    use CastsAttributes;
+
     protected array $defaultValues = [];
-    protected array $casts = [];
     public static $keyField = 'id';
     public static $polymorphicKeyField = false;
 
@@ -42,14 +43,5 @@ class ActiveRecord extends \craft\db\ActiveRecord
         $type = static::$polymorphicKeyField ? ($record[static::$polymorphicKeyField] ?? static::class) : static::class;
 
         return new $type;
-    }
-
-    function __get($key)
-    {
-        if ($caster = ($this->casts[$key] ?? false)) {
-            return (new $caster)->get($this, $key, $this->getAttribute($key));
-        }
-
-        return parent::__get($key);
     }
 }

@@ -79,7 +79,7 @@ class Backend extends ActiveRecord
         ]);
     }
 
-    function post($uri, array $body=[])
+    function post($uri, array $body=[], array $headers=[])
     {
         // $handler = new CurlHandler;
         // $tap = Middleware::tap(function (RequestInterface $request, $options) use ($handler) {
@@ -91,6 +91,7 @@ class Backend extends ActiveRecord
         try {
             $response = $this->getClient()->request('POST', $uri, [
                 // 'handler' => $tap($handler),
+                'headers' => $headers,
                 'json' => $body,
             ]);
 
@@ -98,8 +99,12 @@ class Backend extends ActiveRecord
         }
 
         catch (ClientException $e) {
-            $response = json_decode($e->getResponse()->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
-            throw new RuntimeException($response['error']['message'] ?? 'Unknown API error');
+            $this->handleErrorResponse($e);
         }
+    }
+
+    function handleErrorResponse(ClientException $e)
+    {
+        throw $e;
     }
 }

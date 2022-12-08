@@ -11,7 +11,7 @@ use markhuot\craftai\stubs\Request;
 /**
  * @property Request $request
  */
-class BackendsController extends Controller
+class BackendController extends Controller
 {
     function actionIndex()
     {

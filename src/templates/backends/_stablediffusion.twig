@@ -17,8 +17,8 @@
 {{ forms.autosuggestField({
     first: true,
     label: 'API Token',
-    name: 'settings[apiToken]',
-    value: old('settings.apiToken', backend.settings.apiToken|default('')),
-    errors: [craft.app.session.getFlash('error.settings.apiToken')]|filter,
+    name: 'settings[apiKey]',
+    value: old('settings.apiKey', backend.settings.apiKey|default('')),
+    errors: [craft.app.session.getFlash('error.settings.apiKey')]|filter,
     suggestEnvVars: true,
 }) }}

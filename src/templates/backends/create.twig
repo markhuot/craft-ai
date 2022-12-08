@@ -2,10 +2,11 @@
 {% import '_includes/forms.twig' as forms %}
 
 {% set title = "Create Backend"|t('ai') %}
+{% set selectedSubnavItem = 'backends' %}
 {% set fullPageForm = true %}
 
 {% block content %}
-    {{ actionInput('ai/backends/store') }}
+    {{ actionInput('ai/backend/store') }}
     {{ redirectInput('settings/plugins/ai') }}
 
     {{ forms.hidden({

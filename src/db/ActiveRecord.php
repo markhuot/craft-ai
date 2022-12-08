@@ -29,6 +29,20 @@ class ActiveRecord extends \craft\db\ActiveRecord
         return $model;
     }
 
+    public static function firstOrFail($condition)
+    {
+        $record = static::find()->where($condition)->asArray()->one();
+
+        if (empty($record)) {
+            throw new \RuntimeException('Record not found');
+        }
+
+        $model = static::make($record);
+        $model->setIsNewRecord(false);
+
+        return $model;
+    }
+
     static function make(?array $record=[])
     {
         $type = static::$polymorphicKeyField ? ($record[static::$polymorphicKeyField] ?? static::class) : static::class;

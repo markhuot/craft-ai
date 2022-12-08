@@ -41,7 +41,7 @@ class Backend extends ActiveRecord
      *
      * @return T
      */
-    static function for(string $interface)
+    static function for(string $interface, $silence=false)
     {
         $possibilities = Backend::find()->all();
 
@@ -52,7 +52,9 @@ class Backend extends ActiveRecord
             }
         }
 
-        throw new RuntimeException('No backend found supporting [' . $interface . ']');
+        if ($silence === false) {
+            throw new RuntimeException('No backend found supporting [' . $interface . ']');
+        }
     }
 
     public function rules()
@@ -61,6 +63,11 @@ class Backend extends ActiveRecord
             ['name', 'required'],
             ['type', 'required'],
         ];
+    }
+
+    function getTypeHandle()
+    {
+        return strtolower((new ReflectionClass($this))->getShortName());
     }
 
     public function getSettingsView()

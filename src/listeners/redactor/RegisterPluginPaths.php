@@ -10,8 +10,5 @@ class RegisterPluginPaths
     function handle(RegisterPluginPathsEvent $event)
     {
         $event->paths[] = __DIR__ . '/../../redactor/';
-
-        Field::registerRedactorPlugin('craftai-complete');
-        Field::registerRedactorPlugin('craftai-edit');
     }
 }

@@ -1,29 +1,19 @@
-{% extends "_layouts/cp.twig" %}
 {% import '_includes/forms.twig' as forms %}
 
-{% set title = "Create Backend"|t('ai') %}
-{% set selectedSubnavItem = 'backends' %}
-{% set fullPageForm = true %}
+{{ forms.hidden({
+    name: 'id',
+    value: backend.id|default()
+}) }}
 
-{% block content %}
-    {{ actionInput('ai/backend/store') }}
-    {{ redirectInput('settings/plugins/ai') }}
+{{ forms.textField({
+    first: true,
+    label: 'Name',
+    name: 'name',
+    value: old('name', backend.name|default('')),
+    errors: [craft.app.session.getFlash('error.name')]|filter,
+}) }}
 
-    {{ forms.hidden({
-        name: 'id',
-        value: backend.id|default()
-    }) }}
-
-    {{ forms.textField({
-        first: true,
-        label: 'Name',
-        name: 'name',
-        value: old('name', backend.name|default('')),
-        errors: [craft.app.session.getFlash('error.name')]|filter,
-    }) }}
-
-    {% include backend.settingsView %}
-{% endblock %}
+{% include backend.settingsView %}
 
 {#
 {% js %}

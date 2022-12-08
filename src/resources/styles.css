@@ -1,0 +1,18 @@
+.mt-l {
+    margin-top: 1rem;
+}
+
+.ai-block { display: block; }
+.ai-shadow { box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+.ai-rounded { border-radius: 1rem; }
+.ai-hidden { overflow: hidden; }
+.ai-center { text-align: center; }
+.ai-p-l { padding: 1rem; }
+.ai-p-2xl { padding: 3rem; }
+.ai-bg-gray { background-color: rgba(96,125,159,.25); }
+.ai-py-sm { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.hover\:ai-shadow-lg:hover { box-shadow: 0 6px 8px rgba(0,0,0,0.1); }
+.ai-transition { transition: all 0.2s ease-in-out; }
+.ai-filter-gray { filter: grayscale(100%); }
+.group:hover .group-hover\:filter-none { filter: none; }
+.group:hover .group-hover\:scale-1\.1 { transform: scale(1.1); }

@@ -1,6 +1,7 @@
 {% extends "_layouts/cp.twig" %}
 {% import '_includes/forms.twig' as forms %}
 
+{% do view.registerAssetBundle("markhuot\\craftai\\assetbundles\\CraftAi") %}
 {% set title = "Generate Images"|t('ai') %}
 {% set selectedSubnavItem = 'images' %}
 
@@ -16,10 +17,22 @@
                     first: true,
                     label: 'Prompt',
                     name: 'prompt',
+                    placeholder: 'two sea otters holding hands while swimming on their back',
                     value: old('prompt'),
                     errors: [craft.app.session.getFlash('error.prompt')]|filter,
                 }) }}
             </div>
+            {{ forms.selectField({
+                label: 'Count',
+                name: 'count',
+                value: old('count', 2),
+                options: [
+                    {label: '4', value: 4},
+                    {label: '2', value: 2},
+                    {label: '1', value: 1},
+                ],
+                errors: [craft.app.session.getFlash('error.count')]|filter,
+            }) }}
             {{ forms.selectField({
                 label: 'Volume',
                 name: 'volume',
@@ -29,11 +42,33 @@
             }) }}
         </div>
 
-        <p>
-            {{ forms.submitButton({
-                label: 'Generate',
-            }) }}
-        </p>
+        <div class="mt-l">
+            <div class="btngroup">
+                {{ forms.submitButton({
+                    label: 'Generate',
+                    class: 'btn submit',
+                }) }}
+                {{ forms.button({
+                    label: '',
+                    class: 'btn submit menubtn',
+                }) }}
+                <div class="menu">
+                    <ul>
+                        {% for backend in backends %}
+                        <li>
+                            {{ tag('a', {
+                                text: 'Submit with ' ~ backend.name,
+                                class: 'formsubmit',
+                                data: {
+                                    params: {'backend': backend.id}
+                                }
+                            }) }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
     </form>
 
     <hr>

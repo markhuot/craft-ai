@@ -1,15 +1,22 @@
 {% extends "_layouts/cp.twig" %}
 {% import '_includes/forms.twig' as forms %}
+{% do view.registerAssetBundle("markhuot\\craftai\\assetbundles\\CraftAi") %}
 
 {% set title = "Backends"|t('ai') %}
 {% set selectedSubnavItem = 'backends' %}
 
 {% block content %}
     {% if backends|length %}
-        <h2>Backends</h2>
-        {% for backend in backends %}
-            <p><a href="{{ cpUrl('ai/backend/' ~ backend.id) }}">{{ backend.name }}</a></p>
-        {% endfor %}
+        <ul class="flex gap-l">
+            {% for backend in backends %}
+                <li>
+                    <a href="{{ cpUrl('ai/backend/' ~ backend.id) }}" class="ai-block ai-shadow ai-rounded ai-hidden ai-center ai-transition group hover:ai-shadow-lg">
+                        <div class="ai-p-2xl"><img width="75" class="ai-block ai-transition ai-filter-gray group-hover:filter-none group-hover:scale-1.1" src="{{ craft.app.assetManager.getPublishedUrl('@ai/resources/images/', true, backend.typeHandle ~ '.png') }}"></div>
+                        <div class="ai-bg-gray ai-py-sm">{{ backend.name }}</div>
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
 
         <hr>
     {% endif %}
@@ -18,6 +25,7 @@
     <ul>
         <li><a href="{{ cpUrl('ai/backend/create/openai') }}">OpenAI</a></li>
         <li><a href="{{ cpUrl('ai/backend/create/stable-diffusion') }}">Stable Diffusion</a></li>
-        <li><a href="{{ cpUrl('ai/backend/create/google') }}">Google</a></li>
+        {# <li><a href="{{ cpUrl('ai/backend/create/aws') }}">Amazon AWS</a></li> #}
+        {# <li><a href="{{ cpUrl('ai/backend/create/google') }}">Google</a></li> #}
     </ul>
 {% endblock %}

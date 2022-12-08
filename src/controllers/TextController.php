@@ -15,6 +15,11 @@ use markhuot\craftai\models\TextCompletionPostRequest;
  */
 class TextController extends Controller
 {
+    function actionIndex()
+    {
+        return $this->renderTemplate('ai/text/index');
+    }
+
     function actionComplete()
     {
         $this->requirePostRequest();
@@ -22,9 +27,17 @@ class TextController extends Controller
 
         $response = Backend::for(Completion::class)->completeText($data->content);
 
-        return $this->asJson([
-            'text' => $response->text,
-        ]);
+        if ($this->request->getAcceptsJson()) {
+            return $this->asJson([
+                'text' => $response->text,
+            ]);
+        }
+
+        $this->setSuccessFlash('AI completion succeeded');
+        return $this->redirect('ai/text?' . http_build_query([
+            'content' => $data->content,
+            'completion' => $response->text,
+        ]));
     }
 
     function actionEdit()

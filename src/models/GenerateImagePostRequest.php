@@ -8,12 +8,19 @@ use craft\models\Volume;
 
 class GenerateImagePostRequest extends Model
 {
+    public ?Backend $backend = null;
     public ?string $prompt = null;
     public ?Volume $volume = null;
 
     protected array $casts = [
+        'backend' => ModelCast::class,
         'volume' => ModelCast::class,
     ];
+
+    public function safeAttributes()
+    {
+        return array_merge(parent::safeAttributes(), ['backend']);
+    }
 
     public function rules(): array
     {

@@ -21,6 +21,7 @@ class ImageController extends Controller
         $assets = !empty($assetIds) ? Asset::find()->id($assetIds)->all() : [];
 
         return $this->renderTemplate('ai/images/index', [
+            'backends' => Backend::find()->all(),
             'assets' => $assets,
         ]);
     }
@@ -30,7 +31,7 @@ class ImageController extends Controller
         $this->requirePostRequest();
         $data = $this->request->getBodyParamObject(GenerateImagePostRequest::class);
 
-        $response = Backend::for(GenerateImage::class)->generateImage($data->prompt);
+        $response = ($data->backend ?? Backend::for(GenerateImage::class))->generateImage($data->prompt);
         $assets = \Craft::$container->get(CreateAssetsForImages::class)->handle($data->volume, $response->paths);
 
         $this->setSuccessFlash('Generated ' . count($assets) . ' assets');

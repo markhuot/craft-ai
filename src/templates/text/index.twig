@@ -6,7 +6,7 @@
 {% set selectedSubnavItem = 'text' %}
 
 {% block content %}
-    <form action="" method="post">
+    <form action="" method="post" id="main-form">
         {{ csrfInput() }}
         {{ actionInput('ai/text/complete') }}
         {{ redirectInput('ai/text') }}

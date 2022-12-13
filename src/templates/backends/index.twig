@@ -10,7 +10,7 @@
         <ul class="flex gap-l">
             {% for backend in backends %}
                 <li>
-                    <a href="{{ cpUrl('ai/backend/' ~ backend.id) }}" class="ai-block ai-shadow ai-rounded ai-hidden ai-center ai-transition group hover:ai-shadow-lg">
+                    <a href="{{ cpUrl('ai/backend/' ~ backend.id) }}" class="ai-block ai-shadow ai-rounded ai-hidden ai-center ai-transition group hover:ai-shadow-lg" pest="edit[{{ backend.name }}]">
                         <div class="ai-p-2xl"><img width="75" class="ai-block ai-transition ai-filter-gray group-hover:filter-none group-hover:scale-1.1" src="{{ craft.app.assetManager.getPublishedUrl('@ai/resources/images/', true, backend.typeHandle ~ '.png') }}"></div>
                         <div class="ai-bg-gray ai-py-sm">{{ backend.name }}</div>
                     </a>
@@ -23,8 +23,8 @@
 
     <h2>Add a new backend</h2>
     <ul>
-        <li><a href="{{ cpUrl('ai/backend/create/openai') }}">OpenAI</a></li>
-        <li><a href="{{ cpUrl('ai/backend/create/stable-diffusion') }}">Stable Diffusion</a></li>
+        <li><a href="{{ cpUrl('ai/backend/create/openai') }}" pest="add.openai">OpenAI</a></li>
+        <li><a href="{{ cpUrl('ai/backend/create/stable-diffusion') }}" pest="add.stablediffusion">Stable Diffusion</a></li>
         {# <li><a href="{{ cpUrl('ai/backend/create/aws') }}">Amazon AWS</a></li> #}
         {# <li><a href="{{ cpUrl('ai/backend/create/google') }}">Google</a></li> #}
     </ul>

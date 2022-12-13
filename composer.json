@@ -11,9 +11,13 @@
         "craftcms/cms": "^4.3",
         "guzzlehttp/guzzle": "7.5.x-dev"
     },
+    "require-dev": {
+        "markhuot/craft-pest": "dev-master"
+    },
     "autoload": {
         "psr-4": {
-            "markhuot\\craftai\\": "./src"
+            "markhuot\\craftai\\": "./src",
+            "markhuot\\craftai\\tests\\": "./tests"
         },
         "files": [
             "./src/helpers/event.php"

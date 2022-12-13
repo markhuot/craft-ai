@@ -114,4 +114,12 @@ class Backend extends ActiveRecord
     {
         throw $e;
     }
+
+    static function factory()
+    {
+        $shortName = (new ReflectionClass(static::class))->getShortName();
+        $fqcn = 'markhuot\\craftai\\tests\\factories\\' . $shortName;
+
+        return $fqcn::factory();
+    }
 }

@@ -56,6 +56,6 @@ class ActiveRecord extends \craft\db\ActiveRecord
     {
         $type = static::$polymorphicKeyField ? ($record[static::$polymorphicKeyField] ?? static::class) : static::class;
 
-        return new $type;
+        return \Craft::$container->get($type);
     }
 }

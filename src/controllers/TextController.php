@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\controllers;
 
+use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use markhuot\craftai\features\Completion;
 use markhuot\craftai\features\Edit;
@@ -13,7 +14,7 @@ use markhuot\craftai\models\TextCompletionPostRequest;
 /**
  * @property Request $request
  */
-class TextController extends Controller
+class TextController extends \markhuot\craftai\web\Controller
 {
     function actionIndex()
     {
@@ -27,17 +28,13 @@ class TextController extends Controller
 
         $response = Backend::for(Completion::class)->completeText($data->content);
 
-        if ($this->request->getAcceptsJson()) {
-            return $this->asJson([
-                'text' => $response->text,
-            ]);
-        }
-
-        $this->setSuccessFlash('AI completion succeeded');
-        return $this->redirect('ai/text?' . http_build_query([
-            'content' => $data->content,
-            'completion' => $response->text,
-        ]));
+        return $this->response(
+            json: fn () => $this->asJson(['text' => $response->text]),
+            html: fn () => $this->flash('AI completion succeeded')->redirect(UrlHelper::prependCpTrigger('ai/text?' . http_build_query([
+                'content' => $data->content,
+                'completion' => $response->text,
+            ]))),
+        );
     }
 
     function actionEdit()
@@ -47,8 +44,8 @@ class TextController extends Controller
 
         $response = Backend::for(Edit::class)->editText($data->input, $data->instructions);
 
-        return $this->asJson([
-            'text' => $response->text,
-        ]);
+        return $this->response(
+            json: fn () => $this->asJson(['text' => $response->text]),
+        );
     }
 }

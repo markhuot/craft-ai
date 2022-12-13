@@ -48,7 +48,7 @@ class StableDiffusion extends \markhuot\craftai\models\Backend implements Genera
             ],
         );
 
-        // $body = json_decode(file_get_contents(__DIR__.'/../../test/responses/stablediffusion/text-to-image.json'), true, 512, JSON_THROW_ON_ERROR);
+        // $body = json_decode(file_get_contents(__DIR__.'/../../tests/responses/stablediffusion/text-to-image.json'), true, 512, JSON_THROW_ON_ERROR);
 
         $paths = [];
         foreach ($body['artifacts'] as $artifact) {

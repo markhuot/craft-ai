@@ -45,7 +45,7 @@ class BackendController extends Controller
             ->selectedSubnavItem('backends')
             ->addCrumb('Backends', UrlHelper::cpUrl('ai/backends'))
             ->action('ai/backend/store')
-            ->redirectUrl('ai/backends')
+            ->redirectUrl(UrlHelper::prependCpTrigger('ai/backends'))
             ->contentTemplate('ai/backends/create', [
                 'backend' => $backend,
             ]);

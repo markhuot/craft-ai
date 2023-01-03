@@ -5,6 +5,7 @@ namespace markhuot\craftai\controllers;
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use markhuot\craftai\backends\OpenAi;
+use markhuot\craftai\backends\Replicate;
 use markhuot\craftai\backends\StableDiffusion;
 use markhuot\craftai\models\Backend;
 use markhuot\craftai\models\BackendDeleteRequest;
@@ -27,6 +28,7 @@ class BackendController extends Controller
         switch ($type) {
             case 'openai': $backend = new OpenAi; break;
             case 'stable-diffusion': $backend = new StableDiffusion; break;
+            case 'replicate': $backend = new Replicate; break;
             default: throw new \RuntimeException('Could not find backend for [' . $type . ']');
         }
 

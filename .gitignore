@@ -7,5 +7,6 @@
 /craft
 /.env
 /config
+/cpresources
 .DS_Store
 .idea

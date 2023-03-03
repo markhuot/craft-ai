@@ -19,7 +19,7 @@
                     name: 'prompt',
                     placeholder: 'two sea otters holding hands while swimming on their back',
                     value: old('prompt'),
-                    errors: [craft.app.session.getFlash('error.prompt')]|filter,
+                    errors: [flash('error.prompt')]|filter,
                 }) }}
             </div>
             {{ forms.selectField({
@@ -31,14 +31,14 @@
                     {label: '2', value: 2},
                     {label: '1', value: 1},
                 ],
-                errors: [craft.app.session.getFlash('error.count')]|filter,
+                errors: [flash('error.count')]|filter,
             }) }}
             {{ forms.selectField({
                 label: 'Volume',
                 name: 'volume',
                 value: old('volume'),
                 options: craft.app.volumes.allVolumes|map(v => {label: v.name, value: v.handle}),
-                errors: [craft.app.session.getFlash('error.volume')]|filter,
+                errors: [flash('error.volume')]|filter,
             }) }}
         </div>
 

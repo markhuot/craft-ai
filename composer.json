@@ -12,7 +12,14 @@
         "guzzlehttp/guzzle": "7.5.x-dev"
     },
     "require-dev": {
-        "markhuot/craft-pest": "dev-master"
+        "markhuot/craft-pest": "dev-master",
+        "craftcms/redactor": "^3.0",
+        "craftcms/craft": "dev-main"
+    },
+    "scripts": {
+        "post-update-cmd": [
+            "./bin/post-install.sh"
+        ]
     },
     "autoload": {
         "psr-4": {
@@ -27,5 +34,12 @@
         "name": "AI",
         "handle": "ai",
         "class": "markhuot\\craftai\\Ai"
+    },
+    "config": {
+        "allow-plugins": {
+            "craftcms/plugin-installer": true,
+            "yiisoft/yii2-composer": true,
+            "pestphp/pest-plugin": true
+        }
     }
 }

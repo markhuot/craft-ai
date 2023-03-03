@@ -13,16 +13,39 @@ class Extension extends AbstractExtension
     {
         return [
             new TwigFunction('old', [$this, 'old']),
+            new TwigFunction('flash', [$this, 'flash']),
         ];
     }
 
     function old($key, $default=null)
     {
         $flashes = \Craft::$app->session->getAllFlashes();
+
         if (Arr::exists($flashes, 'old.'.$key)) {
             return Arr::get($flashes, 'old.'.$key);
         }
 
+        if (is_object($default)) {
+            $properties = explode('.', $key);
+            foreach ($properties as $prop) {
+                if (is_object($default)) {
+                    $default = $default->{$prop} ?? null;
+                }
+                else if (is_array($default)) {
+                    $default = $default[$prop] ?? null;
+                }
+                else {
+                    throw new \RuntimeException('Could not find default value.');
+                }
+            }
+            return $default;
+        }
+
         return $default;
+    }
+
+    function flash($key)
+    {
+        return \Craft::$app->session->getFlash($key);
     }
 }

@@ -19,7 +19,7 @@
                     name: 'content',
                     placeholder: 'Write a paragraph about how AI makes it easier to write content in Craft CMS.',
                     value: old('prompt'),
-                    errors: [craft.app.session.getFlash('error.prompt')]|filter,
+                    errors: [flash('error.prompt')]|filter,
                 }) }}
             </div>
         </div>

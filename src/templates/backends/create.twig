@@ -9,8 +9,8 @@
     first: true,
     label: 'Name',
     name: 'name',
-    value: old('name', backend.name|default('')),
-    errors: [craft.app.session.getFlash('error.name')]|filter,
+    value: old('name', backend),
+    errors: [flash('error.name')]|filter,
 }) }}
 
 {% include backend.settingsView %}

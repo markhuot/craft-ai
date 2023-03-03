@@ -20,3 +20,7 @@ fi
 if [ ! -f "bootstrap.php" ]; then
   cp  vendor/craftcms/craft/bootstrap.php ./
 fi
+
+./craft plugin/install pest
+./craft plugin/install ai
+php ./bin/create-default-fs.php > /dev/null 2>&1

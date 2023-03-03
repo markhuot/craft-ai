@@ -9,8 +9,8 @@
     first: true,
     label: 'Base URL',
     name: 'settings[baseUrl]',
-    value: old('settings.baseUrl', backend.settings.baseUrl|default('')),
-    errors: [craft.app.session.getFlash('error.settings.baseUrl')]|filter,
+    value: old('settings.baseUrl', backend),
+    errors: [flash('error.settings.baseUrl')]|filter,
     suggestEnvVars: true,
 }) }}
 
@@ -18,7 +18,7 @@
     first: true,
     label: 'API Token',
     name: 'settings[apiKey]',
-    value: old('settings.apiKey', backend.settings.apiKey|default('')),
-    errors: [craft.app.session.getFlash('error.settings.apiKey')]|filter,
+    value: old('settings.apiKey', backend),
+    errors: [flash('error.settings.apiKey')]|filter,
     suggestEnvVars: true,
 }) }}

@@ -76,10 +76,12 @@
     <div class="flex gap-l">
         {% for asset in assets %}
             <div>
-                {% tag 'img' with {
-                    src: asset.url,
-                    width: 200,
-                } %}{% endtag %}
+                <a href="{{ asset.cpEditUrl }}">
+                    {% tag 'img' with {
+                        src: asset.url,
+                        width: 200,
+                    } %}{% endtag %}
+                </a>
             </div>
         {% endfor %}
     </div>

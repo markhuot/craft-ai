@@ -1,0 +1,15 @@
+{% do view.registerAssetBundle("markhuot\\craftai\\assetbundles\\CraftAi") %}
+
+<div class="meta ai-py-14">
+    <div class="heading">
+        <label id="new-filename-label" for="new-filename">Caption</label>
+        {% if caption %}
+            <p>
+                <em>{{ caption }}</em>
+                <a href="#" class="formsubmit" data-action="ai/image/caption" data-event-data='{"assetId": {{ asset.id }}}'>regenerate?</a>
+            </p>
+        {% else %}
+            <p><em>No caption exists, <a href="#" class="formsubmit" data-action="ai/image/caption" data-event-data='{"assetId": {{ asset.id }}}'>generate a caption now</a>?</em></p>
+        {% endif %}
+    </div>
+</div>

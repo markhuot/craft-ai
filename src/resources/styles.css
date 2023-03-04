@@ -3,14 +3,23 @@
 }
 
 .ai-block { display: block; }
+.ai-flex { display: flex; }
+.ai-flex-grow { flex-grow: 1; }
+.ai-flex-gap { gap: 1rem; }
+.ai-items-end { align-items: flex-end; }
 .ai-shadow { box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
 .ai-rounded { border-radius: 1rem; }
 .ai-hidden { overflow: hidden; }
 .ai-center { text-align: center; }
+body .\[\&_td\]\:ai-center td { text-align: center; }
 .ai-p-l { padding: 1rem; }
+table:not(.data).\[\&_td\]\:ai-p-l :is(td,th) { padding: 1rem; }
+.ai-mx-auto { margin-left: auto; margin-right: auto; }
 .ai-p-2xl { padding: 3rem; }
-.ai-bg-gray { background-color: rgba(96,125,159,.25); }
 .ai-py-sm { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.ai-py-14 { padding-top: 14px; padding-bottom: 14px; }
+.ai-bg-gray { background-color: rgba(96,125,159,.25); }
+.even\:ai-bg-gray tr:nth-child(even) { background-color: rgba(96,125,159,0.05); }
 .hover\:ai-shadow-lg:hover { box-shadow: 0 6px 8px rgba(0,0,0,0.1); }
 .ai-transition { transition: all 0.2s ease-in-out; }
 .ai-filter-gray { filter: grayscale(100%); }

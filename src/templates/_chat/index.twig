@@ -1,0 +1,64 @@
+{% extends "_layouts/cp.twig" %}
+{% import '_includes/forms.twig' as forms %}
+
+{% do view.registerAssetBundle("markhuot\\craftai\\assetbundles\\CraftAi") %}
+{% set title = "Chat"|t('ai') %}
+{% set selectedSubnavItem = 'chat' %}
+
+{% block actionButton %}
+    <form method="post">
+        {{ actionInput('ai/chat/clear') }}
+        {{ csrfInput() }}
+        <button class="btn">Clear</button>
+    </form>
+{% endblock %}
+
+{% block content %}
+    <form method="post">
+        {{ actionInput('ai/chat/send') }}
+        {{ csrfInput() }}
+
+        {{ forms.textField({
+            first: true,
+            label: 'Personality',
+            instructions: 'Customize the personality of the chatbot.',
+            name: 'personality',
+            value: old('personality', personality),
+            errors: [flash('error.personality')]|filter,
+        }) }}
+
+        <div>
+            {% for message in messages %}
+                <p>
+                    <strong>
+                        {{ message.role == 'user' ? 'You' }}
+                        {{ message.role == 'assistant' ? 'AI' }}
+                    </strong>
+                    <br>
+                    {{ message.content }}
+                </p>
+            {% endfor %}
+        </div>
+
+        <hr>
+
+        <div class="ai-flex ai-flex-gap ai-items-end">
+            <div class="ai-flex-grow">
+                {{ forms.textField({
+                    first: true,
+                    label: 'Message',
+                    name: 'message',
+                    value: old('message'),
+                    errors: [flash('error.message')]|filter,
+                }) }}
+            </div>
+            <div>
+                {{ forms.button({
+                    label: 'Send',
+                    class: 'submit',
+                    type: 'submit',
+                }) }}
+            </div>
+        </div>
+    </form>
+{% endblock %}

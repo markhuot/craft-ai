@@ -18,7 +18,7 @@ class TextController extends \markhuot\craftai\web\Controller
 {
     function actionIndex()
     {
-        return $this->renderTemplate('ai/text/index');
+        return $this->renderTemplate('ai/_text/index');
     }
 
     function actionComplete()

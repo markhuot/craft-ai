@@ -24,7 +24,7 @@ it('can complete a prompt', function () {
     $backend->settings = ['baseUrl' => 'https://api.openai.com/v1/', 'apiKey' => '$OPENAI_API_KEY'];
     $backend->save();
 
-    $this->get('admin/ai/text')
+    $this->get('/admin/ai/text')
         ->assertOk()
         ->form('#main-form')
         ->fill('content', 'Finish this sentence, Craft is great because...')

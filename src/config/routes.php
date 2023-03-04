@@ -1,5 +1,6 @@
 <?php
 
+use markhuot\craftai\features\Chat;
 use markhuot\craftai\features\Completion;
 use markhuot\craftai\features\GenerateImage;
 use markhuot\craftai\models\Backend;
@@ -17,6 +18,14 @@ if (Backend::for(Completion::class, true)) {
         'route' => 'ai/text',
         'label' => 'Text',
         'controller' => 'ai/text/index',
+    ];
+}
+
+if (Backend::for(Chat::class, true)) {
+    $routes['chat'] = [
+        'route' => 'ai/chat',
+        'label' => 'Chat',
+        'controller' => 'ai/chat/index',
     ];
 }
 

@@ -10,6 +10,7 @@ use Gooseai\Prompt;
 use Gooseai\Request;
 use GPBMetadata\Generation;
 use GuzzleHttp\Exception\ClientException;
+use GuzzleHttp\Exception\ServerException;
 use markhuot\craftai\features\GenerateImage;
 use markhuot\craftai\models\ImageGenerationResponse;
 use markhuot\craftai\validators\Json as JsonValidator;
@@ -17,6 +18,7 @@ use markhuot\craftai\validators\Json as JsonValidator;
 class StableDiffusion extends \markhuot\craftai\models\Backend implements GenerateImage
 {
     protected array $defaultValues = [
+        'name' => 'Stable Diffusion',
         'settings' => ['baseUrl' => 'https://api.stability.ai/v1alpha/'],
     ];
 
@@ -29,7 +31,7 @@ class StableDiffusion extends \markhuot\craftai\models\Backend implements Genera
         ]);
     }
 
-    public function handleErrorResponse(ClientException $e)
+    public function handleErrorResponse(ClientException|ServerException $e)
     {
         $response = json_decode($e->getResponse()->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
         throw new \RuntimeException($response['message']);

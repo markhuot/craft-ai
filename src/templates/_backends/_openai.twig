@@ -1,0 +1,25 @@
+{% import '_includes/forms.twig' as forms %}
+
+{{ forms.hidden({
+    name: 'type',
+    value: 'markhuot\\craftai\\backends\\OpenAi'
+}) }}
+
+{{ forms.autosuggestField({
+    first: true,
+    label: 'Base URL',
+    name: 'settings[baseUrl]',
+    value: old('settings.baseUrl', backend),
+    errors: [flash('error.settings.baseUrl')]|filter,
+    suggestEnvVars: true,
+}) }}
+
+{{ forms.autosuggestField({
+    first: true,
+    label: 'API Key',
+    name: 'settings[apiKey]',
+    value: old('settings.apiKey', backend),
+    errors: [flash('error.settings.apiKey')]|filter,
+    suggestEnvVars: true,
+    instructions: 'You can sign up for an API token at https://platform.openai.com/account/api-keys',
+}) }}

@@ -4,6 +4,7 @@ namespace markhuot\craftai\migrations;
 
 use craft\db\Migration;
 use markhuot\craftai\db\Table;
+use craft\db\Table as CraftTables;
 
 class Install extends Migration
 {
@@ -18,12 +19,15 @@ class Install extends Migration
             'uid' => $this->uid(),
         ]);
 
+        $this->addColumn(CraftTables::ASSETS, 'caption', 'varchar(255)');
+
         return true;
     }
 
     function safeDown()
     {
         $this->dropTableIfExists(Table::BACKENDS);
+        $this->dropColumn(CraftTables::ASSETS, 'caption');
 
         return true;
     }

@@ -5,6 +5,7 @@ namespace markhuot\craftai\models;
 use Craft;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ClientException;
+use GuzzleHttp\Exception\ServerException;
 use markhuot\craftai\backends\OpenAi;
 use markhuot\craftai\casts\Json as JsonCast;
 use markhuot\craftai\db\ActiveRecord;
@@ -73,7 +74,7 @@ class Backend extends ActiveRecord
     public function getSettingsView()
     {
         $shortName = (new ReflectionClass($this))->getShortName();
-        return 'ai/backends/_' . strtolower($shortName);
+        return 'ai/_backends/_' . strtolower($shortName);
     }
 
     function getClient()
@@ -86,7 +87,7 @@ class Backend extends ActiveRecord
         ]);
     }
 
-    function post($uri, array $body=[], array $headers=[])
+    function post($uri, array $body=[], array $headers=[], ?string $rawBody=null)
     {
         // $handler = new CurlHandler;
         // $tap = Middleware::tap(function (RequestInterface $request, $options) use ($handler) {
@@ -96,21 +97,26 @@ class Backend extends ActiveRecord
         //     return $handler($request, $options);
         // });
         try {
-            $response = $this->getClient()->request('POST', $uri, [
-                // 'handler' => $tap($handler),
+            $params = [
                 'headers' => $headers,
-                'json' => $body,
-            ]);
+            ];
+            if (!empty($body)) {
+                $params['json'] = $body;
+            }
+            if (!empty($rawBody)) {
+                $params['body'] = $rawBody;
+            }
+            $response = $this->getClient()->request('POST', $uri, $params);
 
             return json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
         }
 
-        catch (ClientException $e) {
+        catch (ClientException|ServerException $e) {
             $this->handleErrorResponse($e);
         }
     }
 
-    function handleErrorResponse(ClientException $e)
+    function handleErrorResponse(ClientException|ServerException $e)
     {
         throw $e;
     }

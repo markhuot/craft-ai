@@ -3,19 +3,23 @@
 namespace markhuot\craftai\backends;
 
 use GuzzleHttp\Exception\ClientException;
+use GuzzleHttp\Exception\ServerException;
+use markhuot\craftai\features\Chat;
 use markhuot\craftai\features\Completion;
 use markhuot\craftai\features\Edit;
 use markhuot\craftai\features\GenerateImage;
 use markhuot\craftai\validators\Json as JsonValidator;
 use RuntimeException;
 
-class OpenAi extends \markhuot\craftai\models\Backend implements Completion, Edit, GenerateImage
+class OpenAi extends \markhuot\craftai\models\Backend implements Completion, Edit, GenerateImage, Chat
 {
     use OpenAiCompletion;
     use OpenAiTextEdit;
     use OpenAiDalle;
+    use OpenAiChat;
 
     protected array $defaultValues = [
+        'name' => 'OpenAI',
         'settings' => ['baseUrl' => 'https://api.openai.com/v1/'],
     ];
 
@@ -28,7 +32,7 @@ class OpenAi extends \markhuot\craftai\models\Backend implements Completion, Edi
         ]);
     }
 
-    public function handleErrorResponse(ClientException $e)
+    public function handleErrorResponse(ClientException|ServerException $e)
     {
         $response = json_decode($e->getResponse()->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
         throw new RuntimeException($response['error']['message'] ?? 'Unknown API error');

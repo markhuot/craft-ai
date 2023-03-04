@@ -2,7 +2,7 @@
 
 {{ forms.hidden({
     name: 'type',
-    value: 'markhuot\\craftai\\backends\\StableDiffusion'
+    value: 'markhuot\\craftai\\backends\\HuggingFace',
 }) }}
 
 {{ forms.autosuggestField({
@@ -16,9 +16,10 @@
 
 {{ forms.autosuggestField({
     first: true,
-    label: 'API Token',
+    label: 'API Key',
     name: 'settings[apiKey]',
     value: old('settings.apiKey', backend),
     errors: [flash('error.settings.apiKey')]|filter,
     suggestEnvVars: true,
+    instructions: 'You can sign up for an API token at https://huggingface.co/settings/tokens',
 }) }}

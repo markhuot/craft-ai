@@ -4,6 +4,7 @@ namespace markhuot\craftai\controllers;
 
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
+use markhuot\craftai\backends\HuggingFace;
 use markhuot\craftai\backends\OpenAi;
 use markhuot\craftai\backends\StableDiffusion;
 use markhuot\craftai\models\Backend;
@@ -17,7 +18,7 @@ class BackendController extends Controller
 {
     function actionIndex()
     {
-        return $this->renderTemplate('ai/backends/index', [
+        return $this->renderTemplate('ai/_backends/index', [
             'backends' => Backend::find()->all(),
         ]);
     }
@@ -27,6 +28,7 @@ class BackendController extends Controller
         switch ($type) {
             case 'openai': $backend = new OpenAi; break;
             case 'stable-diffusion': $backend = new StableDiffusion; break;
+            case 'hugging-face': $backend = new HuggingFace; break;
             default: throw new \RuntimeException('Could not find backend for [' . $type . ']');
         }
 
@@ -46,7 +48,7 @@ class BackendController extends Controller
             ->addCrumb('Backends', UrlHelper::cpUrl('ai/backends'))
             ->action('ai/backend/store')
             ->redirectUrl(UrlHelper::prependCpTrigger('ai/backends'))
-            ->contentTemplate('ai/backends/create', [
+            ->contentTemplate('ai/_backends/create', [
                 'backend' => $backend,
             ]);
 

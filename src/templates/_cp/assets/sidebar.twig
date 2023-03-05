@@ -13,3 +13,11 @@
         {% endif %}
     </div>
 </div>
+
+<script>
+    const button = document.createElement('a');
+    button.classList.add('btn');
+    button.href = '{{ url('ai/images/edit', {assetId: asset.id})|raw }}';
+    button.innerHTML = 'Edit with AI';
+    document.querySelector('.image-actions.buttons').appendChild(button);
+</script>

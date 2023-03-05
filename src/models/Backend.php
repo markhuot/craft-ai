@@ -35,6 +35,21 @@ class Backend extends ActiveRecord
         return Table::BACKENDS;
     }
 
+    static function allFor(string $interface)
+    {
+        $found = [];
+        $possibilities = Backend::find()->all();
+
+        foreach ($possibilities as $possibility) {
+            $reflect = new ReflectionClass($possibility);
+            if ($reflect->implementsInterface($interface)) {
+                $found[] = $possibility;
+            }
+        }
+
+        return $found;
+    }
+
     /**
      * @template T
      *
@@ -44,13 +59,9 @@ class Backend extends ActiveRecord
      */
     static function for(string $interface, $silence=false)
     {
-        $possibilities = Backend::find()->all();
-
-        foreach ($possibilities as $possibility) {
-            $reflect = new ReflectionClass($possibility);
-            if ($reflect->implementsInterface($interface)) {
-                return $possibility;
-            }
+        $backends = static::allFor($interface);
+        if (isset($backends[0])) {
+            return $backends[0];
         }
 
         if ($silence === false) {
@@ -87,7 +98,7 @@ class Backend extends ActiveRecord
         ]);
     }
 
-    function post($uri, array $body=[], array $headers=[], ?string $rawBody=null)
+    function post($uri, array $body=[], array $headers=[], ?string $rawBody=null, array $multipart=[])
     {
         // $handler = new CurlHandler;
         // $tap = Middleware::tap(function (RequestInterface $request, $options) use ($handler) {
@@ -105,6 +116,9 @@ class Backend extends ActiveRecord
             }
             if (!empty($rawBody)) {
                 $params['body'] = $rawBody;
+            }
+            if (!empty($multipart)) {
+                $params['multipart'] = $multipart;
             }
             $response = $this->getClient()->request('POST', $uri, $params);
 

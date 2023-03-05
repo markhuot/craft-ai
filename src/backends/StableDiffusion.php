@@ -37,7 +37,7 @@ class StableDiffusion extends \markhuot\craftai\models\Backend implements Genera
         throw new \RuntimeException($response['message']);
     }
 
-    function generateImage(string $prompt): ImageGenerationResponse
+    function generateImage(string $prompt, int $count=1): ImageGenerationResponse
     {
         $body = $this->post(
             uri: 'generation/stable-diffusion-512-v2-1/text-to-image',
@@ -46,7 +46,7 @@ class StableDiffusion extends \markhuot\craftai\models\Backend implements Genera
             ],
             body: [
                 'text_prompts' => [['text' => $prompt]],
-                'samples' => 2,
+                'samples' => $count,
             ],
         );
 

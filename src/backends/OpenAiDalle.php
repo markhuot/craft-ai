@@ -7,13 +7,13 @@ use markhuot\craftai\models\ImageGenerationResponse;
 
 trait OpenAiDalle
 {
-    function generateImage(string $prompt): ImageGenerationResponse
+    function generateImage(string $prompt, int $count=1): ImageGenerationResponse
     {
         $body = $this->post(
             uri: 'images/generations',
             body: [
                 'prompt' => $prompt,
-                'n' => 2,
+                'n' => $count,
                 'size' => '512x512'
             ],
         );

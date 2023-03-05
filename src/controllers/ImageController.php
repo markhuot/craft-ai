@@ -9,6 +9,7 @@ use markhuot\craftai\actions\CreateAssetsForImages;
 use markhuot\craftai\features\Caption;
 use markhuot\craftai\features\GenerateImage;
 use markhuot\craftai\models\Backend;
+use markhuot\craftai\models\EditImagePostRequest;
 use markhuot\craftai\models\GenerateImagePostRequest;
 use markhuot\craftai\stubs\Request;
 
@@ -17,28 +18,29 @@ use markhuot\craftai\stubs\Request;
  */
 class ImageController extends Controller
 {
-    function actionIndex()
+    function actionGenerate()
     {
         $assetIds = array_filter($this->request->getQueryParam('assets', []));
         $assets = !empty($assetIds) ? Asset::find()->id($assetIds)->all() : [];
 
-        return $this->renderTemplate('ai/_images/index', [
-            'backends' => Backend::find()->all(),
+        return $this->renderTemplate('ai/_images/generate', [
+            'backends' => Backend::allFor(GenerateImage::class),
             'assets' => $assets,
+            'prompt' => $this->request->getQueryParam('prompt'),
         ]);
     }
 
-    function actionCreate()
+    function actionStoreGeneration()
     {
         $this->requirePostRequest();
         $data = $this->request->getBodyParamObject(GenerateImagePostRequest::class);
 
-        $response = ($data->backend ?? Backend::for(GenerateImage::class))->generateImage($data->prompt);
+        $response = ($data->backend ?? Backend::for(GenerateImage::class))->generateImage($data->prompt, $data->count);
         $assets = \Craft::$container->get(CreateAssetsForImages::class)->handle($data->volume, $response->paths);
 
         $this->setSuccessFlash('Generated ' . count($assets) . ' assets');
         $params = array_map(fn ($a) => 'assets[]='.$a->id, $assets);
-        return $this->redirect('ai/images?'.implode('&', $params));
+        return $this->redirect('ai/images/generate?prompt='.urlencode($data->prompt).'&'.implode('&', $params));
     }
 
     function actionCaption()
@@ -51,5 +53,25 @@ class ImageController extends Controller
             ->execute();
 
         return $this->redirect($asset->cpEditUrl);
+    }
+
+    function actionEdit()
+    {
+        return $this->renderTemplate('ai/_images/edit', [
+            'asset' => Asset::find()->id($this->request->getQueryParam('assetId'))->one(),
+            'prompt' => null,
+        ]);
+    }
+
+    function actionStoreEdit()
+    {
+        $this->requirePostRequest();
+        $data = $this->request->getBodyParamObject(EditImagePostRequest::class);
+
+        $response = ($data->backend ?? Backend::for(GenerateImage::class))->editImage($data->prompt, $data->asset, $data->mask, $data->count);
+        $assets = \Craft::$container->get(CreateAssetsForImages::class)->handle($data->asset->volume, $response->paths);
+
+        $this->setSuccessFlash('Generated ' . count($assets) . ' assets');
+        return $this->redirect('ai/images/edit?prompt='.urlencode($data->prompt).'&assetId='.$assets[0]->id);
     }
 }

@@ -2,6 +2,7 @@
 
 use markhuot\craftai\features\Chat;
 use markhuot\craftai\features\Completion;
+use markhuot\craftai\features\EditImage;
 use markhuot\craftai\features\GenerateImage;
 use markhuot\craftai\models\Backend;
 
@@ -30,10 +31,18 @@ if (Backend::for(Chat::class, true)) {
 }
 
 if (Backend::for(GenerateImage::class, true)) {
-    $routes['images'] = [
-        'route' => 'ai/images',
-        'label' => 'Images',
-        'controller' => 'ai/image/index',
+    $routes['image.generate'] = [
+        'route' => 'ai/images/generate',
+        'label' => 'Generate Images',
+        'controller' => 'ai/image/generate',
+    ];
+}
+
+if (Backend::for(EditImage::class, true)) {
+    $routes['image.edit'] = [
+        'route' => 'ai/images/edit',
+        'label' => 'Edit Images',
+        'controller' => 'ai/image/edit',
     ];
 }
 

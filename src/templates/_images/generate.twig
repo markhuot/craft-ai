@@ -3,13 +3,13 @@
 
 {% do view.registerAssetBundle("markhuot\\craftai\\assetbundles\\CraftAi") %}
 {% set title = "Generate Images"|t('ai') %}
-{% set selectedSubnavItem = 'images' %}
+{% set selectedSubnavItem = 'image.generate' %}
 
 {% block content %}
     <form action="" method="post">
         {{ csrfInput() }}
-        {{ actionInput('ai/image/create') }}
-        {{ redirectInput('ai/images') }}
+        {{ actionInput('ai/image/store-generation') }}
+        {{ redirectInput('ai/images/generate') }}
 
         <div class="flex gap-m">
             <div class="flex-grow">
@@ -18,7 +18,7 @@
                     label: 'Prompt',
                     name: 'prompt',
                     placeholder: 'two sea otters holding hands while swimming on their back',
-                    value: old('prompt'),
+                    value: old('prompt', prompt),
                     errors: [flash('error.prompt')]|filter,
                 }) }}
             </div>
@@ -57,7 +57,7 @@
                         {% for backend in backends %}
                         <li>
                             {{ tag('a', {
-                                text: 'Submit with ' ~ backend.name,
+                                text: 'Generate with ' ~ backend.name,
                                 class: 'formsubmit',
                                 data: {
                                     params: {'backend': backend.id}

@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\casts;
 
+use craft\base\ElementInterface;
 use craft\models\Volume;
 use markhuot\craftai\db\ActiveRecord;
 
@@ -24,6 +25,10 @@ class Model
         if (is_numeric($value)) {
             switch ($className) {
                 case Volume::class: return \Craft::$app->volumes->getVolumeById($value);
+            }
+
+            if (class_implements($className, ElementInterface::class)) {
+                return $className::find()->id($value)->one();
             }
 
             if (is_subclass_of($className, ActiveRecord::class)) {

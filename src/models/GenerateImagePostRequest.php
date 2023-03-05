@@ -11,6 +11,7 @@ class GenerateImagePostRequest extends Model
     public ?Backend $backend = null;
     public ?string $prompt = null;
     public ?Volume $volume = null;
+    public ?int $count = 1;
 
     protected array $casts = [
         'backend' => ModelCast::class,
@@ -19,7 +20,7 @@ class GenerateImagePostRequest extends Model
 
     public function safeAttributes()
     {
-        return array_merge(parent::safeAttributes(), ['backend']);
+        return array_merge(parent::safeAttributes(), ['backend', 'count']);
     }
 
     public function rules(): array

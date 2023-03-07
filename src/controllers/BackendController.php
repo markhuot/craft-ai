@@ -3,13 +3,14 @@
 namespace markhuot\craftai\controllers;
 
 use craft\helpers\UrlHelper;
-use craft\web\Controller;
+use markhuot\craftai\Ai;
 use markhuot\craftai\backends\HuggingFace;
 use markhuot\craftai\backends\OpenAi;
 use markhuot\craftai\backends\StableDiffusion;
 use markhuot\craftai\models\Backend;
 use markhuot\craftai\models\BackendDeleteRequest;
 use markhuot\craftai\stubs\Request;
+use markhuot\craftai\web\Controller;
 
 /**
  * @property Request $request
@@ -20,7 +21,20 @@ class BackendController extends Controller
     {
         return $this->renderTemplate('ai/_backends/index', [
             'backends' => Backend::find()->all(),
+            'settings' => Ai::getInstance()->getSettings(),
         ]);
+    }
+
+    function actionToggleFakes()
+    {
+        $settings = Ai::getInstance()->getSettings();
+        $settings->useFakes = !$settings->useFakes;
+        \Craft::$app->getPlugins()->savePluginSettings(Ai::getInstance(), $settings->toArray());
+
+        return $this->response(
+            json: ['success' => true, 'value' => $settings->useFakes],
+            html: fn () => $this->redirect(UrlHelper::cpUrl('ai/backends')),
+        );
     }
 
     function actionCreate(string $type)

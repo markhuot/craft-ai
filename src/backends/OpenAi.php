@@ -6,19 +6,21 @@ use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\ServerException;
 use markhuot\craftai\features\Chat;
 use markhuot\craftai\features\Completion;
-use markhuot\craftai\features\Edit;
+use markhuot\craftai\features\EditText;
 use markhuot\craftai\features\EditImage;
+use markhuot\craftai\features\GenerateEmbeddings;
 use markhuot\craftai\features\GenerateImage;
 use markhuot\craftai\validators\Json as JsonValidator;
 use RuntimeException;
 
-class OpenAi extends \markhuot\craftai\models\Backend implements Completion, Edit, GenerateImage, Chat, EditImage
+class OpenAi extends \markhuot\craftai\models\Backend implements Completion, EditText, GenerateImage, Chat, EditImage, GenerateEmbeddings
 {
     use OpenAiCompletion;
     use OpenAiTextEdit;
     use OpenAiDalle;
     use OpenAiChat;
     use OpenAiEditImage;
+    use OpenAiGenerateEmbeddings;
 
     protected array $defaultValues = [
         'name' => 'OpenAI',

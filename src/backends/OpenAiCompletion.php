@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\backends;
 
+use Faker\Factory;
 use markhuot\craftai\features\Completion;
 use markhuot\craftai\models\TextCompletionResponse;
 
@@ -23,5 +24,16 @@ trait OpenAiCompletion
         $model->text = $response['choices'][0]['text'] ?? null;
 
         return $model;
+    }
+
+    function completeTextFake(string $text): array
+    {
+        return [
+            'choices' => [
+                [
+                    'text' => $text . Factory::create()->paragraph(5),
+                ],
+            ],
+        ];
     }
 }

@@ -13,16 +13,22 @@ class Controller extends \craft\web\Controller
 
     function response(...$types)
     {
+        $data = null;
         if ($this->request->getAcceptsJson()) {
-            $return = $types['json'] ?? null;
-        }
-        elseif (isset($types['html'])) {
-            $return = $types['html'];
+            $data = $types['json'] ?? null;
         }
         else {
-            $return = $types;
+            $data = $types['html'] ?? $types;
         }
 
-        return is_callable($return) ? $return() : $return;
+        if (is_callable($data)) {
+            $data = $data();
+        }
+
+        if ($this->request->getAcceptsJson()) {
+            return $this->asJson($data);
+        }
+
+        return $data;
     }
 }

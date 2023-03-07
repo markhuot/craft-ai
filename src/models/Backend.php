@@ -6,6 +6,7 @@ use Craft;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\ServerException;
+use markhuot\craftai\Ai;
 use markhuot\craftai\backends\OpenAi;
 use markhuot\craftai\casts\Json as JsonCast;
 use markhuot\craftai\db\ActiveRecord;
@@ -18,6 +19,7 @@ use RuntimeException;
  */
 class Backend extends ActiveRecord
 {
+    protected static bool $faked = false;
     protected Client $client;
 
     protected array $casts = [
@@ -33,6 +35,11 @@ class Backend extends ActiveRecord
     public static function tableName()
     {
         return Table::BACKENDS;
+    }
+
+    public static function fake(bool $value=true)
+    {
+        static::$faked = $value;
     }
 
     static function allFor(string $interface)
@@ -69,6 +76,13 @@ class Backend extends ActiveRecord
         }
     }
 
+    public function init()
+    {
+        parent::init();
+
+        static::$faked = Ai::getInstance()->getSettings()->useFakes;
+    }
+
     public function rules()
     {
         return [
@@ -100,13 +114,14 @@ class Backend extends ActiveRecord
 
     function post($uri, array $body=[], array $headers=[], ?string $rawBody=null, array $multipart=[])
     {
-        // $handler = new CurlHandler;
-        // $tap = Middleware::tap(function (RequestInterface $request, $options) use ($handler) {
-        //     dd($request->getHeaders());
-        //     echo $request->getBody()->getContents();
-        //     die;
-        //     return $handler($request, $options);
-        // });
+        if (static::$faked) {
+            ['function' => $methodName, 'args' => $args] = debug_backtrace(!DEBUG_BACKTRACE_PROVIDE_OBJECT,2)[1];
+            $fakeMethodName = $methodName . 'Fake';
+            if (method_exists($this, $fakeMethodName)) {
+                return $this->$fakeMethodName(...$args);
+            }
+        }
+
         try {
             $params = [
                 'headers' => $headers,
@@ -120,6 +135,7 @@ class Backend extends ActiveRecord
             if (!empty($multipart)) {
                 $params['multipart'] = $multipart;
             }
+
             $response = $this->getClient()->request('POST', $uri, $params);
 
             return json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);

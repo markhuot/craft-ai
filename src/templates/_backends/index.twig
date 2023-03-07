@@ -6,6 +6,15 @@
 {% set selectedSubnavItem = 'backends' %}
 
 {% block content %}
+    {{ forms.lightswitchField({
+        label: 'Use Live Data',
+        id: 'useFakes',
+        name: 'useFakes',
+        on: not settings.useFakes,
+        instructions: 'Control whether the Craft AI system will reach out to the configured back-ends or use fake local data. Disabling live data can reduce cost during testing and development.',
+    }) }}
+    <hr>
+
     {% if backends|length %}
         <h2>Enabled backends</h2>
         <ul class="flex gap-l">
@@ -26,15 +35,16 @@
     <p>Backends are responsible for the interactions provided by Craft AI. Depending on the provider(s) you configure
         different features will become available. For example, Open AI has text-based completions and Stable Diffusion has image
         generation capabilities.</p>
-    <table class="ai-mx-auto even:ai-bg-gray [&_td]:ai-p-l [&_td]:ai-center">
+    <table class="ai-mx-auto even:ai-bg-gray [&_td]:ai-p-l [&_td]:ai-center [&_th]:ai-center">
         <tr>
             <th></th>
-            <th>Image Generation</th>
-            <th>Image Captioning</th>
-            <th>Image Editing</th>
-            <th>Text Completion</th>
-            <th>Text Editing</th>
+            <th>Image<br>Generation</th>
+            <th>Image<br>Captioning</th>
+            <th>Image<br>Editing</th>
+            <th>Text<br>Completion</th>
+            <th>Text<br>Editing</th>
             <th>Chat</th>
+            <th>Semantic<br>Search</th>
         </tr>
         <tr>
             <td><a href="{{ cpUrl('ai/backend/create/openai') }}" pest="add.openai">OpenAI</a></td>
@@ -44,10 +54,12 @@
             <td>✅</td>
             <td>✅</td>
             <td>✅</td>
+            <td>✅</td>
         </tr>
         <tr>
             <td><a href="{{ cpUrl('ai/backend/create/stable-diffusion') }}" pest="add.stablediffusion">Stable Diffusion</a></td>
             <td>✅</td>
+            <td></td>
             <td></td>
             <td></td>
             <td></td>
@@ -62,8 +74,27 @@
             <td></td>
             <td></td>
             <td></td>
+            <td></td>
         </tr>
         {# <li><a href="{{ cpUrl('ai/backend/create/aws') }}">Amazon AWS</a></li> #}
         {# <li><a href="{{ cpUrl('ai/backend/create/google') }}">Google</a></li> #}
     </table>
 {% endblock %}
+
+{% js %}
+    document.addEventListener('click', (event) => {
+        if (event.target && event.target.closest && event.target.closest('button').id === 'useFakes') {
+            Craft.postActionRequest('ai/backend/toggle-fakes', {}, (response) => {
+                if (response.value === true) {
+                    Craft.cp.displayError('Live data disabled');
+                }
+                else if (response.value === false) {
+                    Craft.cp.displaySuccess('Live data enabled');
+                }
+                else {
+                    Craft.cp.displayError('Could not change value');
+                }
+            });
+        }
+    });
+{% endjs %}

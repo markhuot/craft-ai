@@ -19,4 +19,15 @@ trait OpenAiTextEdit
 
         return $model;
     }
+
+    function editTextFake(string $input, string $instruction): array
+    {
+        return [
+            'choices' => [
+                [
+                    'text' => $input . ' ' . $instruction,
+                ],
+            ],
+        ];
+    }
 }

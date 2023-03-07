@@ -12,6 +12,7 @@
 .ai-hidden { overflow: hidden; }
 .ai-center { text-align: center; }
 body .\[\&_td\]\:ai-center td { text-align: center; }
+body .\[\&_th\]\:ai-center th { text-align: center; }
 .ai-p-l { padding: 1rem; }
 table:not(.data).\[\&_td\]\:ai-p-l :is(td,th) { padding: 1rem; }
 .ai-mx-auto { margin-left: auto; margin-right: auto; }

@@ -4,14 +4,15 @@ namespace markhuot\craftai\models;
 
 use craft\base\Model;
 
-class ImageCaptionResponse extends Model
+class EmbeddingsResponse extends Model
 {
-    public string $caption;
+    /** @var float[] */
+    public array $vectors = [];
 
     public function rules(): array
     {
         return [
-            ['caption', 'required'],
+            ['vectors', 'required'],
         ];
     }
 }

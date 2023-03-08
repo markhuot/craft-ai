@@ -16,7 +16,7 @@
     <hr>
 
     {% if backends|length %}
-        <h2>Enabled backends</h2>
+        <h2>Enabled AI backends</h2>
         <ul class="flex gap-l">
             {% for backend in backends %}
                 <li>
@@ -27,11 +27,9 @@
                 </li>
             {% endfor %}
         </ul>
-
-        <hr>
     {% endif %}
 
-    <h2>Add a new backend</h2>
+    <h2 class="ai-mt-xl">Add a new AI backend</h2>
     <p>Backends are responsible for the interactions provided by Craft AI. Depending on the provider(s) you configure
         different features will become available. For example, Open AI has text-based completions and Stable Diffusion has image
         generation capabilities.</p>

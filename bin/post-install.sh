@@ -9,6 +9,7 @@ if [ ! -f ".env" ]; then
 fi
 
 if ! grep -q "CRAFT_RUN_QUEUE_AUTOMATICALLY=false" .env; then
+  echo "" >> .env
   echo "CRAFT_RUN_QUEUE_AUTOMATICALLY=false" >> .env
   echo "" >> .env
 fi
@@ -23,6 +24,19 @@ if [ ! -f "config/app.php" ]; then
           ],
       ],
   ];" > config/app.php
+fi
+
+if ! grep -q "ELASTIC_PASSWORD=" .env; then
+  echo "" >> .env
+  echo "ELASTIC_PASSWORD=secret
+        KIBANA_PASSWORD=secret
+        STACK_VERSION=8.6.2
+        CLUSTER_NAME=docker-cluster
+        LICENSE=basic
+        ES_PORT=9200
+        KIBANA_PORT=5601
+        MEM_LIMIT=1073741824" >> .env
+  echo "" >> .env
 fi
 
 if [ ! -d "web" ]; then

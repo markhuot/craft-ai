@@ -1,7 +1,5 @@
-.mt-l {
-    margin-top: 1rem;
-}
-
+.ai-mt-l { margin-top: 1rem; }
+.ai-mt-xl { margin-top: 2rem; }
 .ai-block { display: block; }
 .ai-flex { display: flex; }
 .ai-flex-grow { flex-grow: 1; }

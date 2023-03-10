@@ -31,7 +31,7 @@ trait OpenAiCompletion
         return [
             'choices' => [
                 [
-                    'text' => $text . Factory::create()->paragraph(5),
+                    'text' => Factory::create()->paragraph(5),
                 ],
             ],
         ];

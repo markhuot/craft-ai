@@ -217,10 +217,6 @@ services:
 volumes:
   certs:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: storage/certs
   esdata01:
     driver: local
   esdata02:

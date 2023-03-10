@@ -3,6 +3,7 @@
 namespace markhuot\craftai\actions;
 
 use craft\base\Element;
+use craft\base\ElementInterface;
 use craft\helpers\Search;
 use Illuminate\Support\Collection;
 
@@ -11,7 +12,7 @@ class GetElementKeywords
     /**
      * @return Collection<array<array-key, string>>
      */
-    public function handle(Element $element): Collection
+    public function handle(ElementInterface $element): Collection
     {
         $attributeKeywords = [];
         $attributes = $element::searchableAttributes();

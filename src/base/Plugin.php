@@ -24,6 +24,15 @@ class Plugin extends \craft\base\Plugin
         return new Settings;
     }
 
+    public function setSettings(array $settings): void
+    {
+        // Only useFakes is stored in the database. The rest of the settings
+        // we pull out of the filesystem exclusively
+        $settings = collect($settings)->only(['useFakes'])->toArray();
+
+        parent::setSettings($settings);
+    }
+
     protected function settingsHtml(): ?string
     {
         return \Craft::$app->view->renderTemplate('ai/settings');

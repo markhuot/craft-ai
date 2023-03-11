@@ -10,7 +10,6 @@
     "require": {
         "craftcms/cms": "^4.3",
         "guzzlehttp/guzzle": "7.5.x-dev",
-        "elasticsearch/elasticsearch": "^8.6",
         "opensearch-project/opensearch-php": "^2.1"
     },
     "require-dev": {

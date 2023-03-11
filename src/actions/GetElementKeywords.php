@@ -15,26 +15,26 @@ class GetElementKeywords
     public function handle(ElementInterface $element): Collection
     {
         return collect()
-            ->concat($this->getAttributeKeywords())
-            ->concat($this->getFieldKeywords())
+            ->concat($this->getAttributeKeywords($element))
+            ->concat($this->getFieldKeywords($element))
             ->filter(fn ($value) => !empty($value) && mb_strlen($value) > 3);
     }
     
-    protected function getAttributeKeywords()
+    protected function getAttributeKeywords(ElementInterface $element)
     {
         return collect($element::searchableAttributes())
             ->when($element::hasTitles(), fn ($c) => $c->push('title'))
             ->mapWithKeys(fn ($attribute) => [
-                $attribute => $element->getSearchKeywords($attribute);
+                $attribute => $element->getSearchKeywords($attribute),
             ]);
     }
     
-    protected function getFieldKeywords()
+    protected function getFieldKeywords(ElementInterface $element)
     {
         return collect($element->getFieldLayout()?->getCustomFields() ?? [])
             ->filter(fn ($field) => $field->searchable)
             ->mapWithKeys(fn ($field) => [
-                $field->handle => Search::normalizeKeywords($field->getSearchKeywords($element->getFieldValue($field->handle), $element))
+                $field->handle => Search::normalizeKeywords($field->getSearchKeywords($element->getFieldValue($field->handle), $element)),
             ]);
     }
 }

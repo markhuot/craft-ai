@@ -81,8 +81,6 @@ class BackendController extends Controller
 
     function actionStore()
     {
-        $this->requirePostRequest();
-
         $this->request
             ->getBodyParamObject(Backend::class)
             ->save();
@@ -92,10 +90,9 @@ class BackendController extends Controller
 
     function actionDelete()
     {
-        $this->requirePostRequest();
-        $data = $this->request->getBodyParamObject(BackendDeleteRequest::class);
-
-        $data->backend->delete();
+        $this->request
+            ->getBodyParamObject(Backend::class)
+            ->delete();
 
         return $this->redirectToPostedUrl();
     }

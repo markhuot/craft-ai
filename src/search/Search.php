@@ -5,6 +5,11 @@ namespace markhuot\craftai\search;
 use markhuot\craftai\Ai;
 
 /**
+ * Search vcector backends
+ *
+ * https://hub.docker.com/r/opensearchproject/opensearch#!
+ * https://weaviate.io/developers/weaviate/installation
+ *
  * @mixin Opensearch
  */
 class Search

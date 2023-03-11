@@ -40,7 +40,7 @@ class AskQuery
             'Given the following context attempt to answer the question below. If you do not know the answer with certainity respond with "I don\'t know".',
             "Context\n{$context}",
             "Question: {$this->prompt}",
-            "--\nAnswer: ",
+            "Answer: ",
         ]);
 
         $response = Backend::for(Completion::class)->completeText($prompt);

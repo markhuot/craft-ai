@@ -26,7 +26,6 @@ class AskController extends Controller
 
     function actionAsk()
     {
-        $this->requirePostRequest();
         $data = $this->request->getBodyParamObject(AskPostRequest::class);
 
         return $this->redirect('ai/ask?prompt='.urlencode($data->prompt));

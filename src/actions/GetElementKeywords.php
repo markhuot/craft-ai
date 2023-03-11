@@ -16,21 +16,19 @@ class GetElementKeywords
     {
         $attributeKeywords = [];
         $attributes = $element::searchableAttributes();
-        if  ($element::hasTitles()) {
+        if ($element::hasTitles()) {
             $attributes[] = 'title';
         }
         foreach ($attributes as $attribute) {
             $attributeKeywords[$attribute] = $element->getSearchKeywords($attribute);
         }
 
-        $fieldKeywords = collect($element->getFieldLayout()?->getCustomFields() ?? [])
+        return collect($element->getFieldLayout()?->getCustomFields() ?? [])
             ->filter(fn ($field) => $field->searchable)
             ->mapWithKeys(fn ($field) => [
                 $field->handle => Search::normalizeKeywords($field->getSearchKeywords($element->getFieldValue($field->handle), $element))
             ])
-            ->toArray();
-
-        return collect(array_merge($attributeKeywords, $fieldKeywords))
+            ->concat($attributeKeywords)
             ->filter(fn ($value) => !empty($value) && mb_strlen($value) > 3);
     }
 }

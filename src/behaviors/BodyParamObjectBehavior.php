@@ -24,6 +24,7 @@ class BodyParamObjectBehavior extends Behavior
      */
     function getBodyParamObject(string|object $class, string $formName='')
     {
+        $this->owner->requirePostRequest();
         $bodyParams = $this->owner->getBodyParams();
 
         if (is_subclass_of($class, ActiveRecord::class)) {

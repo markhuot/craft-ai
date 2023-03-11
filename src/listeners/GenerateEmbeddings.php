@@ -20,6 +20,10 @@ class GenerateEmbeddings
         /** @var Element $element */
         $element = $event->sender;
 
+        if ($element->getIsRevision() || $element->getIsDraft()) {
+            return;
+        }
+
         $keywords = $getKeywords->handle($element)
             ->map(fn ($value, $key) => "The {$key} is {$value}")
             ->join("\n");

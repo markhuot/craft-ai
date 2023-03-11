@@ -31,7 +31,11 @@
 
     <hr>
 
-    {% if answer %}
-        <p>{{ answer }}</p>
+    {% if answer[0] %}
+        <p>{{ answer[0] }}</p>
+        {% set entries = craft.entries.status(null).id(answer[1].pluck('_source.elementId')).collect() %}
+        {% if entries.count() %}
+            <p>Consulted: {{ entries|map(e => '<a href="#">'~e.title~'</a>')|join(', ')|raw }}</p>
+        {% endif %}
     {% endif %}
 {% endblock %}

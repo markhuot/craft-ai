@@ -24,17 +24,20 @@ class AskQuery
         return $this;
     }
 
-    function answer(): ?string
+    /**
+     * @return array{string|null, Collection}
+     */
+    function answer(): array
     {
         if (empty($this->prompt)) {
-            return null;
+            return [null, collect()];
         }
 
         $documents = $this->getMatchingDocuments();
 
         $context = $documents->pluck('_source._keywords')->map(fn ($k) => 'the context is '.$k)->join("\n");
         $prompt = implode("\n\n", [
-            'Given the following context attempt to answer the question below.',
+            'Given the following context attempt to answer the question below. If you do not know the answer with certainity respond with "I don\'t know".',
             "Context\n{$context}",
             "Question: {$this->prompt}",
             "--\nAnswer: ",
@@ -42,7 +45,7 @@ class AskQuery
 
         $response = Backend::for(Completion::class)->completeText($prompt);
 
-        return $response->text;
+        return [$response->text, $documents];
     }
 
     protected function getMatchingDocuments(): Collection

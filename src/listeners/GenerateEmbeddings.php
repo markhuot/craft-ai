@@ -31,7 +31,6 @@ class GenerateEmbeddings
         $response = Backend::for(GenerateEmbeddingsFeature::class)
             ->generateEmbeddings($keywords);
 
-        $id = implode('::', [get_class($element), $element->id]);
         $document = [
             'elementId' => $element->id,
             'elementType' => get_class($element),
@@ -44,6 +43,7 @@ class GenerateEmbeddings
             '_keywords_vec' => $response->vectors,
         ];
 
+        $id = implode('::', [get_class($element), $element->id]);
         $search->index($id, $document);
     }
 }

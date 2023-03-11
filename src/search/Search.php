@@ -14,10 +14,10 @@ class Search
         return $this->getBackend()->{$method}(...$arguments);
     }
 
-    function getBackend(): OpenSearch
+    function getBackend(?string $driver=null): OpenSearch
     {
         $settings = Ai::getInstance()->getSettings();
-        $driver = $settings->driver;
+        $driver = $driver ?? $settings->driver;
 
         $class = $settings->get('drivers.'.$driver.'.class');
 

@@ -17,6 +17,7 @@ use RuntimeException;
 class HuggingFace extends Backend implements Caption
 {
     protected array $defaultValues = [
+        'type' => self::class,
         'name' => 'Hugging Face',
         'settings' => ['baseUrl' => 'https://api-inference.huggingface.co/models/'],
     ];

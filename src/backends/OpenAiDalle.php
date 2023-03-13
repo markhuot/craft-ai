@@ -3,7 +3,11 @@
 namespace markhuot\craftai\backends;
 
 use craft\helpers\Assets;
+use GuzzleHttp\Exception\ClientException;
+use GuzzleHttp\Psr7\Request;
+use GuzzleHttp\Psr7\Response;
 use markhuot\craftai\models\ImageGenerationResponse;
+use markhuot\craftpest\factories\Asset;
 
 trait OpenAiDalle
 {
@@ -29,5 +33,24 @@ trait OpenAiDalle
         $response->paths = $paths;
 
         return $response;
+    }
+
+    function generateImageFake(string $prompt, int $count=1): array
+    {
+        if ($prompt === 'ERROR') {
+            throw new ClientException(
+                message: 'faked error',
+                request: new Request('GET', 'image/generate'),
+                response: new Response(500, [], json_encode(['error' => ['message' => 'faked error']])),
+            );
+        }
+
+        return [
+            'data' => [
+                [
+                    'url' => __DIR__.'/../../tests/data/fake.png',
+                ],
+            ],
+        ];
     }
 }

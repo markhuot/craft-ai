@@ -8,6 +8,7 @@ use yii\base\Model;
 use craft\web\Request;
 use craft\web\Response;
 use yii\base\Behavior;
+use yii\web\BadRequestHttpException;
 use yii\web\HttpException;
 
 /**
@@ -24,7 +25,10 @@ class BodyParamObjectBehavior extends Behavior
      */
     function getBodyParamObject(string|object $class, string $formName='')
     {
-        $this->owner->requirePostRequest();
+        if (!$this->owner->getIsPost()) {
+            throw new BadRequestHttpException('Post request required');
+        }
+
         $bodyParams = $this->owner->getBodyParams();
 
         if (is_subclass_of($class, ActiveRecord::class)) {

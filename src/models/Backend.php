@@ -42,6 +42,11 @@ class Backend extends ActiveRecord
         static::$faked = $value;
     }
 
+    public static function isFaked()
+    {
+        return static::$faked;
+    }
+
     static function allFor(string $interface)
     {
         $found = [];
@@ -76,13 +81,6 @@ class Backend extends ActiveRecord
         }
     }
 
-    public function init()
-    {
-        parent::init();
-
-        static::$faked = Ai::getInstance()->getSettings()->useFakes;
-    }
-
     public function rules()
     {
         return [
@@ -114,15 +112,15 @@ class Backend extends ActiveRecord
 
     function post($uri, array $body=[], array $headers=[], ?string $rawBody=null, array $multipart=[])
     {
-        if (static::$faked) {
-            ['function' => $methodName, 'args' => $args] = debug_backtrace(!DEBUG_BACKTRACE_PROVIDE_OBJECT,2)[1];
-            $fakeMethodName = $methodName . 'Fake';
-            if (method_exists($this, $fakeMethodName)) {
-                return $this->$fakeMethodName(...$args);
-            }
-        }
-
         try {
+            if (static::$faked) {
+                ['function' => $methodName, 'args' => $args] = debug_backtrace(!DEBUG_BACKTRACE_PROVIDE_OBJECT,2)[1];
+                $fakeMethodName = $methodName . 'Fake';
+                if (method_exists($this, $fakeMethodName)) {
+                    return $this->$fakeMethodName(...$args);
+                }
+            }
+
             $params = [
                 'headers' => $headers,
             ];

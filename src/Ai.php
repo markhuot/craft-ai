@@ -14,6 +14,7 @@ use markhuot\craftai\listeners\GenerateEmbeddings;
 use markhuot\craftai\listeners\redactor\DefineRedactorConfig;
 use markhuot\craftai\listeners\redactor\RegisterPluginPaths;
 use markhuot\craftai\listeners\RegisterCpUrlRules;
+use markhuot\craftai\models\Backend;
 use markhuot\craftai\models\Settings;
 use markhuot\craftai\twig\Extension;
 use function markhuot\openai\helpers\listen;
@@ -37,6 +38,8 @@ class Ai extends Plugin
             fn() => [\craft\redactor\Field::class, \craft\redactor\Field::EVENT_REGISTER_PLUGIN_PATHS, RegisterPluginPaths::class],
             fn() => [\craft\redactor\Field::class, \craft\redactor\Field::EVENT_DEFINE_REDACTOR_CONFIG, DefineRedactorConfig::class],
         );
+
+        Backend::fake($this->getSettings()->useFakes);
 
         \Craft::$app->view->registerTwigExtension(new Extension);
     }

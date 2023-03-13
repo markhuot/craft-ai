@@ -39,14 +39,12 @@ class BackendController extends Controller
 
     function actionCreate(string $type)
     {
-        switch ($type) {
-            case 'openai': $backend = new OpenAi; break;
-            case 'stable-diffusion': $backend = new StableDiffusion; break;
-            case 'hugging-face': $backend = new HuggingFace; break;
-            default: throw new \RuntimeException('Could not find backend for [' . $type . ']');
-        }
-
-        return $this->cpEditScreen($backend);
+        return $this->cpEditScreen(match ($type) {
+            'openai' => new OpenAi,
+            'stable-diffusion' => new StableDiffusion,
+            'hugging-face' => new HuggingFace,
+            default => throw new \RuntimeException('Could not find backend for [' . $type . ']'),
+        });
     }
 
     function actionEdit(int $id)

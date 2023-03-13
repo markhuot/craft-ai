@@ -18,6 +18,7 @@ use markhuot\craftai\validators\Json as JsonValidator;
 class StableDiffusion extends \markhuot\craftai\models\Backend implements GenerateImage
 {
     protected array $defaultValues = [
+        'type' => self::class,
         'name' => 'Stable Diffusion',
         'settings' => ['baseUrl' => 'https://api.stability.ai/v1alpha/'],
     ];

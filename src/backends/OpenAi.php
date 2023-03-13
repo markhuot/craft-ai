@@ -23,6 +23,7 @@ class OpenAi extends \markhuot\craftai\models\Backend implements Completion, Edi
     use OpenAiGenerateEmbeddings;
 
     protected array $defaultValues = [
+        'type' => self::class,
         'name' => 'OpenAI',
         'settings' => ['baseUrl' => 'https://api.openai.com/v1/'],
     ];

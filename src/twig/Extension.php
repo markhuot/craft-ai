@@ -19,6 +19,7 @@ class Extension extends AbstractExtension
 
     function old(string $key, object|string|null $default=null): ?string
     {
+        /** @var array<array-key, string> $flashes */
         $flashes = \Craft::$app->session->getAllFlashes();
 
         if (Arr::exists($flashes, 'old.'.$key)) {

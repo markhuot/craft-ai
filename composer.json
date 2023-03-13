@@ -1,6 +1,7 @@
 {
     "name": "markhuot/craft-ai",
     "description": "A Craft CMS plugin to integrate with AI services",
+    "license": "proprietary",
     "type": "craft-plugin",
     "authors": [
         {

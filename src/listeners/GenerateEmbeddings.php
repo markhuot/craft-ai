@@ -4,7 +4,6 @@ namespace markhuot\craftai\listeners;
 
 use craft\base\Element;
 use craft\events\ModelEvent;
-use Elastic\Elasticsearch\ClientBuilder;
 use markhuot\craftai\actions\GetElementKeywords;
 use markhuot\craftai\features\GenerateEmbeddings as GenerateEmbeddingsFeature;
 use markhuot\craftai\models\Backend;
@@ -12,7 +11,7 @@ use markhuot\craftai\search\Search;
 
 class GenerateEmbeddings
 {
-    function handle(
+    public function handle(
         ModelEvent $event,
         Search $search,
         GetElementKeywords $getKeywords,

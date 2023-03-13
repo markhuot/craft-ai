@@ -7,5 +7,5 @@ use markhuot\craftai\models\EditImageResponse;
 
 interface EditImage
 {
-    function editImage(string $prompt, Asset $asset, string $mask, int $count=1): EditImageResponse;
+    public function editImage(string $prompt, Asset $asset, string $mask, int $count = 1): EditImageResponse;
 }

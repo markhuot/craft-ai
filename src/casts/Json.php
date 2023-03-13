@@ -4,7 +4,7 @@ namespace markhuot\craftai\casts;
 
 class Json
 {
-    function get($model, $key, $value)
+    public function get($model, $key, $value)
     {
         return json_decode($value, true, 512, JSON_THROW_ON_ERROR);
     }
@@ -20,7 +20,7 @@ class Json
     // Ideally I'd like to flip/flop this and store the data in it's casted/expanded form so that
     // changes to a nested value can be serialized back, but the infra just isn't there in Yii so
     // we have to work within the confines of the framework.
-    function set($model, $key, $value)
+    public function set($model, $key, $value)
     {
         return $value; // json_encode($value, JSON_THROW_ON_ERROR);
     }

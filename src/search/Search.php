@@ -14,12 +14,12 @@ use markhuot\craftai\Ai;
  */
 class Search
 {
-    function __call(string $method, array $arguments)
+    public function __call(string $method, array $arguments)
     {
         return $this->getBackend()->{$method}(...$arguments);
     }
 
-    function getBackend(?string $driver=null): OpenSearch
+    public function getBackend(?string $driver = null): OpenSearch
     {
         $settings = Ai::getInstance()->getSettings();
         $driver = $driver ?? $settings->driver;

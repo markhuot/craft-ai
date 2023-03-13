@@ -7,7 +7,7 @@ use markhuot\craftai\fields\Ai;
 
 class AddAiField
 {
-    function handle(RegisterComponentTypesEvent $event)
+    public function handle(RegisterComponentTypesEvent $event)
     {
         $event->types[] = Ai::class;
     }

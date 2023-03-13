@@ -18,7 +18,8 @@
     "require-dev": {
         "markhuot/craft-pest": "dev-master",
         "craftcms/redactor": "^3.0",
-        "craftcms/craft": "dev-main"
+        "craftcms/craft": "dev-main",
+        "laravel/pint": "^1.6"
     },
     "autoload": {
         "psr-4": {

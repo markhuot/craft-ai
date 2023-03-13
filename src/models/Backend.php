@@ -6,8 +6,6 @@ use Craft;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\ServerException;
-use markhuot\craftai\Ai;
-use markhuot\craftai\backends\OpenAi;
 use markhuot\craftai\casts\Json as JsonCast;
 use markhuot\craftai\db\ActiveRecord;
 use markhuot\craftai\db\Table;
@@ -20,6 +18,7 @@ use RuntimeException;
 class Backend extends ActiveRecord
 {
     protected static bool $faked = false;
+
     protected Client $client;
 
     protected array $casts = [
@@ -37,7 +36,7 @@ class Backend extends ActiveRecord
         return Table::BACKENDS;
     }
 
-    public static function fake(bool $value=true)
+    public static function fake(bool $value = true)
     {
         static::$faked = $value;
     }
@@ -47,7 +46,7 @@ class Backend extends ActiveRecord
         return static::$faked;
     }
 
-    static function allFor(string $interface)
+    public static function allFor(string $interface)
     {
         $found = [];
         $possibilities = Backend::find()->all();
@@ -65,11 +64,10 @@ class Backend extends ActiveRecord
     /**
      * @template T
      *
-     * @param class-string<T> $interface
-     *
+     * @param  class-string<T>  $interface
      * @return T
      */
-    static function for(string $interface, $silence=false)
+    public static function for(string $interface, $silence = false)
     {
         $backends = static::allFor($interface);
         if (isset($backends[0])) {
@@ -77,7 +75,7 @@ class Backend extends ActiveRecord
         }
 
         if ($silence === false) {
-            throw new RuntimeException('No backend found supporting [' . $interface . ']');
+            throw new RuntimeException('No backend found supporting ['.$interface.']');
         }
     }
 
@@ -89,7 +87,7 @@ class Backend extends ActiveRecord
         ];
     }
 
-    function getTypeHandle()
+    public function getTypeHandle()
     {
         return strtolower((new ReflectionClass($this))->getShortName());
     }
@@ -97,25 +95,26 @@ class Backend extends ActiveRecord
     public function getSettingsView()
     {
         $shortName = (new ReflectionClass($this))->getShortName();
-        return 'ai/_backends/_' . strtolower($shortName);
+
+        return 'ai/_backends/_'.strtolower($shortName);
     }
 
-    function getClient()
+    public function getClient()
     {
         return new Client([
             'base_uri' => Craft::parseEnv($this->settings['baseUrl']),
             'headers' => [
-                'Authorization' => 'Bearer ' . Craft::parseEnv($this->settings['apiKey']),
+                'Authorization' => 'Bearer '.Craft::parseEnv($this->settings['apiKey']),
             ],
         ]);
     }
 
-    function post($uri, array $body=[], array $headers=[], ?string $rawBody=null, array $multipart=[])
+    public function post($uri, array $body = [], array $headers = [], ?string $rawBody = null, array $multipart = [])
     {
         try {
             if (static::$faked) {
-                ['function' => $methodName, 'args' => $args] = debug_backtrace(!DEBUG_BACKTRACE_PROVIDE_OBJECT,2)[1];
-                $fakeMethodName = $methodName . 'Fake';
+                ['function' => $methodName, 'args' => $args] = debug_backtrace(! DEBUG_BACKTRACE_PROVIDE_OBJECT, 2)[1];
+                $fakeMethodName = $methodName.'Fake';
                 if (method_exists($this, $fakeMethodName)) {
                     return $this->$fakeMethodName(...$args);
                 }
@@ -124,35 +123,33 @@ class Backend extends ActiveRecord
             $params = [
                 'headers' => $headers,
             ];
-            if (!empty($body)) {
+            if (! empty($body)) {
                 $params['json'] = $body;
             }
-            if (!empty($rawBody)) {
+            if (! empty($rawBody)) {
                 $params['body'] = $rawBody;
             }
-            if (!empty($multipart)) {
+            if (! empty($multipart)) {
                 $params['multipart'] = $multipart;
             }
 
             $response = $this->getClient()->request('POST', $uri, $params);
 
             return json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
-        }
-
-        catch (ClientException|ServerException $e) {
+        } catch (ClientException|ServerException $e) {
             $this->handleErrorResponse($e);
         }
     }
 
-    function handleErrorResponse(ClientException|ServerException $e)
+    public function handleErrorResponse(ClientException|ServerException $e)
     {
         throw $e;
     }
 
-    static function factory()
+    public static function factory()
     {
         $shortName = (new ReflectionClass(static::class))->getShortName();
-        $fqcn = 'markhuot\\craftai\\tests\\factories\\' . $shortName;
+        $fqcn = 'markhuot\\craftai\\tests\\factories\\'.$shortName;
 
         return $fqcn::factory();
     }

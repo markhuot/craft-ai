@@ -7,7 +7,7 @@ use markhuot\craftpest\factories\Factory;
 
 class OpenAi extends Factory
 {
-    function definition(int $index = 0)
+    public function definition(int $index = 0)
     {
         return [
             'type' => OpenAiModel::class,
@@ -16,12 +16,12 @@ class OpenAi extends Factory
         ];
     }
 
-    function newElement()
+    public function newElement()
     {
         return new OpenAiModel;
     }
 
-    function store($element)
+    public function store($element)
     {
         return $element->save();
     }

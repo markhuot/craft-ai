@@ -12,7 +12,7 @@ class Json extends Validator
      */
     public array $rules;
 
-    function validateAttribute($model, $attribute): void
+    public function validateAttribute($model, $attribute): void
     {
         // Get "null" props to start. If there's a rule like `['foo', 'required']` then we need
         // to make sure the `foo` prop is set to null so that the validator can __get('foo')
@@ -29,7 +29,7 @@ class Json extends Validator
             $dynamicModel->addRule($rule[0], $rule[1], array_slice($rule, 2));
         }
 
-        if (!$dynamicModel->validate()) {
+        if (! $dynamicModel->validate()) {
             foreach ($dynamicModel->errors as $key => $error) {
                 $model->addError($attribute.'.'.$key, $error[0]);
             }

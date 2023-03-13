@@ -10,7 +10,7 @@ class OpenSearch
 {
     protected Client $client;
 
-    function __construct()
+    public function __construct()
     {
         $this->connect();
     }
@@ -32,7 +32,7 @@ class OpenSearch
     protected function ensureIndex(): self
     {
         $response = $this->client->indices()->resolveIndex(['name' => 'craft']);
-        if  (empty($response['indices'])) {
+        if (empty($response['indices'])) {
             $this->client->indices()->create(['index' => 'craft']);
         }
 
@@ -58,44 +58,44 @@ class OpenSearch
         return $this;
     }
 
-    function index(string $id, array $document)
+    public function index(string $id, array $document)
     {
         $this->ensureIndex()->ensureMapping();
 
         $this->client->index(['index' => 'craft', 'id' => $id, 'body' => $document]);
     }
 
-    function knnSearch($vectors, $limit=3): array
+    public function knnSearch($vectors, $limit = 3): array
     {
         $json = $this->client->search([
             'index' => 'craft',
             'body' => [
-                "size" => $limit,
-                "query" => [
-                    "script_score" => [
-                        "query" => [
-                            "bool" => [
-                                "filter" => [
-                                    "bool" => [
-                                        "must_not" => [
-                                            ["exists" => ["field" => "revisionId"]],
-                                            ["exists" => ["field" => "draftId"]],
-                                            ["exists" => ["field" => "dateDeleted"]],
+                'size' => $limit,
+                'query' => [
+                    'script_score' => [
+                        'query' => [
+                            'bool' => [
+                                'filter' => [
+                                    'bool' => [
+                                        'must_not' => [
+                                            ['exists' => ['field' => 'revisionId']],
+                                            ['exists' => ['field' => 'draftId']],
+                                            ['exists' => ['field' => 'dateDeleted']],
                                         ],
-                                        "must" => [
-                                            "term" => ["enabled" => true],
-                                        ]
+                                        'must' => [
+                                            'term' => ['enabled' => true],
+                                        ],
                                     ],
                                 ],
                             ],
                         ],
-                        "script" => [
-                            "source" => "knn_score",
-                            "lang" => "knn",
-                            "params" => [
-                                "field" => "_keywords_vec",
-                                "query_value" => $vectors,
-                                "space_type" => "cosinesimil",
+                        'script' => [
+                            'source' => 'knn_score',
+                            'lang' => 'knn',
+                            'params' => [
+                                'field' => '_keywords_vec',
+                                'query_value' => $vectors,
+                                'space_type' => 'cosinesimil',
                             ],
                         ],
                     ],

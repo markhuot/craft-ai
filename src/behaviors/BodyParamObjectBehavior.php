@@ -3,13 +3,12 @@
 namespace markhuot\craftai\behaviors;
 
 use Craft;
-use markhuot\craftai\db\ActiveRecord;
-use yii\base\Model;
 use craft\web\Request;
 use craft\web\Response;
+use markhuot\craftai\db\ActiveRecord;
 use yii\base\Behavior;
+use yii\base\Model;
 use yii\web\BadRequestHttpException;
-use yii\web\HttpException;
 
 /**
  * @property Request $owner;
@@ -19,13 +18,12 @@ class BodyParamObjectBehavior extends Behavior
     /**
      * @template T
      *
-     * @param class-string<T> $class
-     *
+     * @param  class-string<T>  $class
      * @return T
      */
-    function getBodyParamObject(string|object $class, string $formName='')
+    public function getBodyParamObject(string|object $class, string $formName = '')
     {
-        if (!$this->owner->getIsPost()) {
+        if (! $this->owner->getIsPost()) {
             throw new BadRequestHttpException('Post request required');
         }
 
@@ -42,14 +40,13 @@ class BodyParamObjectBehavior extends Behavior
                     $class::$polymorphicKeyField => $bodyParams[$class::$polymorphicKeyField] ?? null,
                 ]));
             }
-        }
-        else {
+        } else {
             $model = new $class;
         }
 
         $model->load($bodyParams, $formName);
 
-        if (!$model->validate()) {
+        if (! $model->validate()) {
             $this->owner->getAcceptsJson() ?
                 $this->errorJson($model) :
                 $this->errorBack($model);
@@ -58,7 +55,7 @@ class BodyParamObjectBehavior extends Behavior
         return $model;
     }
 
-    function errorJson(Model $model)
+    public function errorJson(Model $model)
     {
         $response = new Response();
         $response->setStatusCode(500);
@@ -69,7 +66,7 @@ class BodyParamObjectBehavior extends Behavior
         Craft::$app->end(500, $response);
     }
 
-    function errorBack(Model $model)
+    public function errorBack(Model $model)
     {
         foreach ($model->errors as $key => $messages) {
             Craft::$app->session->setFlash('error.'.$key, implode(',', $messages));
@@ -83,13 +80,12 @@ class BodyParamObjectBehavior extends Behavior
         Craft::$app->end(500, $response);
     }
 
-    protected function setOldFlashes($array, $prefix='')
+    protected function setOldFlashes($array, $prefix = '')
     {
         foreach ($array as $key => $value) {
             if (is_array($value)) {
                 $this->setOldFlashes($value, implode('.', array_filter([$prefix, $key])));
-            }
-            else {
+            } else {
                 Craft::$app->session->setFlash('old.'.implode('.', array_filter([$prefix, $key])), $value);
             }
         }

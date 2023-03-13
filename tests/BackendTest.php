@@ -7,7 +7,7 @@ use markhuot\craftpest\factories\User;
 
 it('shows backends', function () {
     $user = User::factory()->admin(true);
-    
+
     $this->actingAs($user)
         ->get('admin/ai/backends')
         ->assertSee('Add a new AI backend');
@@ -60,4 +60,3 @@ it('processes backend errors', function () {
 
     $backend->generateImage('ERROR');
 });
-

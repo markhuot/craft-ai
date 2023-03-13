@@ -8,17 +8,17 @@ use markhuot\craftai\db\ActiveRecord;
 
 class Model
 {
-    function get($model, $key, $value)
+    public function get($model, $key, $value)
     {
         return $value;
     }
 
-    function set($model, $key, $value)
+    public function set($model, $key, $value)
     {
         $reflect = new \ReflectionClass($model);
         $property = $reflect->getProperty($key);
         $className = $property->getType()?->getName();
-        if (!$className) {
+        if (! $className) {
             return;
         }
 
@@ -42,6 +42,6 @@ class Model
             }
         }
 
-        throw new \RuntimeException('Could not cast [' . $value . '] to [' . (string)$property->getType() . ']');
+        throw new \RuntimeException('Could not cast ['.$value.'] to ['.(string) $property->getType().']');
     }
 }

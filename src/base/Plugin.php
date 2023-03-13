@@ -9,6 +9,7 @@ use markhuot\craftai\models\Settings;
 class Plugin extends \craft\base\Plugin
 {
     public bool $hasCpSettings = true;
+
     public bool $hasCpSection = true;
 
     public function init()

@@ -3,9 +3,7 @@
 namespace markhuot\craftai\controllers;
 
 use markhuot\craftai\db\AskQuery;
-use markhuot\craftai\features\GenerateEmbeddings;
 use markhuot\craftai\models\AskPostRequest;
-use markhuot\craftai\models\Backend;
 use markhuot\craftai\stubs\Request;
 use markhuot\craftai\web\Controller;
 
@@ -14,7 +12,7 @@ use markhuot\craftai\web\Controller;
  */
 class AskController extends Controller
 {
-    function actionIndex()
+    public function actionIndex()
     {
         $prompt = $this->request->getQueryParam('prompt', '');
 
@@ -24,7 +22,7 @@ class AskController extends Controller
         ]);
     }
 
-    function actionAsk()
+    public function actionAsk()
     {
         $data = $this->request->getBodyParamObject(AskPostRequest::class);
 

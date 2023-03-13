@@ -6,5 +6,5 @@ use markhuot\craftai\models\TextCompletionResponse;
 
 interface Completion
 {
-    function completeText(string $text): TextCompletionResponse;
+    public function completeText(string $text): TextCompletionResponse;
 }

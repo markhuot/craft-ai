@@ -23,9 +23,9 @@ class Settings extends Model
      */
     public array $drivers;
 
-    function __construct($config = [])
+    public function __construct($config = [])
     {
-        $defaultConfig = require __DIR__ . '/../config.php';
+        $defaultConfig = require __DIR__.'/../config.php';
         foreach ($defaultConfig as $key => $value) {
             $this->{$key} = $value;
         }
@@ -33,7 +33,7 @@ class Settings extends Model
         parent::__construct($config);
     }
 
-    function get($key)
+    public function get($key)
     {
         return Arr::get($this, $key);
     }

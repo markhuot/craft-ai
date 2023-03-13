@@ -12,12 +12,12 @@ class AskQuery
 {
     protected ?string $prompt;
 
-    function __construct(
+    public function __construct(
        protected Search $search,
     ) {
     }
 
-    function prompt(string $prompt): self
+    public function prompt(string $prompt): self
     {
         $this->prompt = $prompt;
 
@@ -27,7 +27,7 @@ class AskQuery
     /**
      * @return array{string|null, Collection}
      */
-    function answer(): array
+    public function answer(): array
     {
         if (empty($this->prompt)) {
             return [null, collect()];
@@ -40,7 +40,7 @@ class AskQuery
             'Given the following context attempt to answer the question below. If you do not know the answer with certainity respond with "I don\'t know".',
             "Context\n{$context}",
             "Question: {$this->prompt}",
-            "Answer: ",
+            'Answer: ',
         ]);
 
         $response = Backend::for(Completion::class)->completeText($prompt);

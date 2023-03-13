@@ -18,8 +18,7 @@ function listen(...$events)
 
             // Event::on($class, $event, \Craft::$container->invoke($handler->handle(...)));
             Event::on($class, $event, fn (...$args) => \Craft::$container->invoke($handler->handle(...), $args));
-        }
-        catch (\Throwable $e) {
+        } catch (\Throwable $e) {
             if (preg_match('/Class ".+" not found/', $e->getMessage())) {
                 continue;
             }

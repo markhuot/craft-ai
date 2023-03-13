@@ -7,18 +7,17 @@ use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
 use markhuot\craftai\models\ImageGenerationResponse;
-use markhuot\craftpest\factories\Asset;
 
 trait OpenAiDalle
 {
-    function generateImage(string $prompt, int $count=1): ImageGenerationResponse
+    public function generateImage(string $prompt, int $count = 1): ImageGenerationResponse
     {
         $body = $this->post(
             uri: 'images/generations',
             body: [
                 'prompt' => $prompt,
                 'n' => $count,
-                'size' => '512x512'
+                'size' => '512x512',
             ],
         );
 
@@ -35,7 +34,7 @@ trait OpenAiDalle
         return $response;
     }
 
-    function generateImageFake(string $prompt, int $count=1): array
+    public function generateImageFake(string $prompt, int $count = 1): array
     {
         if ($prompt === 'ERROR') {
             throw new ClientException(

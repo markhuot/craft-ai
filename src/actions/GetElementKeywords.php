@@ -2,7 +2,6 @@
 
 namespace markhuot\craftai\actions;
 
-use craft\base\Element;
 use craft\base\ElementInterface;
 use craft\helpers\Search;
 use Illuminate\Support\Collection;
@@ -17,9 +16,9 @@ class GetElementKeywords
         return collect()
             ->concat($this->getAttributeKeywords($element))
             ->concat($this->getFieldKeywords($element))
-            ->filter(fn ($value) => !empty($value) && mb_strlen($value) > 3);
+            ->filter(fn ($value) => ! empty($value) && mb_strlen($value) > 3);
     }
-    
+
     protected function getAttributeKeywords(ElementInterface $element)
     {
         return collect($element::searchableAttributes())
@@ -28,7 +27,7 @@ class GetElementKeywords
                 $attribute => $element->getSearchKeywords($attribute),
             ]);
     }
-    
+
     protected function getFieldKeywords(ElementInterface $element)
     {
         return collect($element->getFieldLayout()?->getCustomFields() ?? [])

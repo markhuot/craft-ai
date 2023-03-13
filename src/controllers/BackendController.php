@@ -8,7 +8,6 @@ use markhuot\craftai\backends\HuggingFace;
 use markhuot\craftai\backends\OpenAi;
 use markhuot\craftai\backends\StableDiffusion;
 use markhuot\craftai\models\Backend;
-use markhuot\craftai\models\BackendDeleteRequest;
 use markhuot\craftai\stubs\Request;
 use markhuot\craftai\web\Controller;
 
@@ -17,7 +16,7 @@ use markhuot\craftai\web\Controller;
  */
 class BackendController extends Controller
 {
-    function actionIndex()
+    public function actionIndex()
     {
         return $this->renderTemplate('ai/_backends/index', [
             'backends' => Backend::find()->all(),
@@ -25,10 +24,10 @@ class BackendController extends Controller
         ]);
     }
 
-    function actionToggleFakes()
+    public function actionToggleFakes()
     {
         $settings = Ai::getInstance()->getSettings();
-        $settings->useFakes = !$settings->useFakes;
+        $settings->useFakes = ! $settings->useFakes;
         \Craft::$app->getPlugins()->savePluginSettings(Ai::getInstance(), $settings->toArray());
 
         return $this->response(
@@ -37,25 +36,25 @@ class BackendController extends Controller
         );
     }
 
-    function actionCreate(string $type)
+    public function actionCreate(string $type)
     {
         return $this->cpEditScreen(match ($type) {
             'openai' => new OpenAi,
             'stable-diffusion' => new StableDiffusion,
             'hugging-face' => new HuggingFace,
-            default => throw new \RuntimeException('Could not find backend for [' . $type . ']'),
+            default => throw new \RuntimeException('Could not find backend for ['.$type.']'),
         });
     }
 
-    function actionEdit(int $id)
+    public function actionEdit(int $id)
     {
         return $this->cpEditScreen(Backend::find()->where(['id' => $id])->one());
     }
 
-    protected function cpEditScreen(?Backend $backend=null)
+    protected function cpEditScreen(?Backend $backend = null)
     {
         $screen = $this->asCpScreen()
-            ->title(($backend?->isNewRecord ? 'Create' : 'Edit') . ' Backend')
+            ->title(($backend?->isNewRecord ? 'Create' : 'Edit').' Backend')
             ->selectedSubnavItem('backends')
             ->addCrumb('Backends', UrlHelper::cpUrl('ai/backends'))
             ->action('ai/backend/store')
@@ -64,7 +63,7 @@ class BackendController extends Controller
                 'backend' => $backend,
             ]);
 
-        if (!$backend->isNewRecord) {
+        if (! $backend->isNewRecord) {
             $screen->addAltAction('Delete', [
                 'destructive' => true,
                 'action' => 'ai/backend/delete',
@@ -77,7 +76,7 @@ class BackendController extends Controller
         return $screen;
     }
 
-    function actionStore()
+    public function actionStore()
     {
         $this->request
             ->getBodyParamObject(Backend::class)
@@ -86,7 +85,7 @@ class BackendController extends Controller
         return $this->redirectToPostedUrl();
     }
 
-    function actionDelete()
+    public function actionDelete()
     {
         $this->request
             ->getBodyParamObject(Backend::class)

@@ -10,7 +10,7 @@ class Elasticsearch
 {
     protected Client $client;
 
-    function __construct()
+    public function __construct()
     {
         $this->connect();
     }
@@ -31,8 +31,8 @@ class Elasticsearch
 
     protected function ensureIndex(): self
     {
-        $response = json_decode((string)$this->client->indices()->resolveIndex(['name' => 'craft'])->getBody(), true, JSON_THROW_ON_ERROR);
-        if  (empty($response['indices'])) {
+        $response = json_decode((string) $this->client->indices()->resolveIndex(['name' => 'craft'])->getBody(), true, JSON_THROW_ON_ERROR);
+        if (empty($response['indices'])) {
             $this->client->indices()->create(['index' => 'craft']);
         }
 
@@ -60,14 +60,14 @@ class Elasticsearch
         return $this;
     }
 
-    function index(string $id, array $document)
+    public function index(string $id, array $document)
     {
         $this->ensureIndex()->ensureMapping();
 
         $this->client->index(['index' => 'craft', 'id' => $id, 'body' => $document]);
     }
 
-    function knnSearch($vectors): array
+    public function knnSearch($vectors): array
     {
         $response = $this->client->search([
             'index' => 'craft',
@@ -77,12 +77,12 @@ class Elasticsearch
                     'query_vector' => $vectors,
                     'k' => 10,
                     'num_candidates' => 100,
-                    "filter" => [
-                        "bool" => [
-                            "must_not" => [
-                                ["exists" => ["field" => "revisionId"]],
-                                ["exists" => ["field" => "draftId"]],
-                                ["exists" => ["field" => "dateDeleted"]],
+                    'filter' => [
+                        'bool' => [
+                            'must_not' => [
+                                ['exists' => ['field' => 'revisionId']],
+                                ['exists' => ['field' => 'draftId']],
+                                ['exists' => ['field' => 'dateDeleted']],
                             ],
                         ],
                     ],
@@ -92,7 +92,7 @@ class Elasticsearch
             ],
         ])->getBody();
 
-        $json = json_decode((string)$response, true, JSON_THROW_ON_ERROR);
+        $json = json_decode((string) $response, true, JSON_THROW_ON_ERROR);
         dd($json);
     }
 }

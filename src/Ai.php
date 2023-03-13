@@ -30,13 +30,13 @@ class Ai extends Plugin
         parent::init();
 
         listen(
-            fn() => [Application::class, Application::EVENT_BEFORE_REQUEST, AddBodyParamObjectBehavior::class],
-            fn() => [UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, RegisterCpUrlRules::class],
-            fn() => [Asset::class, Asset::EVENT_DEFINE_SIDEBAR_HTML, AddAssetSidebarWidgets::class],
-            fn() => [Element::class, Element::EVENT_AFTER_PROPAGATE, GenerateEmbeddings::class],
+            fn () => [Application::class, Application::EVENT_BEFORE_REQUEST, AddBodyParamObjectBehavior::class],
+            fn () => [UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, RegisterCpUrlRules::class],
+            fn () => [Asset::class, Asset::EVENT_DEFINE_SIDEBAR_HTML, AddAssetSidebarWidgets::class],
+            fn () => [Element::class, Element::EVENT_AFTER_PROPAGATE, GenerateEmbeddings::class],
             // fn() => [Fields::class, Fields::EVENT_REGISTER_FIELD_TYPES, AddAiField::class],
-            fn() => [\craft\redactor\Field::class, \craft\redactor\Field::EVENT_REGISTER_PLUGIN_PATHS, RegisterPluginPaths::class],
-            fn() => [\craft\redactor\Field::class, \craft\redactor\Field::EVENT_DEFINE_REDACTOR_CONFIG, DefineRedactorConfig::class],
+            fn () => [\craft\redactor\Field::class, \craft\redactor\Field::EVENT_REGISTER_PLUGIN_PATHS, RegisterPluginPaths::class],
+            fn () => [\craft\redactor\Field::class, \craft\redactor\Field::EVENT_DEFINE_REDACTOR_CONFIG, DefineRedactorConfig::class],
         );
 
         Backend::fake($this->getSettings()->useFakes);

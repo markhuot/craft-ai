@@ -3,12 +3,6 @@
 namespace markhuot\craftai\backends;
 
 use craft\helpers\Assets;
-use Gooseai\ArtifactType;
-use Gooseai\ClassifierParameters;
-use Gooseai\GenerationServiceClient;
-use Gooseai\Prompt;
-use Gooseai\Request;
-use GPBMetadata\Generation;
 use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\ServerException;
 use markhuot\craftai\features\GenerateImage;
@@ -28,7 +22,7 @@ class StableDiffusion extends \markhuot\craftai\models\Backend implements Genera
         return array_merge(parent::rules(), [
             ['settings', JsonValidator::class, 'rules' => [
                 [['baseUrl', 'apiKey'], 'required'],
-            ]]
+            ]],
         ]);
     }
 
@@ -38,7 +32,7 @@ class StableDiffusion extends \markhuot\craftai\models\Backend implements Genera
         throw new \RuntimeException($response['message']);
     }
 
-    function generateImage(string $prompt, int $count=1): ImageGenerationResponse
+    public function generateImage(string $prompt, int $count = 1): ImageGenerationResponse
     {
         $body = $this->post(
             uri: 'generation/stable-diffusion-512-v2-1/text-to-image',

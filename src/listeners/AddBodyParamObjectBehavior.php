@@ -7,7 +7,7 @@ use yii\base\Event;
 
 class AddBodyParamObjectBehavior
 {
-    function handle(Event $event)
+    public function handle(Event $event)
     {
         \Craft::$app->request->attachBehaviors(['bodyParamObject' => BodyParamObjectBehavior::class]);
     }

@@ -2,14 +2,10 @@
 
 namespace markhuot\craftai\controllers;
 
-use craft\elements\Asset;
 use craft\web\Controller;
-use markhuot\craftai\actions\CreateAssetsForImages;
 use markhuot\craftai\features\Chat;
-use markhuot\craftai\features\GenerateImage;
 use markhuot\craftai\models\Backend;
 use markhuot\craftai\models\ChatMessagePostRequest;
-use markhuot\craftai\models\GenerateImagePostRequest;
 use markhuot\craftai\stubs\Request;
 
 /**
@@ -17,7 +13,7 @@ use markhuot\craftai\stubs\Request;
  */
 class ChatController extends Controller
 {
-    function actionIndex()
+    public function actionIndex()
     {
         $messages = collect(\Craft::$app->session->get('craftai-messages', []));
         $personality = $messages->where('role', '=', 'system')->first()['content'] ??
@@ -31,7 +27,7 @@ class ChatController extends Controller
         ]);
     }
 
-    function actionSend()
+    public function actionSend()
     {
         $sessionKey = 'craftai-messages';
         $this->requirePostRequest();
@@ -54,7 +50,7 @@ class ChatController extends Controller
         return $this->redirect('ai/chat');
     }
 
-    function actionClear()
+    public function actionClear()
     {
         \Craft::$app->session->remove('craftai-messages');
 

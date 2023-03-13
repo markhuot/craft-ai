@@ -20,11 +20,6 @@
         "craftcms/redactor": "^3.0",
         "craftcms/craft": "dev-main"
     },
-    "scripts": {
-        "post-update-cmd": [
-            "./bin/post-install.sh"
-        ]
-    },
     "autoload": {
         "psr-4": {
             "markhuot\\craftai\\": "./src",

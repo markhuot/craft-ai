@@ -7,9 +7,12 @@ use yii\validators\Validator;
 
 class Json extends Validator
 {
+    /**
+     * @var array<array-key, mixed>
+     */
     public array $rules;
 
-    function validateAttribute($model, $attribute)
+    function validateAttribute($model, $attribute): void
     {
         // Get "null" props to start. If there's a rule like `['foo', 'required']` then we need
         // to make sure the `foo` prop is set to null so that the validator can __get('foo')

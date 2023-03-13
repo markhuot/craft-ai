@@ -145,7 +145,7 @@ jobs:
       - name: Setup
         run: ./bin/post-clone.sh
       - name: Install Craft
-        run: ./src/bin/craft install --username=admin --email=michael@bluth.com --password=secret --siteName=Ai --siteUrl=http://localhost:8080 --language=en-US
+        run: ./craft install --username=admin --email=michael@bluth.com --password=secret --siteName=Ai --siteUrl=http://localhost:8080 --language=en-US
       - name: Install plugins
         run: ./bin/post-install.sh
       - name: Run test suite

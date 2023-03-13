@@ -17,7 +17,7 @@ class Extension extends AbstractExtension
         ];
     }
 
-    function old($key, $default=null)
+    function old(string $key, object|string $default=null): string
     {
         $flashes = \Craft::$app->session->getAllFlashes();
 

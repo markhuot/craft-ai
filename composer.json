@@ -1,5 +1,6 @@
 {
     "name": "markhuot/craft-ai",
+    "description": "A Craft CMS plugin to integrate with AI services",
     "type": "craft-plugin",
     "authors": [
         {

@@ -58,14 +58,23 @@ class OpenSearch
         return $this;
     }
 
-    public function index(string $id, array $document)
+    /**
+     * @param array<mixed> $document
+     */
+    public function index(string $id, array $document): self
     {
         $this->ensureIndex()->ensureMapping();
 
         $this->client->index(['index' => 'craft', 'id' => $id, 'body' => $document]);
+
+        return $this;
     }
 
-    public function knnSearch($vectors, $limit = 3): array
+    /**
+     * @param array<double> $vectors
+     * @return array<mixed>
+     */
+    public function knnSearch(array $vectors, int $limit = 3): array
     {
         $json = $this->client->search([
             'index' => 'craft',
@@ -103,6 +112,9 @@ class OpenSearch
             ],
         ]);
 
-        return [collect($json['hits']['hits']), $json];
+        /** @var array<mixed> $hits */
+        $hits = $json['hits']['hits'];
+
+        return [collect($hits), $json];
     }
 }

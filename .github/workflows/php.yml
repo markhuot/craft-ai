@@ -125,6 +125,13 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      opensearch:
+        image: opensearchproject/opensearch:latest
+        ports:
+          - 9200:9200
+          - 9600:9600
+        env:
+          - "discovery.type=single-node"
     needs:
       - installPhp
     steps:

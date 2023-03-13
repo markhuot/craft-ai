@@ -10,11 +10,14 @@ use markhuot\craftai\Ai;
  * https://hub.docker.com/r/opensearchproject/opensearch#!
  * https://weaviate.io/developers/weaviate/installation
  *
- * @mixin Opensearch
+ * @mixin OpenSearch
  */
 class Search
 {
-    public function __call(string $method, array $arguments)
+    /**
+     * @param array<mixed> $arguments
+     */
+    public function __call(string $method, array $arguments): mixed
     {
         return $this->getBackend()->{$method}(...$arguments);
     }

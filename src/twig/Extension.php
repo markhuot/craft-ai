@@ -21,8 +21,8 @@ class Extension extends AbstractExtension
         /** @var array<array-key, string> $flashes */
         $flashes = \Craft::$app->session->getAllFlashes();
 
-        if (Arr::exists($flashes, 'old.'.$key)) {
-            return Arr::get($flashes, 'old.'.$key);
+        if ($flashes['old.'.$key] ?? false) {
+            return $flashes['old.'.$key];
         }
 
         if (is_object($default)) {
@@ -43,7 +43,7 @@ class Extension extends AbstractExtension
         return $default;
     }
 
-    public function flash($key)
+    public function flash(string $key): ?string
     {
         return \Craft::$app->session->getFlash($key);
     }

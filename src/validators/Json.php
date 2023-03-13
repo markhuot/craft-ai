@@ -8,7 +8,7 @@ use yii\validators\Validator;
 class Json extends Validator
 {
     /**
-     * @var array<array-key, mixed>
+     * @var array<array-key, array{array<string>|string, string}>
      */
     public array $rules;
 

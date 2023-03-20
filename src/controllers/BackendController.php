@@ -72,7 +72,7 @@ class BackendController extends Controller
             $screen
                 ->addAltAction('Save and continue editing', [
                     'action' => 'ai/backend/store',
-                    'redirect' => 'ai/backend/' . $backend?->id,
+                    'redirect' => 'ai/backend/'.$backend?->id,
                     'shortcut' => 's',
                 ])
                 ->addAltAction('Delete', [
@@ -102,6 +102,7 @@ class BackendController extends Controller
             ->delete();
 
         $this->asSuccess('Backend deleted');
+
         return $this->redirectToPostedUrl();
     }
 }

@@ -2,7 +2,6 @@
 
 namespace markhuot\craftai\twig;
 
-use Illuminate\Support\Arr;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFunction;
 

@@ -2,15 +2,10 @@
 
 namespace markhuot\craftai\backends;
 
-use craft\elements\Asset;
-use craft\helpers\Assets;
 use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\ServerException;
 use markhuot\craftai\features\Caption;
-use markhuot\craftai\features\GenerateImage;
 use markhuot\craftai\models\Backend;
-use markhuot\craftai\models\ImageCaptionResponse;
-use markhuot\craftai\models\ImageGenerationResponse;
 use markhuot\craftai\validators\Json as JsonValidator;
 use RuntimeException;
 

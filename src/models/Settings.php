@@ -3,7 +3,6 @@
 namespace markhuot\craftai\models;
 
 use Illuminate\Support\Arr;
-use Illuminate\Support\Collection;
 use markhuot\craftai\db\Model;
 
 class Settings extends Model

@@ -20,6 +20,7 @@ use RuntimeException;
 class Backend extends ActiveRecord
 {
     protected static bool $faked = false;
+
     protected Generator $faker;
 
     protected Client $client;

@@ -2,9 +2,7 @@
 
 namespace markhuot\craftai\backends;
 
-use craft\elements\Asset;
 use craft\helpers\Assets;
-use markhuot\craftai\models\EditImageResponse;
 use markhuot\craftai\models\ImageGenerationResponse;
 
 trait StableDiffusionGenerateImage

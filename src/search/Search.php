@@ -15,7 +15,7 @@ use markhuot\craftai\Ai;
 class Search
 {
     /**
-     * @param array<mixed> $arguments
+     * @param  array<mixed>  $arguments
      */
     public function __call(string $method, array $arguments): mixed
     {

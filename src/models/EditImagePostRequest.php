@@ -9,9 +9,13 @@ use markhuot\craftai\db\Model;
 class EditImagePostRequest extends Model
 {
     public ?string $prompt = null;
+
     public ?Asset $asset = null;
+
     public ?string $mask = null;
+
     public ?int $count = 1;
+
     public ?Backend $backend = null;
 
     protected array $casts = [

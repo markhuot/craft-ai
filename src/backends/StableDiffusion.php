@@ -2,12 +2,10 @@
 
 namespace markhuot\craftai\backends;
 
-use craft\helpers\Assets;
 use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\ServerException;
 use markhuot\craftai\features\EditImage;
 use markhuot\craftai\features\GenerateImage;
-use markhuot\craftai\models\ImageGenerationResponse;
 use markhuot\craftai\validators\Json as JsonValidator;
 
 class StableDiffusion extends \markhuot\craftai\models\Backend implements GenerateImage, EditImage

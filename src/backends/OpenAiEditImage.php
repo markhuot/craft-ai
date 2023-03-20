@@ -41,7 +41,7 @@ trait OpenAiEditImage
                 [
                     'url' => __DIR__.'/../../tests/data/fake.png',
                 ],
-            ]
+            ],
         ];
     }
 }

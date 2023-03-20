@@ -23,7 +23,7 @@ class GenerateEmbeddings
             return;
         }
 
-        if (!Backend::can(GenerateEmbeddingsFeature::class)) {
+        if (! Backend::can(GenerateEmbeddingsFeature::class)) {
             return;
         }
 

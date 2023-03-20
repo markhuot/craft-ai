@@ -131,7 +131,7 @@ jobs:
           - 9200:9200
           - 9600:9600
         env:
-          - "discovery.type=single-node"
+          "discovery.type": "single-node"
     needs:
       - installPhp
     steps:

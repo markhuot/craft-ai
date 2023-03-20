@@ -14,8 +14,8 @@ class GetElementKeywords
     public function handle(ElementInterface $element): Collection
     {
         return collect()
-            ->concat($this->getAttributeKeywords($element))
-            ->concat($this->getFieldKeywords($element))
+            ->merge($this->getAttributeKeywords($element))
+            ->merge($this->getFieldKeywords($element))
             ->filter(fn ($value) => ! empty($value) && mb_strlen($value) > 3);
     }
 

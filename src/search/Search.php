@@ -25,9 +25,9 @@ class Search
     public function getBackend(?string $driver = null): OpenSearch
     {
         $settings = Ai::getInstance()->getSettings();
-        $driver = $driver ?? $settings->driver;
+        $driver = $driver ?? $settings->searchDriver;
 
-        $class = $settings->get('drivers.'.$driver.'.class');
+        $class = $settings->get('searchDrivers.'.$driver.'.class');
 
         /** @var OpenSearch */
         return \Craft::$container->get($class);

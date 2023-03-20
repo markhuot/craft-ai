@@ -17,14 +17,11 @@ class OpenSearch
 
     protected function connect(): self
     {
-        $config = Ai::getInstance()->getSettings();
+        $settings = Ai::getInstance()->getSettings();
+        $config = $settings->get('searchDrivers.opensearch');
+        unset($config['class']);
 
-        $this->client = (new ClientBuilder)
-            ->setHosts($config->get('drivers.opensearch.hosts'))
-            ->setBasicAuthentication($config->get('drivers.opensearch.basicAuthentication.0'), $config->get('drivers.opensearch.basicAuthentication.1'))
-            //->setCABundle(\Craft::$app->path->getStoragePath() . '/certs/http_ca.crt')
-            ->setSSLVerification($config->get('drivers.opensearch.SSLVerification'))
-            ->build();
+        $this->client = ClientBuilder::fromConfig($config);
 
         return $this;
     }

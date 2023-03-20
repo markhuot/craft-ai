@@ -1,0 +1,30 @@
+{% import '_includes/forms.twig' as forms %}
+
+{% set features = collect({
+    'GenerateImage': 'Image Generation',
+    'Caption': 'Image Captioning',
+    'EditImage': 'Image Editing',
+    'Completion': 'Text Completion',
+    'EditText': 'Text Editing',
+    'Chat': 'Chat',
+    'GenerateEmbeddings': 'Semantic Search',
+}) %}
+
+{% set disable = collect(disable ?? []) %}
+{% set enable = collect(enable ?? features|keys) %}
+{% set checked = collect(backend.settings.enabledFeatures ?? (enable.diff(disable)|map(f => 'markhuot\\craftai\\features\\' ~ f))) %}
+
+{% set options = features|map((label, value) => {
+    name: 'settings[enabledFeatures][]',
+    value: 'markhuot\\craftai\\features\\' ~ value,
+    label: label,
+    disabled: disable.contains(value) or not enable.contains(value),
+    checked: checked.contains('markhuot\\craftai\\features\\' ~ value),
+}) %}
+
+<input type="hidden" name="settings[enabledFeatures][]" value="">
+{{ forms.checkboxGroupField({
+    label: 'Enabled Features',
+    name: 'features',
+    options: options,
+}) }}

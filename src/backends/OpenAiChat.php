@@ -18,4 +18,17 @@ trait OpenAiChat
 
         return $model;
     }
+
+    public function chatFake(array $messages): array
+    {
+        return [
+            'choices' => [
+                [
+                    'message' => [
+                        'content' => $this->faker->sentence,
+                    ],
+                ],
+            ],
+        ];
+    }
 }

@@ -27,7 +27,7 @@ class Model
                 case Volume::class: return \Craft::$app->volumes->getVolumeById($value);
             }
 
-            if (class_implements($className, ElementInterface::class)) {
+            if (isset(class_implements($className)[ElementInterface::class])) {
                 return $className::find()->id($value)->one();
             }
 

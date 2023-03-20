@@ -3,14 +3,14 @@
 return [
     'useFakes' => true,
 
-    'driver' => 'opensearch',
+    'searchDriver' => 'opensearch',
 
-    'drivers' => [
+    'searchDrivers' => [
         'opensearch' => [
             'class' => \markhuot\craftai\search\OpenSearch::class,
             'hosts' => ['https://localhost:9200'],
             'basicAuthentication' => ['admin', 'admin'],
-            'SSLVerification' => false,
+            'sslVerification' => false,
         ],
     ],
 ];

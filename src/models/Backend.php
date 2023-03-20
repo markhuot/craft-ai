@@ -3,6 +3,8 @@
 namespace markhuot\craftai\models;
 
 use Craft;
+use Faker\Factory;
+use Faker\Generator;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\ServerException;
@@ -18,6 +20,7 @@ use RuntimeException;
 class Backend extends ActiveRecord
 {
     protected static bool $faked = false;
+    protected Generator $faker;
 
     protected Client $client;
 
@@ -49,11 +52,12 @@ class Backend extends ActiveRecord
     public static function allFor(string $interface)
     {
         $found = [];
+        /** @var Backend[] $possibilities */
         $possibilities = Backend::find()->all();
 
         foreach ($possibilities as $possibility) {
             $reflect = new ReflectionClass($possibility);
-            if ($reflect->implementsInterface($interface)) {
+            if ($reflect->implementsInterface($interface) && collect($possibility->settings['enabledFeatures'] ?? [])->contains($interface)) {
                 $found[] = $possibility;
             }
         }
@@ -77,6 +81,18 @@ class Backend extends ActiveRecord
         if ($silence === false) {
             throw new RuntimeException('No backend found supporting ['.$interface.']');
         }
+    }
+
+    public static function can(string $interface): bool
+    {
+        return count(static::allFor($interface)) > 0;
+    }
+
+    public function init()
+    {
+        parent::init();
+
+        $this->faker = Factory::create();
     }
 
     public function rules()

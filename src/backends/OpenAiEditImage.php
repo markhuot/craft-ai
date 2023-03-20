@@ -33,4 +33,15 @@ trait OpenAiEditImage
 
         return $response;
     }
+
+    public function editImageFake(string $prompt, Asset $asset, string $mask, int $count = 1): array
+    {
+        return [
+            'data' => [
+                [
+                    'url' => __DIR__.'/../../tests/data/fake.png',
+                ],
+            ]
+        ];
+    }
 }

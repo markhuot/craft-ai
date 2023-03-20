@@ -18,9 +18,12 @@ class BackendController extends Controller
 {
     public function actionIndex()
     {
+        $config = \Craft::$app->config->getConfigFromFile('ai');
+
         return $this->renderTemplate('ai/_backends/index', [
             'backends' => Backend::find()->all(),
             'settings' => Ai::getInstance()->getSettings(),
+            'isFakesSetInFileConfig' => isset($config['useFakes']),
         ]);
     }
 
@@ -58,19 +61,27 @@ class BackendController extends Controller
             ->selectedSubnavItem('backends')
             ->addCrumb('Backends', UrlHelper::cpUrl('ai/backends'))
             ->action('ai/backend/store')
-            ->redirectUrl(UrlHelper::prependCpTrigger('ai/backends'))
+            ->redirectUrl('ai/backends')
+            ->saveShortcutRedirectUrl('ai/backend/{id}')
+            ->editUrl($backend?->id ? 'ai/backend/'.$backend?->id : null)
             ->contentTemplate('ai/_backends/create', [
                 'backend' => $backend,
             ]);
 
         if (! $backend->isNewRecord) {
-            $screen->addAltAction('Delete', [
-                'destructive' => true,
-                'action' => 'ai/backend/delete',
-                'params' => ['backend' => $backend?->id],
-                'redirect' => 'ai/backends',
-                'confirm' => 'Are you sure you want to delete this backend?',
-            ]);
+            $screen
+                ->addAltAction('Save and continue editing', [
+                    'action' => 'ai/backend/store',
+                    'redirect' => 'ai/backend/' . $backend?->id,
+                    'shortcut' => 's',
+                ])
+                ->addAltAction('Delete', [
+                    'destructive' => true,
+                    'action' => 'ai/backend/delete',
+                    'params' => ['backend' => $backend?->id],
+                    'redirect' => 'ai/backends',
+                    'confirm' => 'Are you sure you want to delete this backend?',
+                ]);
         }
 
         return $screen;
@@ -78,11 +89,10 @@ class BackendController extends Controller
 
     public function actionStore()
     {
-        $this->request
-            ->getBodyParamObject(Backend::class)
-            ->save();
+        $backend = $this->request->getBodyParamObject(Backend::class);
+        $backend->save();
 
-        return $this->redirectToPostedUrl();
+        return $this->asModelSuccess($backend, 'Backend saved');
     }
 
     public function actionDelete()
@@ -91,6 +101,7 @@ class BackendController extends Controller
             ->getBodyParamObject(Backend::class)
             ->delete();
 
+        $this->asSuccess('Backend deleted');
         return $this->redirectToPostedUrl();
     }
 }

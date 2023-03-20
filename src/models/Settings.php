@@ -3,6 +3,7 @@
 namespace markhuot\craftai\models;
 
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use markhuot\craftai\db\Model;
 
 class Settings extends Model
@@ -16,12 +17,12 @@ class Settings extends Model
     /**
      * The driver to use for the AI services.
      */
-    public string $driver;
+    public string $searchDriver;
 
     /**
      * @var array The configuration for the various search back-ends
      */
-    public array $drivers;
+    public array $searchDrivers;
 
     public function __construct($config = [])
     {

@@ -43,31 +43,7 @@
         </div>
 
         <div class="ai-mt-l">
-            <div class="btngroup">
-                {{ forms.submitButton({
-                    label: 'Generate',
-                    class: 'btn submit',
-                }) }}
-                {{ forms.button({
-                    label: '',
-                    class: 'btn submit menubtn',
-                }) }}
-                <div class="menu">
-                    <ul>
-                        {% for backend in backends %}
-                        <li>
-                            {{ tag('a', {
-                                text: 'Generate with ' ~ backend.name,
-                                class: 'formsubmit',
-                                data: {
-                                    params: {'backend': backend.id}
-                                }
-                            }) }}
-                        </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
+            {% include 'ai/_images/_submit' %}
         </div>
     </form>
 

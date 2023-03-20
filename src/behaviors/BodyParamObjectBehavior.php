@@ -47,6 +47,7 @@ class BodyParamObjectBehavior extends Behavior
         $model->load($bodyParams, $formName);
 
         if (! $model->validate()) {
+            dd($model);
             $this->owner->getAcceptsJson() ?
                 $this->errorJson($model) :
                 $this->errorBack($model);

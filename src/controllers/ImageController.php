@@ -7,6 +7,7 @@ use craft\elements\Asset;
 use craft\web\Controller;
 use markhuot\craftai\actions\CreateAssetsForImages;
 use markhuot\craftai\features\Caption;
+use markhuot\craftai\features\EditImage;
 use markhuot\craftai\features\GenerateImage;
 use markhuot\craftai\models\Backend;
 use markhuot\craftai\models\EditImagePostRequest;
@@ -32,7 +33,6 @@ class ImageController extends Controller
 
     public function actionStoreGeneration()
     {
-        $this->requirePostRequest();
         $data = $this->request->getBodyParamObject(GenerateImagePostRequest::class);
 
         $response = ($data->backend ?? Backend::for(GenerateImage::class))->generateImage($data->prompt, $data->count);
@@ -61,6 +61,7 @@ class ImageController extends Controller
         return $this->renderTemplate('ai/_images/edit', [
             'asset' => Asset::find()->id($this->request->getQueryParam('assetId'))->one(),
             'prompt' => null,
+            'backends' => Backend::allFor(EditImage::class),
         ]);
     }
 
@@ -69,7 +70,7 @@ class ImageController extends Controller
         $this->requirePostRequest();
         $data = $this->request->getBodyParamObject(EditImagePostRequest::class);
 
-        $response = ($data->backend ?? Backend::for(GenerateImage::class))->editImage($data->prompt, $data->asset, $data->mask, $data->count);
+        $response = ($data->backend ?? Backend::for(EditImage::class))->editImage($data->prompt, $data->asset, $data->mask, $data->count);
         $assets = \Craft::$container->get(CreateAssetsForImages::class)->handle($data->asset->volume, $response->paths);
 
         $this->setSuccessFlash('Generated '.count($assets).' assets');

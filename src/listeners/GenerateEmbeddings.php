@@ -23,6 +23,10 @@ class GenerateEmbeddings
             return;
         }
 
+        if (!Backend::can(GenerateEmbeddingsFeature::class)) {
+            return;
+        }
+
         $keywords = $getKeywords->handle($element)
             ->map(fn ($value, $key) => "The {$key} is {$value}")
             ->join("\n");

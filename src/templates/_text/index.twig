@@ -13,7 +13,7 @@
 
         <div class="flex gap-m">
             <div class="flex-grow">
-                {{ forms.textField({
+                {{ forms.textAreaField({
                     first: true,
                     label: 'Prompt',
                     name: 'content',
@@ -34,7 +34,7 @@
 
     <hr>
 
-    <div class="">
+    <div>
         {{ craft.app.request.getParam('completion') }}
     </div>
 {% endblock %}

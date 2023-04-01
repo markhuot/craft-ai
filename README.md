@@ -44,3 +44,42 @@ also disable "Use Live Data" on the plugin settings page. This will cause the pl
 instead of reaching out to the back-end. Note: the fake data does not actually use AI to generate responses.
 While it should retain the same approximate shape of a real AI response, it will not be accurate to the
 given prompt.
+
+## Generate Text
+
+![text-generation.png](assets%2Ftext-generation.png)
+
+Text generation takes a prompt and generates the next word or words to complete the thought. The prompt should
+be detailed and provide as much context as possible to elicit a meaningful response. For example, if you simply
+asked the system "What is baseball?" it would likely respond with a short sentence about the abstract sport of
+baseball. However, if you asked a more specific version of the question, such as "What is Major League Baseball
+and how is it played in the United States?" it would likely respond with a much more detailed answer. It is common
+to write prompts that are several sentences long and lead the AI in a specific direction. Expanding on the
+baseball example, you could write,
+
+```
+Question: What is Major League Baseball and how is it played in the United States? Respond with several sentences about
+the sport of baseball as well as the history of the sport in the United States. Include information about the
+most popular teams and players from the last five years.
+
+Answer:
+```
+
+## Chat
+
+![chat.png](assets%2Fchat.png)
+
+Chat provides a virtual assistant that uses your site's content to answer questions. The assistant is powered by a series
+of call and response style prompts and is capable of using past responses to inform future responses. Note: the chat
+backends are limited by the size of the prompt (cumulative across all messages) so you will need to "clear" the messages
+periodically in order to avoid hitting the prompt limit.
+
+You may interact with chat either through the dedicated chat page or by using the chat widget in the bottom right of the
+control panel. Both interfaces share the same message history.
+
+When interacting with the chat while viewing an element, such as an entry, asset, or user the chat will be passed the
+element as additional context. This allows you to ask the chat questions about the element currently being viewed such as
+"add a paragraph to this entry with historical information about the subject". Given the preceding example of adding
+historical information the chat system would read the currently viewed entry and add contextually relevant history based
+on the content of the entry. If the entry was about baseball it would add baseball history. If the entry was about
+fine art it would add fine art history.

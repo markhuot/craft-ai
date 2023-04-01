@@ -6,7 +6,7 @@ use markhuot\craftai\Ai;
 use OpenSearch\Client;
 use OpenSearch\ClientBuilder;
 
-class OpenSearch
+class OpenSearch implements SearchInterface
 {
     protected Client $client;
 

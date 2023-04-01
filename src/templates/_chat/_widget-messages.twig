@@ -1,0 +1,15 @@
+<div data-chat-widget-messages>
+    {% if messages|length == 0 %}
+        <p><em>Start a new conversion with Craft AI. You can ask general questions like, "who won the 1980 World Series?" or content specific questions like "are there any grammar mistakes in this entry?"</em></p>
+    {% endif %}
+    <ul class="ai-space-x-md">
+        {% for message in messages %}
+            {% if message.role != 'system' %}
+                <li>
+                    <strong>{{ message.role }}</strong><br>
+                    {{ message.content }}
+                </li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+</div>

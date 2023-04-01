@@ -19,4 +19,11 @@ trait HuggingFaceCaption
 
         return $response;
     }
+
+    public function generateCaptionFake(Asset $asset): array
+    {
+        return [
+            ['generated_text' => 'lorem ipsum dolor sit amet'],
+        ];
+    }
 }

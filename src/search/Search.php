@@ -10,7 +10,7 @@ use markhuot\craftai\Ai;
  * https://hub.docker.com/r/opensearchproject/opensearch#!
  * https://weaviate.io/developers/weaviate/installation
  *
- * @mixin OpenSearch
+ * @mixin SearchInterface
  */
 class Search
 {
@@ -22,7 +22,7 @@ class Search
         return $this->getBackend()->{$method}(...$arguments);
     }
 
-    public function getBackend(?string $driver = null): OpenSearch
+    public function getBackend(?string $driver = null): OpenSearch|NullSearch
     {
         $settings = Ai::getInstance()->getSettings();
         $driver = $driver ?? $settings->searchDriver;

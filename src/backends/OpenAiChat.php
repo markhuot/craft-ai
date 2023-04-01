@@ -9,7 +9,7 @@ trait OpenAiChat
     public function chat(array $messages): ChatMessageResponse
     {
         $response = $this->post('chat/completions', [
-            'model' => 'gpt-3.5-turbo',
+            'model' => 'gpt-4',
             'messages' => $messages,
         ]);
 

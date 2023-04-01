@@ -27,11 +27,18 @@ class Plugin extends \craft\base\Plugin
 
     public function setSettings(array $settings): void
     {
+        $config = require __DIR__.'/../config.php';
+
         // Only useFakes is stored in the database. The rest of the settings
         // we pull out of the filesystem exclusively
-        $settings = collect($settings)->only(['useFakes'])->toArray();
+        $config['useFakes'] = $settings['useFakes'] ?? $config['useFakes'];
 
-        parent::setSettings($settings);
+        if (file_exists($userConfigPath = Craft::getAlias('@config/ai.php'))) {
+            $userConfig = require $userConfigPath;
+            $config = array_merge($config, $userConfig);
+        }
+
+        parent::setSettings($config);
     }
 
     protected function settingsHtml(): ?string

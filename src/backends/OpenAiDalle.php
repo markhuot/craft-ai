@@ -45,11 +45,10 @@ trait OpenAiDalle
         }
 
         return [
-            'data' => [
-                [
-                    'url' => __DIR__.'/../../tests/data/fake.png',
-                ],
-            ],
+            'data' => collect([])
+                ->pad($count, null)
+                ->map(fn () => ['url' => __DIR__.'/../../tests/data/fake.png'])
+                ->toArray(),
         ];
     }
 }

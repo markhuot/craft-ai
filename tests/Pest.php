@@ -16,6 +16,10 @@ uses(
     markhuot\craftpest\test\RefreshesDatabase::class,
 )->in('./');
 
+uses()->beforeEach(function () {
+    \markhuot\craftai\models\Backend::fake();
+})->in('./');
+
 /*
 |--------------------------------------------------------------------------
 | Expectations

@@ -1,0 +1,91 @@
+{% import '_includes/forms.twig' as forms %}
+
+<div data-chat-widget-container class="ai-fixed ai-bottom-0 ai-tranform-popover ai-right-0 ai-pl-md ai-pr-xl ai-w-sidebar ai-z-top ai-transform-popover">
+    <div class="ai-rounded-t-lg ai-overflow-hidden ai-bg-gray ai-shadow-sidebar">
+        <button data-chat-widget-toggle class="ai-py-m ai-px ai-flex ai-justify-between ai-w-full group hover:ai-bg-gray-800">
+            <strong class="ai-text-base">Chat</strong>
+            <span data-chat-widget-toggle-arrow class="menubtn ai-bg-gray ai-rounded ai-bg-gray-800 group-hover:ai-bg-gray ai-w-1.5rem ai-h-1.5rem ai-overflow-hidden ai-flex ai-items-center ai-justify-center ai-rotate-180"></span>
+        </button>
+        <div class="ai-pb-m ai-px">
+            {% include "ai/_chat/_widget-messages" with { messages: messages|default([]) } %}
+            <form class="ai-flex ai-flex-gap ai-mt-md" data-chat-widget>
+                {{ forms.hidden({
+                    name: 'elementId',
+                    value: elementId|default(null),
+                }) }}
+                {{ forms.text({
+                    first: true,
+                    name: 'message',
+                    placeholder: 'Ask a question...',
+                }) }}
+                {{ forms.button({
+                    label: '→',
+                    type: 'submit',
+                    class: 'btn submit',
+                    class: 'btn',
+                }) }}
+            </form>
+            <p class="ai-center ai-mt-sm"><a href="#" data-chat-widget-clear>Clear messages</a></p>
+        </div>
+    </div>
+</div>
+
+{% js %}
+    if (localStorage.getItem("chatWidgetClosed") === 'false') {
+        document.querySelector('[data-chat-widget-container]').classList.remove('ai-transform-popover');
+        document.querySelector('[data-chat-widget-toggle-arrow]').classList.remove('ai-rotate-180');
+    }
+    setTimeout(() => {
+        document.querySelector('[data-chat-widget-container]').classList.add('ai-transition-transform')
+        document.querySelector('[data-chat-widget-toggle-arrow]').classList.add('ai-transition-transform')
+    }, 100);
+
+    document.addEventListener('click', event => {
+        if (!event.target.closest) {
+            return;
+        }
+        const target = event.target.closest('[data-chat-widget-toggle]');
+        if (!target) {
+            return;
+        }
+
+        event.preventDefault();
+        document.querySelector('[data-chat-widget-container]').classList.toggle('ai-transform-popover');
+        document.querySelector('[data-chat-widget-toggle-arrow]').classList.toggle('ai-rotate-180');
+
+        localStorage.setItem("chatWidgetClosed", document.querySelector('[data-chat-widget-container]').classList.contains('ai-transform-popover'));
+    });
+    document.addEventListener('submit', event => {
+        if (!event.target.dataset || event.target.dataset.chatWidget === undefined) {
+            return;
+        }
+
+        event.preventDefault();
+        const form = event.target;
+        const elementId = form.elementId.value;
+        const message = form.message.value;
+        Craft.postActionRequest('ai/chat/send', { message, elementId }, response => {
+            if (response.success) {
+                document.querySelector('[data-chat-widget-messages]').innerHTML = response.messageMarkup;
+                form.message.value = '';
+            } else {
+                Craft.cp.displayError(response.message);
+            }
+        });
+    });
+    document.addEventListener('click', event => {
+        if (!event.target.dataset || event.target.dataset.chatWidgetClear === undefined) {
+            return;
+        }
+
+        event.preventDefault();
+
+        Craft.postActionRequest('ai/chat/clear', {}, response => {
+            if (response.success) {
+                document.querySelector('[data-chat-widget-messages]').innerHTML = response.messageMarkup;
+            } else {
+                Craft.cp.displayError(response.message);
+            }
+        });
+    });
+{% endjs %}

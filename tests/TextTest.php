@@ -3,10 +3,8 @@
 use markhuot\craftai\backends\OpenAi;
 use markhuot\craftai\features\EditText;
 use markhuot\craftai\models\Backend;
-use markhuot\craftai\models\TextCompletionResponse;
 use markhuot\craftai\models\TextEditResponse;
 use markhuot\craftpest\factories\User;
-use function markhuot\craftpest\helpers\test\mock;
 
 beforeEach(fn () => Backend::fake());
 

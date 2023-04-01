@@ -2,20 +2,26 @@
 
 namespace markhuot\craftai\models;
 
-use markhuot\craftai\casts\Model as ModelCast;
+use craft\base\ElementInterface;
 use markhuot\craftai\db\Model;
-use craft\models\Volume;
 
 class ChatMessagePostRequest extends Model
 {
-    public string $message;
-    public string $personality;
+    public ?string $message = null;
+
+    public ?string $personality = null;
+
+    public ?int $elementId = null;
 
     public function rules(): array
     {
         return [
-            [['personality'], 'required'],
             [['message'], 'required'],
         ];
+    }
+
+    public function safeAttributes()
+    {
+        return array_merge(parent::safeAttributes(), ['personality', 'elementId']);
     }
 }

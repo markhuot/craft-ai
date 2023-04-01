@@ -24,12 +24,8 @@
                 }) }}
             </div>
         </div>
-        <div class="mt-l">
-            {{ forms.submitButton({
-                label: 'Generate',
-                class: 'btn submit',
-                type: 'submit',
-            }) }}
+        <div class="ai-mt-l">
+            {% include 'ai/_images/_submit' %}
         </div>
     </form>
     <style>
@@ -43,26 +39,30 @@
             background-position:0 0, 0 0, -10px -10px, 10px 10px;
         }
     </style>
-    <canvas class="mt-l" data-edit-canvas id="canvas" width="{{ asset.width }}" height="{{ asset.height }}"></canvas>
+    <canvas class="ai-mt-l" data-edit-canvas id="canvas" width="{{ asset.width }}" height="{{ asset.height }}"></canvas>
 {% endblock %}
 
 {% js %}
-    document.addEventListener('submit', function (event) {
-        if (event.target?.dataset?.editForm === undefined) {
-            return;
-        }
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.value = '';
+    input.name = 'mask';
+    document.querySelector('[data-edit-form]').appendChild(input);
 
-        const canvas = document.querySelector('[data-edit-canvas]');
-        const pngData = canvas.toDataURL('image/png');
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.value = pngData;
-        input.name = 'mask';
-        event.target.appendChild(input);
+//     document.addEventListener('submit', function (event) {
+//         if (event.target?.dataset?.editForm === undefined) {
+//             return;
+//         }
+//
+//         const canvas = document.querySelector('[data-edit-canvas]');
+//         const pngData = canvas.toDataURL('image/png');
+//         const input = document.createElement('input');
+//         input.type = 'hidden';
+//         input.value = pngData;
+//         input.name = 'mask';
+//         event.target.appendChild(input);
+//     });
 
-        // console.log('debug', pngData.length);
-        // event.preventDefault();
-    });
     // Code from https://github.com/herbertyoung/Eraser.js
     (function(exports){
         var document = exports.document,
@@ -170,6 +170,9 @@
                 }else{
                     this.canvas.removeEventListener(tapmove, this.tapMoveHandler, false);
                 }
+
+                document.querySelector('[data-edit-form]').querySelector('[name="mask"]').value =
+                    document.querySelector('[data-edit-canvas]').toDataURL('image/png');
             },
             removeEvent: function(){
                 this.canvas.removeEventListener(tapstart, this.tapStartHandler, false);

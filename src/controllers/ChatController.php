@@ -2,22 +2,21 @@
 
 namespace markhuot\craftai\controllers;
 
-use craft\elements\Asset;
-use craft\web\Controller;
-use markhuot\craftai\actions\CreateAssetsForImages;
+use markhuot\craftai\actions\GetElementKeywords;
 use markhuot\craftai\features\Chat;
-use markhuot\craftai\features\GenerateImage;
 use markhuot\craftai\models\Backend;
 use markhuot\craftai\models\ChatMessagePostRequest;
-use markhuot\craftai\models\GenerateImagePostRequest;
 use markhuot\craftai\stubs\Request;
+use markhuot\craftai\web\Controller;
 
 /**
  * @property Request $request
  */
 class ChatController extends Controller
 {
-    function actionIndex()
+    const CACHE_KEY = 'craftai-messages';
+
+    public function actionIndex()
     {
         $messages = collect(\Craft::$app->session->get('craftai-messages', []));
         $personality = $messages->where('role', '=', 'system')->first()['content'] ??
@@ -31,16 +30,25 @@ class ChatController extends Controller
         ]);
     }
 
-    function actionSend()
+    public function actionSend()
     {
-        $sessionKey = 'craftai-messages';
         $this->requirePostRequest();
         $data = $this->request->getBodyParamObject(ChatMessagePostRequest::class);
 
-        $messages = \Craft::$app->session->get($sessionKey) ?? [[
+        $keywords = '';
+        if ($data->elementId) {
+            $element = \Craft::$app->elements->getElementById($data->elementId);
+            $keywords = "\n\nAdditional Context: " . \Craft::$container->get(GetElementKeywords::class)->handle($element)->join(' ');
+        }
+
+        $messages = collect(\Craft::$app->session->get(static::CACHE_KEY) ?? [[
             'role' => 'system',
-            'content' => $data->personality,
-        ]];
+            'content' => '',
+        ]]);
+        $messages = $messages->map(fn ($message) => $message['role'] === 'system' ? [
+            'role' => 'system',
+            'content' => $data->personality . $keywords,
+        ] : $message)->toArray();
         $messages[] = [
             'role' => 'user',
             'content' => $data->message,
@@ -49,15 +57,31 @@ class ChatController extends Controller
             'role' => 'assistant',
             'content' => Backend::for(Chat::class)->chat($messages)->message,
         ];
-        \Craft::$app->session->set($sessionKey, $messages);
+        \Craft::$app->session->set(static::CACHE_KEY, $messages);
 
-        return $this->redirect('ai/chat');
+        return $this->response(
+            html: fn () => $this->redirect('ai/chat'),
+            json: [
+                'success' => true,
+                'messageMarkup' => \Craft::$app->view->renderTemplate('ai/_chat/_widget-messages', [
+                    'messages' => $messages,
+                ])
+            ],
+        );
     }
 
-    function actionClear()
+    public function actionClear()
     {
-        \Craft::$app->session->remove('craftai-messages');
+        \Craft::$app->session->remove(static::CACHE_KEY);
 
-        return $this->redirect('ai/chat');
+        return $this->response(
+            html: fn () => $this->redirect('ai/chat'),
+            json: [
+                'success' => true,
+                'messageMarkup' => \Craft::$app->view->renderTemplate('ai/_chat/_widget-messages', [
+                    'messages' => [],
+                ])
+            ],
+        );
     }
 }

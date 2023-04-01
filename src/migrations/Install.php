@@ -3,12 +3,12 @@
 namespace markhuot\craftai\migrations;
 
 use craft\db\Migration;
-use markhuot\craftai\db\Table;
 use craft\db\Table as CraftTables;
+use markhuot\craftai\db\Table;
 
 class Install extends Migration
 {
-    function safeUp()
+    public function safeUp()
     {
         $this->createTable(Table::BACKENDS, [
             'id' => $this->primaryKey(),
@@ -24,7 +24,7 @@ class Install extends Migration
         return true;
     }
 
-    function safeDown()
+    public function safeDown()
     {
         $this->dropTableIfExists(Table::BACKENDS);
         $this->dropColumn(CraftTables::ASSETS, 'caption');

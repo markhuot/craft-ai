@@ -6,7 +6,7 @@ trait CastsAttributes
 {
     protected array $casts = [];
 
-    function __get($key)
+    public function __get($key)
     {
         if ($caster = ($this->casts[$key] ?? false)) {
             return (new $caster)->get($this, $key, $this->getAttribute($key));
@@ -15,7 +15,7 @@ trait CastsAttributes
         return parent::__get($key);
     }
 
-    function setAttributes($values, $safeOnly = true): void
+    public function setAttributes($values, $safeOnly = true): void
     {
         foreach ($values as $key => $value) {
             if ($caster = ($this->casts[$key] ?? false)) {

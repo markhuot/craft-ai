@@ -6,5 +6,5 @@ use markhuot\craftai\models\ImageGenerationResponse;
 
 interface GenerateImage
 {
-    function generateImage(string $prompt, int $count=1): ImageGenerationResponse;
+    public function generateImage(string $prompt, int $count = 1): ImageGenerationResponse;
 }

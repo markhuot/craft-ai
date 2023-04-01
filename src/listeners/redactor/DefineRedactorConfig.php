@@ -9,7 +9,7 @@ use markhuot\craftai\models\Backend;
 
 class DefineRedactorConfig
 {
-    function handle(ModifyRedactorConfigEvent $event)
+    public function handle(ModifyRedactorConfigEvent $event)
     {
         if (empty($event->config)) {
             if (Backend::for(Completion::class, true)) {

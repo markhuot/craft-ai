@@ -6,10 +6,10 @@ use markhuot\craftai\models\ChatMessageResponse;
 
 trait OpenAiChat
 {
-    function chat(array $messages): ChatMessageResponse
+    public function chat(array $messages): ChatMessageResponse
     {
         $response = $this->post('chat/completions', [
-            "model" => "gpt-3.5-turbo",
+            'model' => 'gpt-4',
             'messages' => $messages,
         ]);
 
@@ -17,5 +17,18 @@ trait OpenAiChat
         $model->message = $response['choices'][0]['message']['content'];
 
         return $model;
+    }
+
+    public function chatFake(array $messages): array
+    {
+        return [
+            'choices' => [
+                [
+                    'message' => [
+                        'content' => $this->faker->sentence,
+                    ],
+                ],
+            ],
+        ];
     }
 }

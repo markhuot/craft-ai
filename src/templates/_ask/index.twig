@@ -1,0 +1,41 @@
+{% extends "_layouts/cp.twig" %}
+{% import '_includes/forms.twig' as forms %}
+
+{% do view.registerAssetBundle("markhuot\\craftai\\assetbundles\\CraftAi") %}
+{% set title = "Ask a question"|t('ai') %}
+{% set selectedSubnavItem = 'ask' %}
+
+{% block content %}
+    <form action="" method="post">
+        {{ csrfInput() }}
+        {{ actionInput('ai/ask/ask') }}
+        {{ redirectInput('ai/ask') }}
+
+        <div class="flex gap-m ai-items-end">
+            <div class="flex-grow">
+                {{ forms.textField({
+                    first: true,
+                    label: 'Prompt',
+                    name: 'prompt',
+                    placeholder: 'how much would would a wouldchuck chuck if a wouldchuck could chuck wood?',
+                    value: old('prompt', prompt),
+                    errors: [flash('error.prompt')]|filter,
+                }) }}
+            </div>
+            {{ forms.submitButton({
+                label: 'Ask',
+                class: 'btn submit',
+            }) }}
+        </div>
+    </form>
+
+    <hr>
+
+    {% if answer[0] %}
+        <p>{{ answer[0] }}</p>
+        {% set entries = craft.entries.status(null).id(answer[1].pluck('_source.elementId')).collect() %}
+        {% if entries.count() %}
+            <p>Consulted: {{ entries|map(e => '<a href="#">'~e.title~'</a>')|join(', ')|raw }}</p>
+        {% endif %}
+    {% endif %}
+{% endblock %}

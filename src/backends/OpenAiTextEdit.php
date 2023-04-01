@@ -6,7 +6,7 @@ use markhuot\craftai\models\TextEditResponse;
 
 trait OpenAiTextEdit
 {
-    function editText(string $input, string $instruction): TextEditResponse
+    public function editText(string $input, string $instruction): TextEditResponse
     {
         $response = $this->post('edits', [
             'model' => 'text-davinci-edit-001',
@@ -20,12 +20,12 @@ trait OpenAiTextEdit
         return $model;
     }
 
-    function editTextFake(string $input, string $instruction): array
+    public function editTextFake(string $input, string $instruction): array
     {
         return [
             'choices' => [
                 [
-                    'text' => $input . ' ' . $instruction,
+                    'text' => $input.' '.$instruction,
                 ],
             ],
         ];

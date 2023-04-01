@@ -6,8 +6,8 @@ use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\ServerException;
 use markhuot\craftai\features\Chat;
 use markhuot\craftai\features\Completion;
-use markhuot\craftai\features\EditText;
 use markhuot\craftai\features\EditImage;
+use markhuot\craftai\features\EditText;
 use markhuot\craftai\features\GenerateEmbeddings;
 use markhuot\craftai\features\GenerateImage;
 use markhuot\craftai\validators\Json as JsonValidator;
@@ -23,6 +23,7 @@ class OpenAi extends \markhuot\craftai\models\Backend implements Completion, Edi
     use OpenAiGenerateEmbeddings;
 
     protected array $defaultValues = [
+        'type' => self::class,
         'name' => 'OpenAI',
         'settings' => ['baseUrl' => 'https://api.openai.com/v1/'],
     ];
@@ -32,7 +33,7 @@ class OpenAi extends \markhuot\craftai\models\Backend implements Completion, Edi
         return array_merge(parent::rules(), [
             ['settings', JsonValidator::class, 'rules' => [
                 [['baseUrl', 'apiKey'], 'required'],
-            ]]
+            ]],
         ]);
     }
 

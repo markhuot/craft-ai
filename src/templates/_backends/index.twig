@@ -11,12 +11,14 @@
         id: 'useFakes',
         name: 'useFakes',
         on: not settings.useFakes,
+        disabled: isFakesSetInFileConfig,
         instructions: 'Control whether the Craft AI system will reach out to the configured back-ends or use fake local data. Disabling live data can reduce cost during testing and development.',
+        warning: isFakesSetInFileConfig ? 'Live data is ' ~ (settings.useFakes ? 'disabled' : 'enabled') ~ ' in the <code>config/ai.php</code> file. To ' ~ (settings.useFakes ? 'use' : 'disable') ~ ' live data you must edit the config file directly.' : '',
     }) }}
     <hr>
 
     {% if backends|length %}
-        <h2>Enabled backends</h2>
+        <h2>Enabled AI backends</h2>
         <ul class="flex gap-l">
             {% for backend in backends %}
                 <li>
@@ -27,11 +29,9 @@
                 </li>
             {% endfor %}
         </ul>
-
-        <hr>
     {% endif %}
 
-    <h2>Add a new backend</h2>
+    <h2 class="ai-mt-xl">Add a new AI backend</h2>
     <p>Backends are responsible for the interactions provided by Craft AI. Depending on the provider(s) you configure
         different features will become available. For example, Open AI has text-based completions and Stable Diffusion has image
         generation capabilities.</p>
@@ -60,7 +60,7 @@
             <td><a href="{{ cpUrl('ai/backend/create/stable-diffusion') }}" pest="add.stablediffusion">Stable Diffusion</a></td>
             <td>✅</td>
             <td></td>
-            <td></td>
+            <td>✅</td>
             <td></td>
             <td></td>
             <td></td>
@@ -86,7 +86,7 @@
         if (event.target && event.target.closest && event.target.closest('button').id === 'useFakes') {
             Craft.postActionRequest('ai/backend/toggle-fakes', {}, (response) => {
                 if (response.value === true) {
-                    Craft.cp.displayError('Live data disabled');
+                    Craft.cp.displaySuccess('Live data disabled');
                 }
                 else if (response.value === false) {
                     Craft.cp.displaySuccess('Live data enabled');

@@ -3,12 +3,11 @@
 namespace markhuot\craftai\backends;
 
 use Faker\Factory;
-use markhuot\craftai\features\Completion;
 use markhuot\craftai\models\TextCompletionResponse;
 
 trait OpenAiCompletion
 {
-    function completeText(string $text): TextCompletionResponse
+    public function completeText(string $text): TextCompletionResponse
     {
         $response = $this->post('completions', [
             'model' => 'text-davinci-003',
@@ -26,12 +25,12 @@ trait OpenAiCompletion
         return $model;
     }
 
-    function completeTextFake(string $text): array
+    public function completeTextFake(string $text): array
     {
         return [
             'choices' => [
                 [
-                    'text' => $text . Factory::create()->paragraph(5),
+                    'text' => Factory::create()->paragraph(5),
                 ],
             ],
         ];

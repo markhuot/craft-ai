@@ -23,3 +23,7 @@
     suggestEnvVars: true,
     instructions: 'You can sign up for an API token at https://huggingface.co/settings/tokens',
 }) }}
+
+{% include 'ai/_backends/_features' with {
+    enable: ['Caption'],
+} %}

@@ -9,5 +9,4 @@ use markhuot\craftai\behaviors\BodyParamObjectBehavior;
  */
 class Request extends \craft\web\Request
 {
-
 }

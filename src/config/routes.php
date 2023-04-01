@@ -3,6 +3,7 @@
 use markhuot\craftai\features\Chat;
 use markhuot\craftai\features\Completion;
 use markhuot\craftai\features\EditImage;
+use markhuot\craftai\features\GenerateEmbeddings;
 use markhuot\craftai\features\GenerateImage;
 use markhuot\craftai\models\Backend;
 
@@ -43,6 +44,14 @@ if (Backend::for(EditImage::class, true)) {
         'route' => 'ai/images/edit',
         'label' => 'Edit Images',
         'controller' => 'ai/image/edit',
+    ];
+}
+
+if (Backend::for(GenerateEmbeddings::class, true)) {
+    $routes['ask'] = [
+        'route' => 'ai/ask',
+        'label' => 'Ask',
+        'controller' => 'ai/ask/index',
     ];
 }
 

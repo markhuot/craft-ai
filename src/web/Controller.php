@@ -4,6 +4,9 @@ namespace markhuot\craftai\web;
 
 class Controller extends \craft\web\Controller
 {
+    /**
+     * @param  array<array-key, string>  $settings Such as `icon` and `iconLabel`
+     */
     public function flash(?string $default = null, array $settings = []): self
     {
         $this->setSuccessFlash($default, $settings);
@@ -11,13 +14,15 @@ class Controller extends \craft\web\Controller
         return $this;
     }
 
-    function response(...$types)
+    /**
+     * @param  array{html: mixed, json: mixed}  $types
+     */
+    public function response(...$types): mixed
     {
         $data = null;
         if ($this->request->getAcceptsJson()) {
             $data = $types['json'] ?? null;
-        }
-        else {
+        } else {
             $data = $types['html'] ?? $types;
         }
 

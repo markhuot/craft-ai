@@ -100,3 +100,19 @@ Each backend has its own defaults and biases so you may want to specify the arti
 
 Similarly, you'll find some backends are more suitied for photo realism than others and some are better suited for
 abstract concepts.
+
+## Edit images
+
+You can use AI to edit parts of an image via inpainting. To inpaint a part of a picture use the eraser too to erase the
+part of the image you want to update. Following the same prompt guidelines as generating an image write a prompt that
+describes the entire image as well as the update you would like to make.
+
+The resulting edit will be saved a new asset.
+
+## Ask
+
+To use the "Ask" feature you must configure a search backend such as OpenSearch. This can be done by creating a
+`config/ai.php` file by copying the default config.
+
+Once configured the search backend will be updated with a vector embedding based on the element's "search keywords" every
+time that element is saved.

@@ -2,7 +2,7 @@
 
 An intelligent integration for [Craft CMS](https://craftcms.com/).
 
-![screenshot.png](assets%2Fscreenshot.png)
+![screenshot.png](assets/screenshot.png)
 
 Craft AI provides additional AI functionality to Craft CMS, including:
 
@@ -35,7 +35,7 @@ to the backend. Both are pre-filled for you out of the box.
 All backends also require some sort of API key. You can find a deep link to the generate an API key on
 each backend's settings page. For example,
 
-![settings-openai.png](assets%2Fsettings-openai.png)
+![settings-openai.png](assets/settings-openai.png)
 
 ## Using fake data
 
@@ -47,7 +47,7 @@ given prompt.
 
 ## Generate Text
 
-![text-generation.png](assets%2Ftext-generation.png)
+![text-generation.png](assets/text-generation.png)
 
 Text generation takes a prompt and generates the next word or words to complete the thought. The prompt should
 be detailed and provide as much context as possible to elicit a meaningful response. For example, if you simply
@@ -67,7 +67,7 @@ Answer:
 
 ## Chat
 
-![chat.png](assets%2Fchat.png)
+![chat.png](assets/chat.png)
 
 Chat provides a virtual assistant that uses your site's content to answer questions. The assistant is powered by a series
 of call and response style prompts and is capable of using past responses to inform future responses. Note: the chat

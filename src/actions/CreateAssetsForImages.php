@@ -9,8 +9,9 @@ class CreateAssetsForImages
 {
     /**
      * @param  string[]  $imagePaths
+     * @return Asset[]
      */
-    public function handle(Volume $volume, array $imagePaths)
+    public function handle(Volume $volume, array $imagePaths): array
     {
         $assets = [];
 

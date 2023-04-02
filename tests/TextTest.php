@@ -15,7 +15,6 @@ it('can complete a prompt', function () {
 
     $this->actingAs($user)
         ->get('admin/ai/text')
-        ->dd()
         ->assertOk()
         ->form('#main-form')
         ->fill('content', $prompt)

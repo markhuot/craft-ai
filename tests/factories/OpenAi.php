@@ -3,6 +3,7 @@
 namespace markhuot\craftai\tests\factories;
 
 use markhuot\craftai\backends\OpenAi as OpenAiModel;
+use markhuot\craftai\features\Completion;
 use markhuot\craftpest\factories\Factory;
 
 class OpenAi extends Factory
@@ -12,7 +13,13 @@ class OpenAi extends Factory
         return [
             'type' => OpenAiModel::class,
             'name' => 'OpenAI Backend',
-            'settings' => ['baseUrl' => 'https://api.openai.com/v1/', 'apiKey' => '$OPENAI_API_KEY'],
+            'settings' => [
+                'baseUrl' => 'https://api.openai.com/v1/',
+                'apiKey' => '$OPENAI_API_KEY',
+                'enabledFeatures' => [
+                    Completion::class
+                ],
+            ],
         ];
     }
 

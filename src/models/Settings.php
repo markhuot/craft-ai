@@ -24,7 +24,10 @@ class Settings extends Model
      */
     public array $searchDrivers = ['null' => ['class' => NullSearch::class]];
 
-    public function get($key)
+    /**
+     * @return mixed
+     */
+    public function get(string $key): mixed
     {
         return Arr::get($this, $key);
     }

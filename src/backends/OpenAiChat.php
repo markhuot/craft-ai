@@ -19,6 +19,9 @@ trait OpenAiChat
         return $model;
     }
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function chatFake(array $messages): array
     {
         return [

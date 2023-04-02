@@ -10,6 +10,9 @@ class TextEditPostRequest extends Model
 
     public ?string $instructions = null;
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function rules(): array
     {
         return [

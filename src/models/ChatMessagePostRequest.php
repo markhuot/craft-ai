@@ -12,6 +12,9 @@ class ChatMessagePostRequest extends Model
 
     public ?int $elementId = null;
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function rules(): array
     {
         return [
@@ -19,7 +22,10 @@ class ChatMessagePostRequest extends Model
         ];
     }
 
-    public function safeAttributes()
+    /**
+     * @return array<array-key, string>
+     */
+    public function safeAttributes(): array
     {
         return array_merge(parent::safeAttributes(), ['personality', 'elementId']);
     }

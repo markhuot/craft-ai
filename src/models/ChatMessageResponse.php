@@ -8,6 +8,9 @@ class ChatMessageResponse extends Model
 {
     public string $message;
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function rules(): array
     {
         return [

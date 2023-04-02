@@ -28,6 +28,9 @@ class EditImagePostRequest extends Model
         return array_merge(parent::safeAttributes(), ['backend']);
     }
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function rules(): array
     {
         return [

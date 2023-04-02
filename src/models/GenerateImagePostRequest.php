@@ -26,6 +26,9 @@ class GenerateImagePostRequest extends Model
         return array_merge(parent::safeAttributes(), ['backend', 'count']);
     }
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function rules(): array
     {
         return [

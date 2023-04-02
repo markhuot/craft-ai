@@ -9,6 +9,9 @@ class EmbeddingsResponse extends Model
     /** @var float[] */
     public array $vectors = [];
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function rules(): array
     {
         return [

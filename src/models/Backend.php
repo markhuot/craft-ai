@@ -163,7 +163,7 @@ class Backend extends ActiveRecord
         throw $e;
     }
 
-    public static function factory()
+    public static function factory(): \markhuot\craftpest\factories\Factory
     {
         $shortName = (new ReflectionClass(static::class))->getShortName();
         $fqcn = 'markhuot\\craftai\\tests\\factories\\'.$shortName;

@@ -2,7 +2,6 @@
 
 namespace markhuot\craftai\controllers;
 
-use craft\helpers\UrlHelper;
 use markhuot\craftai\features\Completion;
 use markhuot\craftai\features\EditText;
 use markhuot\craftai\models\Backend;

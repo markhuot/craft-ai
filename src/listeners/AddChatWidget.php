@@ -3,7 +3,6 @@
 namespace markhuot\craftai\listeners;
 
 use craft\controllers\ElementsController;
-use craft\web\Request;
 use markhuot\craftai\assetbundles\CraftAi;
 use markhuot\craftai\controllers\ChatController;
 use markhuot\craftai\features\Chat;
@@ -12,8 +11,9 @@ use yii\base\Event;
 
 class AddChatWidget
 {
-    function handle(Event $event) {
-        if (!Backend::can(Chat::class)) {
+    public function handle(Event $event)
+    {
+        if (! Backend::can(Chat::class)) {
             return;
         }
 

@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\actions;
 
+use Craft;
 use craft\elements\Asset;
 use craft\models\Volume;
 
@@ -18,12 +19,12 @@ class CreateAssetsForImages
         foreach ($imagePaths as $path) {
             $asset = new Asset;
             $asset->newFilename = 'image.'.time().'.png';
-            $asset->newFolderId = \Craft::$app->assets->getRootFolderByVolumeId($volume->id)->id;
+            $asset->newFolderId = Craft::$app->assets->getRootFolderByVolumeId($volume->id)->id;
             $asset->tempFilePath = $path;
-            $asset->uploaderId = \Craft::$app->getUser()->getId();
+            $asset->uploaderId = Craft::$app->getUser()->getId();
             $asset->avoidFilenameConflicts = true;
             $asset->setScenario(Asset::SCENARIO_CREATE);
-            if (! \Craft::$app->elements->saveElement($asset)) {
+            if (! Craft::$app->elements->saveElement($asset)) {
                 // @todo, deal with this and show errors
                 continue;
             }

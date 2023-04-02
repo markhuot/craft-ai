@@ -2,10 +2,6 @@
 
 namespace markhuot\craftai\search;
 
-use markhuot\craftai\Ai;
-use OpenSearch\Client;
-use OpenSearch\ClientBuilder;
-
 class NullSearch implements SearchInterface
 {
     public function __construct()

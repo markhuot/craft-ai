@@ -20,8 +20,8 @@ use markhuot\craftai\listeners\RegisterCpUrlRules;
 use markhuot\craftai\models\Backend;
 use markhuot\craftai\models\Settings;
 use markhuot\craftai\twig\Extension;
-use yii\base\Event;
 use function markhuot\openai\helpers\listen;
+use yii\base\Event;
 
 /**
  * @method static self getInstance()

@@ -2,7 +2,6 @@
 
 namespace markhuot\craftai\models;
 
-use craft\base\ElementInterface;
 use markhuot\craftai\db\Model;
 
 class ChatMessagePostRequest extends Model

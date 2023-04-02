@@ -38,7 +38,7 @@ class ChatController extends Controller
         $keywords = '';
         if ($data->elementId) {
             $element = \Craft::$app->elements->getElementById($data->elementId);
-            $keywords = "\n\nAdditional Context: " . \Craft::$container->get(GetElementKeywords::class)->handle($element)->join(' ');
+            $keywords = "\n\nAdditional Context: ".\Craft::$container->get(GetElementKeywords::class)->handle($element)->join(' ');
         }
 
         $messages = collect(\Craft::$app->session->get(static::CACHE_KEY) ?? [[
@@ -47,7 +47,7 @@ class ChatController extends Controller
         ]]);
         $messages = $messages->map(fn ($message) => $message['role'] === 'system' ? [
             'role' => 'system',
-            'content' => $data->personality . $keywords,
+            'content' => $data->personality.$keywords,
         ] : $message)->toArray();
         $messages[] = [
             'role' => 'user',
@@ -65,7 +65,7 @@ class ChatController extends Controller
                 'success' => true,
                 'messageMarkup' => \Craft::$app->view->renderTemplate('ai/_chat/_widget-messages', [
                     'messages' => $messages,
-                ])
+                ]),
             ],
         );
     }
@@ -80,7 +80,7 @@ class ChatController extends Controller
                 'success' => true,
                 'messageMarkup' => \Craft::$app->view->renderTemplate('ai/_chat/_widget-messages', [
                     'messages' => [],
-                ])
+                ]),
             ],
         );
     }

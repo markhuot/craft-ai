@@ -16,7 +16,7 @@
         "phpstan/phpstan": "^1.10"
     },
     "require-dev": {
-        "markhuot/craft-pest": "dev-master",
+        "markhuot/craft-pest": "dev-session-fixes",
         "craftcms/redactor": "^3.0",
         "craftcms/craft": "dev-main",
         "laravel/pint": "^1.6"

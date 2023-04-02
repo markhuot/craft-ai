@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai;
 
+use Craft;
 use craft\base\Element;
 use craft\elements\Asset;
 use craft\web\Application;
@@ -28,7 +29,7 @@ use function markhuot\openai\helpers\listen;
  */
 class Ai extends Plugin
 {
-    public function init()
+    public function init(): void
     {
         parent::init();
 
@@ -45,6 +46,6 @@ class Ai extends Plugin
 
         Backend::fake($this->getSettings()->useFakes);
 
-        \Craft::$app->view->registerTwigExtension(new Extension);
+        Craft::$app->view->registerTwigExtension(new Extension);
     }
 }

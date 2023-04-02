@@ -13,7 +13,7 @@ it('can complete a prompt', function () {
     $prompt = 'Finish this sentence, Craft is great because...';
 
     $this->actingAs(User::factory()->admin(true))
-        ->get('/admin/ai/text')
+        ->get('admin/ai/text')
         ->assertOk()
         ->form('#main-form')
         ->fill('content', $prompt)

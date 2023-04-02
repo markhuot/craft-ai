@@ -29,10 +29,10 @@ class TextController extends \markhuot\craftai\web\Controller
 
         return $this->response(
             json: fn () => ['text' => $response->text],
-            html: fn () => $this->flash('AI completion succeeded')->redirect(UrlHelper::prependCpTrigger('ai/text?'.http_build_query([
+            html: fn () => $this->flash('AI completion succeeded')->redirect('ai/text?'.http_build_query([
                 'content' => $data->content,
                 'completion' => $response->text,
-            ]))),
+            ])),
         );
     }
 

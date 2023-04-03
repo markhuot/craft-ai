@@ -18,6 +18,8 @@ class OpenSearch implements SearchInterface
     protected function connect(): self
     {
         $settings = Ai::getInstance()->getSettings();
+
+        /** @var array<array-key, mixed> $config */
         $config = $settings->get('searchDrivers.opensearch');
         unset($config['class']);
 

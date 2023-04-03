@@ -25,32 +25,37 @@ class Backend extends ActiveRecord
 
     protected Client $client;
 
+    /** @var array<string, class-string> */
     protected array $casts = [
         'settings' => JsonCast::class,
     ];
 
+    /** @var array<string, mixed> */
     protected array $defaultValues = [
         'type' => self::class,
     ];
 
-    public static $polymorphicKeyField = 'type';
+    public static string $polymorphicKeyField = 'type';
 
     public static function tableName()
     {
         return Table::BACKENDS;
     }
 
-    public static function fake(bool $value = true)
+    public static function fake(bool $value = true): void
     {
         static::$faked = $value;
     }
 
-    public static function isFaked()
+    public static function isFaked(): bool
     {
         return static::$faked;
     }
 
-    public static function allFor(string $interface)
+    /**
+     * @return array<Backend>
+     */
+    public static function allFor(string $interface): array
     {
         $found = [];
         /** @var Backend[] $possibilities */

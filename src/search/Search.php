@@ -27,6 +27,7 @@ class Search
         $settings = Ai::getInstance()->getSettings();
         $driver = $driver ?? $settings->searchDriver;
 
+        /** @var string $class */
         $class = $settings->get('searchDrivers.'.$driver.'.class');
 
         /** @var OpenSearch */

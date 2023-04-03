@@ -18,6 +18,7 @@ class EditImagePostRequest extends Model
 
     public ?Backend $backend = null;
 
+    /** @var array<string, class-string> */
     protected array $casts = [
         'asset' => ModelCast::class,
         'backend' => ModelCast::class,

@@ -20,7 +20,7 @@ class Settings extends Model
     public string $searchDriver = 'null';
 
     /**
-     * @var array The configuration for the various search back-ends
+     * @var array<string, array<array-key, mixed>> The configuration for the various search back-ends
      */
     public array $searchDrivers = ['null' => ['class' => NullSearch::class]];
 

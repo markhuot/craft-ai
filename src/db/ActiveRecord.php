@@ -10,7 +10,7 @@ class ActiveRecord extends \craft\db\ActiveRecord
 
     public static $keyField = 'id';
 
-    public static $polymorphicKeyField = false;
+    public static string $polymorphicKeyField = false;
 
     public function init()
     {

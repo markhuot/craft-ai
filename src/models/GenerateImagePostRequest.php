@@ -16,6 +16,7 @@ class GenerateImagePostRequest extends Model
 
     public ?int $count = 1;
 
+    /** @var array<string, class-string> */
     protected array $casts = [
         'backend' => ModelCast::class,
         'volume' => ModelCast::class,

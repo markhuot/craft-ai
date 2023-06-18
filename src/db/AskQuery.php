@@ -13,7 +13,7 @@ class AskQuery
     protected ?string $prompt;
 
     public function __construct(
-       protected Search $search,
+        protected Search $search,
     ) {
     }
 

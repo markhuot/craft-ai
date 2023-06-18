@@ -2,14 +2,12 @@
 
 namespace markhuot\craftai;
 
-use Craft;
 use craft\base\Element;
 use craft\elements\Asset;
 use craft\web\Application;
 use craft\web\UrlManager;
 use craft\web\View;
 use markhuot\craftai\base\Plugin;
-use markhuot\craftai\listeners\AddAiField;
 use markhuot\craftai\listeners\AddAssetSidebarWidgets;
 use markhuot\craftai\listeners\AddBodyParamObjectBehavior;
 use markhuot\craftai\listeners\AddChatWidget;
@@ -21,7 +19,7 @@ use markhuot\craftai\models\Backend;
 use markhuot\craftai\models\Settings;
 use markhuot\craftai\twig\Extension;
 use function markhuot\openai\helpers\listen;
-use yii\base\Event;
+use function markhuot\openai\helpers\view;
 
 /**
  * @method static self getInstance()
@@ -46,6 +44,6 @@ class Ai extends Plugin
 
         Backend::fake($this->getSettings()->useFakes);
 
-        Craft::$app->view->registerTwigExtension(new Extension);
+        view()->registerTwigExtension(new Extension);
     }
 }

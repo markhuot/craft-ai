@@ -6,7 +6,7 @@ use markhuot\craftai\listeners\ListenerInterface;
 use yii\base\Event;
 
 /**
- * @param  array<array-key, callable>  ...$events
+ * @param  \Closure  ...$events
  */
 function listen(...$events): void
 {

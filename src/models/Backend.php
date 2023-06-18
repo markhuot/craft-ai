@@ -35,7 +35,7 @@ class Backend extends ActiveRecord
         'type' => self::class,
     ];
 
-    public static string $polymorphicKeyField = 'type';
+    public static ?string $polymorphicKeyField = 'type';
 
     public static function tableName()
     {

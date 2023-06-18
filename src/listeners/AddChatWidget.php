@@ -13,6 +13,10 @@ class AddChatWidget
 {
     public function handle(Event $event)
     {
+        if (! \Craft::$app->request->isCpRequest) {
+            return;
+        }
+
         if (! Backend::can(Chat::class)) {
             return;
         }

@@ -75,6 +75,8 @@ class OpenSearch implements SearchInterface
      */
     public function knnSearch(array $vectors, int $limit = 3): array
     {
+        $this->ensureIndex()->ensureMapping();
+
         $json = $this->client->search([
             'index' => 'craft',
             'body' => [

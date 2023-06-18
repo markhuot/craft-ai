@@ -15,7 +15,7 @@ use ReflectionClass;
 use RuntimeException;
 
 /**
- * @property array $settings
+ * @property array{enabledFeatures: string[], baseUrl: string, apiKey: string} $settings
  */
 class Backend extends ActiveRecord
 {
@@ -77,16 +77,16 @@ class Backend extends ActiveRecord
      * @param  class-string<T>  $interface
      * @return T
      */
-    public static function for(string $interface, $silence = false)
+    public static function for(string $interface)
     {
+        /** @var T[] $backends */
         $backends = static::allFor($interface);
+
         if (isset($backends[0])) {
             return $backends[0];
         }
 
-        if ($silence === false) {
-            throw new RuntimeException('No backend found supporting ['.$interface.']');
-        }
+        throw new RuntimeException('No backend found supporting ['.$interface.']');
     }
 
     public static function can(string $interface): bool
@@ -94,14 +94,17 @@ class Backend extends ActiveRecord
         return count(static::allFor($interface)) > 0;
     }
 
-    public function init()
+    public function init(): void
     {
         parent::init();
 
         $this->faker = Factory::create();
     }
 
-    public function rules()
+    /**
+     * @return array<array-key, string[]>
+     */
+    public function rules(): array
     {
         return [
             ['name', 'required'],
@@ -109,19 +112,19 @@ class Backend extends ActiveRecord
         ];
     }
 
-    public function getTypeHandle()
+    public function getTypeHandle(): string
     {
         return strtolower((new ReflectionClass($this))->getShortName());
     }
 
-    public function getSettingsView()
+    public function getSettingsView(): string
     {
         $shortName = (new ReflectionClass($this))->getShortName();
 
         return 'ai/_backends/_'.strtolower($shortName);
     }
 
-    public function getClient()
+    public function getClient(): Client
     {
         return new Client([
             'base_uri' => Craft::parseEnv($this->settings['baseUrl']),
@@ -131,11 +134,21 @@ class Backend extends ActiveRecord
         ]);
     }
 
-    public function post($uri, array $body = [], array $headers = [], ?string $rawBody = null, array $multipart = [])
+    /**
+     * @param array<array-key, mixed> $body
+     * @param array<array-key, mixed> $headers
+     * @param array<array-key, mixed> $multipart
+     *
+     * @return array<array-key, mixed>
+     */
+    public function post(string $uri, array $body = [], array $headers = [], ?string $rawBody = null, array $multipart = []): array
     {
         try {
             if (static::$faked) {
-                ['function' => $methodName, 'args' => $args] = debug_backtrace(! DEBUG_BACKTRACE_PROVIDE_OBJECT, 2)[1];
+                $backtrace = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 2)[1];
+                $methodName = $backtrace['function'];
+                $args = $backtrace['args'] ?? [];
+
                 $fakeMethodName = $methodName.'Fake';
                 if (method_exists($this, $fakeMethodName)) {
                     return $this->$fakeMethodName(...$args);
@@ -163,7 +176,7 @@ class Backend extends ActiveRecord
         }
     }
 
-    public function handleErrorResponse(ClientException|ServerException $e)
+    public function handleErrorResponse(ClientException|ServerException $e): void
     {
         throw $e;
     }

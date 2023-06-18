@@ -19,7 +19,7 @@ class StableDiffusion extends \markhuot\craftai\models\Backend implements Genera
         'settings' => ['baseUrl' => 'https://api.stability.ai/v1alpha/'],
     ];
 
-    public function rules()
+    public function rules(): array
     {
         return array_merge(parent::rules(), [
             ['settings', JsonValidator::class, 'rules' => [
@@ -28,7 +28,7 @@ class StableDiffusion extends \markhuot\craftai\models\Backend implements Genera
         ]);
     }
 
-    public function handleErrorResponse(ClientException|ServerException $e)
+    public function handleErrorResponse(ClientException|ServerException $e): void
     {
         $response = json_decode($e->getResponse()->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
         throw new \RuntimeException($response['message']);

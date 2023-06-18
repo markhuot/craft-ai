@@ -3,6 +3,8 @@
 namespace markhuot\craftai\listeners;
 
 use craft\controllers\ElementsController;
+use craft\web\Request;
+use craft\web\View;
 use markhuot\craftai\assetbundles\CraftAi;
 use markhuot\craftai\controllers\ChatController;
 use markhuot\craftai\features\Chat;
@@ -11,9 +13,15 @@ use yii\base\Event;
 
 class AddChatWidget
 {
-    public function handle(Event $event)
+    public function handle(Event $event): void
     {
-        if (! \Craft::$app->request->isCpRequest) {
+        /** @var Request $request */
+        $request = \Craft::$app->request;
+
+        /** @var View $view */
+        $view = \Craft::$app->view;
+
+        if (! $request->isCpRequest) {
             return;
         }
 
@@ -21,14 +29,14 @@ class AddChatWidget
             return;
         }
 
-        \Craft::$app->view->registerAssetBundle(CraftAi::class);
+        $view->registerAssetBundle(CraftAi::class);
 
         $elementId = null;
         if (is_a(\Craft::$app->controller, ElementsController::class)) {
-            $elementId = \Craft::$app->controller->element->id;
+            $elementId = \Craft::$app->controller->element->id; // @phpstan-ignore-line Ignored because ID isn't on the element interface, but in most cases it'll be there anyway
         }
 
-        echo \Craft::$app->view->renderTemplate('ai/_chat/widget', [
+        echo $view->renderTemplate('ai/_chat/widget', [
             'messages' => \Craft::$app->session->get(ChatController::CACHE_KEY) ?? [],
             'elementId' => $elementId,
         ]);

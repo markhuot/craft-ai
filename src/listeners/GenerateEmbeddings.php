@@ -28,7 +28,7 @@ class GenerateEmbeddings
         }
 
         $keywords = $getKeywords->handle($element)
-            ->map(fn ($value, $key) => "The {$key} is {$value}")
+            ->map(fn (string $value, string $key) => "The {$key} is {$value}")
             ->join("\n");
 
         $response = Backend::for(GenerateEmbeddingsFeature::class)

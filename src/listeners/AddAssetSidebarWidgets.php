@@ -12,7 +12,7 @@ class AddAssetSidebarWidgets
 {
     public function handle(DefineHtmlEvent $event)
     {
-        if (Backend::for(Caption::class, true)) {
+        if (Backend::can(Caption::class)) {
             $asset = $event->sender;
             $caption = (new Query)->select('caption')->from(Table::ASSETS)->where(['id' => $asset->id])->scalar();
             $event->html .= \Craft::$app->view->renderTemplate('ai/_cp/assets/sidebar', [

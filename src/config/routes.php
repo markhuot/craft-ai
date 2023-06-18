@@ -15,7 +15,7 @@ $routes['index'] = [
     'controller' => 'ai/backend/index',
 ];
 
-if (Backend::for(Completion::class, true)) {
+if (Backend::can(Completion::class)) {
     $routes['text'] = [
         'route' => 'ai/text',
         'label' => 'Text',
@@ -23,7 +23,7 @@ if (Backend::for(Completion::class, true)) {
     ];
 }
 
-if (Backend::for(Chat::class, true)) {
+if (Backend::can(Chat::class)) {
     $routes['chat'] = [
         'route' => 'ai/chat',
         'label' => 'Chat',
@@ -31,7 +31,7 @@ if (Backend::for(Chat::class, true)) {
     ];
 }
 
-if (Backend::for(GenerateImage::class, true)) {
+if (Backend::can(GenerateImage::class)) {
     $routes['image.generate'] = [
         'route' => 'ai/images/generate',
         'label' => 'Generate Images',
@@ -39,7 +39,7 @@ if (Backend::for(GenerateImage::class, true)) {
     ];
 }
 
-if (Backend::for(EditImage::class, true)) {
+if (Backend::can(EditImage::class)) {
     $routes['image.edit'] = [
         'route' => 'ai/images/edit',
         'label' => 'Edit Images',
@@ -47,7 +47,7 @@ if (Backend::for(EditImage::class, true)) {
     ];
 }
 
-if (Backend::for(GenerateEmbeddings::class, true)) {
+if (Backend::can(GenerateEmbeddings::class)) {
     $routes['ask'] = [
         'route' => 'ai/ask',
         'label' => 'Ask',

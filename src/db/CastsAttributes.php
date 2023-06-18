@@ -4,6 +4,7 @@ namespace markhuot\craftai\db;
 
 trait CastsAttributes
 {
+    /** @var array<string, class-string> */
     protected array $casts = [];
 
     public function __get($key)

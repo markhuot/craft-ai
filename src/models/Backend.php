@@ -25,7 +25,6 @@ class Backend extends ActiveRecord
 
     protected Client $client;
 
-    /** @var array<string, class-string> */
     protected array $casts = [
         'settings' => JsonCast::class,
     ];
@@ -135,10 +134,9 @@ class Backend extends ActiveRecord
     }
 
     /**
-     * @param array<array-key, mixed> $body
-     * @param array<array-key, mixed> $headers
-     * @param array<array-key, mixed> $multipart
-     *
+     * @param  array<array-key, mixed>  $body
+     * @param  array<array-key, mixed>  $headers
+     * @param  array<array-key, mixed>  $multipart
      * @return array<array-key, mixed>
      */
     public function post(string $uri, array $body = [], array $headers = [], ?string $rawBody = null, array $multipart = []): array

@@ -2,7 +2,7 @@
 
 namespace markhuot\craftai\twig;
 
-use Craft;
+use function markhuot\openai\helpers\session;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFunction;
 
@@ -19,7 +19,7 @@ class Extension extends AbstractExtension
     public function old(string $key, object|string|null $default = null): ?string
     {
         /** @var array<array-key, string> $flashes */
-        $flashes = Craft::$app->session->getAllFlashes();
+        $flashes = session()->getAllFlashes();
 
         if ($flashes['old.'.$key] ?? false) {
             return $flashes['old.'.$key];
@@ -45,6 +45,9 @@ class Extension extends AbstractExtension
 
     public function flash(string $key): ?string
     {
-        return Craft::$app->session->getFlash($key);
+        /** @var ?string $flash */
+        $flash = session()->getFlash($key);
+
+        return $flash;
     }
 }

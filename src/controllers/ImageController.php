@@ -13,13 +13,14 @@ use markhuot\craftai\models\Backend;
 use markhuot\craftai\models\EditImagePostRequest;
 use markhuot\craftai\models\GenerateImagePostRequest;
 use markhuot\craftai\stubs\Request;
+use yii\web\Response;
 
 /**
  * @property Request $request
  */
 class ImageController extends Controller
 {
-    public function actionGenerate()
+    public function actionGenerate(): Response
     {
         $assetIds = array_filter($this->request->getQueryParam('assets', []));
         $assets = ! empty($assetIds) ? Asset::find()->id($assetIds)->all() : [];
@@ -31,7 +32,7 @@ class ImageController extends Controller
         ]);
     }
 
-    public function actionStoreGeneration()
+    public function actionStoreGeneration(): Response
     {
         $data = $this->request->getBodyParamObject(GenerateImagePostRequest::class);
 
@@ -44,7 +45,7 @@ class ImageController extends Controller
         return $this->redirect('ai/images/generate?prompt='.urlencode($data->prompt).'&'.implode('&', $params));
     }
 
-    public function actionCaption()
+    public function actionCaption(): Response
     {
         $asset = Asset::find()->id($this->request->getBodyParam('elementId'))->one();
         $caption = Backend::for(Caption::class)->generateCaption($asset);
@@ -56,7 +57,7 @@ class ImageController extends Controller
         return $this->redirect($asset->cpEditUrl);
     }
 
-    public function actionEdit()
+    public function actionEdit(): Response
     {
         return $this->renderTemplate('ai/_images/edit', [
             'asset' => Asset::find()->id($this->request->getQueryParam('assetId'))->one(),
@@ -65,7 +66,7 @@ class ImageController extends Controller
         ]);
     }
 
-    public function actionStoreEdit()
+    public function actionStoreEdit(): Response
     {
         $this->requirePostRequest();
         $data = $this->request->getBodyParamObject(EditImagePostRequest::class);

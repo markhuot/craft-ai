@@ -4,6 +4,7 @@ namespace markhuot\craftai\listeners;
 
 use craft\base\Element;
 use craft\events\ModelEvent;
+use Illuminate\Support\Collection;
 use markhuot\craftai\actions\GetElementKeywords;
 use markhuot\craftai\features\GenerateEmbeddings as GenerateEmbeddingsFeature;
 use markhuot\craftai\models\Backend;

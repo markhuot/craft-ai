@@ -6,7 +6,7 @@ use craft\base\ElementInterface;
 use craft\models\Volume;
 use markhuot\craftai\db\ActiveRecord;
 
-class Model
+class Model implements CastInterface
 {
     public function get($model, $key, $value)
     {

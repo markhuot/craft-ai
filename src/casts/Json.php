@@ -2,7 +2,7 @@
 
 namespace markhuot\craftai\casts;
 
-class Json
+class Json implements CastInterface
 {
     public function get($model, $key, $value)
     {

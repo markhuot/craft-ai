@@ -28,7 +28,7 @@ class StableDiffusion extends \markhuot\craftai\models\Backend implements Genera
         ]);
     }
 
-    public function handleErrorResponse(ClientException|ServerException $e): void
+    public function handleErrorResponse(ClientException|ServerException $e): never
     {
         $response = json_decode($e->getResponse()->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
         throw new \RuntimeException($response['message']);

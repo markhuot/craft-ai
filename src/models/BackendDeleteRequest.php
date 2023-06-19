@@ -9,7 +9,6 @@ class BackendDeleteRequest extends Model
 {
     public ?Backend $backend = null;
 
-    /** @var array<string, class-string> */
     protected array $casts = [
         'backend' => ModelCast::class,
     ];

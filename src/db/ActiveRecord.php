@@ -2,17 +2,23 @@
 
 namespace markhuot\craftai\db;
 
+use yii\db\Expression;
+use function markhuot\openai\helpers\resolve;
+
 class ActiveRecord extends \craft\db\ActiveRecord
 {
     use CastsAttributes;
 
+    /**
+     * @var array<mixed>
+     */
     protected array $defaultValues = [];
 
-    public static $keyField = 'id';
+    public static string $keyField = 'id';
 
     public static ?string $polymorphicKeyField = null;
 
-    public function init()
+    public function init(): void
     {
         parent::init();
 
@@ -21,18 +27,32 @@ class ActiveRecord extends \craft\db\ActiveRecord
         }
     }
 
-    public static function firstOrNew($condition)
+    /**
+     * @param array<mixed>|Expression $condition
+     */
+    public static function firstOrNew(array|Expression $condition): self
     {
+        /**
+         * @var ?array<mixed> $record Narrow and remove `ActiveRecord` from the
+         *                            possible ->one() return types
+         */
         $record = static::find()->where($condition)->asArray()->one();
 
-        $model = static::make($record);
+        $model = static::make($record ?? []);
         $model->setIsNewRecord(empty($record));
 
         return $model;
     }
 
-    public static function firstOrFail($condition)
+    /**
+     * @param array<mixed>|Expression $condition
+     */
+    public static function firstOrFail(array|Expression $condition): self
     {
+        /**
+         * @var ?array<mixed> $record Narrow and remove `ActiveRecord` from the
+         *                            possible ->one() return types
+         */
         $record = static::find()->where($condition)->asArray()->one();
 
         if (empty($record)) {
@@ -45,8 +65,12 @@ class ActiveRecord extends \craft\db\ActiveRecord
         return $model;
     }
 
-    public static function make(?array $record = [])
+    /**
+     * @param array<mixed> $record
+     */
+    public static function make(array $record = []): self
     {
+        /** @var class-string<ActiveRecord> $type */
         $type = static::$polymorphicKeyField ? ($record[static::$polymorphicKeyField] ?? static::class) : static::class;
 
         $model = new $type;
@@ -55,10 +79,16 @@ class ActiveRecord extends \craft\db\ActiveRecord
         return $model;
     }
 
-    public static function instantiate($record)
+    /**
+     * @param array<mixed> $row
+     *
+     * @return self
+     */
+    public static function instantiate($row)
     {
-        $type = static::$polymorphicKeyField ? ($record[static::$polymorphicKeyField] ?? static::class) : static::class;
+        /** @var class-string<ActiveRecord> $type */
+        $type = static::$polymorphicKeyField ? ($row[static::$polymorphicKeyField] ?? static::class) : static::class;
 
-        return \Craft::$container->get($type);
+        return \Craft::$container->get($type); // @phpstan-ignore-line
     }
 }

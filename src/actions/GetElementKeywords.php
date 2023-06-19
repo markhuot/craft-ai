@@ -9,7 +9,7 @@ use Illuminate\Support\Collection;
 class GetElementKeywords
 {
     /**
-     * @return Collection<array<array-key, string>>
+     * @return Collection<array-key, string>
      */
     public function handle(ElementInterface $element): Collection
     {

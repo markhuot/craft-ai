@@ -2,6 +2,8 @@
 
 namespace markhuot\craftai\search;
 
+use Illuminate\Support\Collection;
+
 interface SearchInterface
 {
     /**
@@ -11,7 +13,7 @@ interface SearchInterface
 
     /**
      * @param  array<double>  $vectors
-     * @return array<mixed>
+     * @return array{Collection<array-key, array<array-key, mixed>>, array<array-key, mixed>}
      */
     public function knnSearch(array $vectors, int $limit = 3): array;
 }

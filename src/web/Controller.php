@@ -2,6 +2,8 @@
 
 namespace markhuot\craftai\web;
 
+use yii\web\Response;
+
 class Controller extends \craft\web\Controller
 {
     /**
@@ -17,7 +19,7 @@ class Controller extends \craft\web\Controller
     /**
      * @param  array{html: mixed, json: mixed}  $types
      */
-    public function response(...$types): mixed
+    public function response(...$types): Response
     {
         $data = null;
         if ($this->request->getAcceptsJson()) {

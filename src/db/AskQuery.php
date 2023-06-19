@@ -25,7 +25,7 @@ class AskQuery
     }
 
     /**
-     * @return array{string|null, Collection}
+     * @return array{string|null, Collection<array-key, array<array-key, mixed>>}
      */
     public function answer(): array
     {
@@ -48,8 +48,15 @@ class AskQuery
         return [$response->text, $documents];
     }
 
+    /**
+     * @return Collection<array-key, array<array-key, mixed>>
+     */
     protected function getMatchingDocuments(): Collection
     {
+        if (empty($this->prompt)) {
+            return collect();
+        }
+
         $vectors = Backend::for(GenerateEmbeddings::class)
             ->generateEmbeddings($this->prompt)->vectors;
 

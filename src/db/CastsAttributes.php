@@ -2,9 +2,11 @@
 
 namespace markhuot\craftai\db;
 
+use markhuot\craftai\casts\CastInterface;
+
 trait CastsAttributes
 {
-    /** @var array<string, class-string> */
+    /** @var array<string, class-string<CastInterface>> */
     protected array $casts = [];
 
     public function __get($key)
@@ -16,6 +18,9 @@ trait CastsAttributes
         return parent::__get($key);
     }
 
+    /**
+     * @param array<array-key, mixed> $values
+     */
     public function setAttributes($values, $safeOnly = true): void
     {
         foreach ($values as $key => $value) {

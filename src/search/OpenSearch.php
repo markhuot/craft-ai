@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\search;
 
+use Illuminate\Support\Collection;
 use markhuot\craftai\Ai;
 use OpenSearch\Client;
 use OpenSearch\ClientBuilder;
@@ -71,7 +72,7 @@ class OpenSearch implements SearchInterface
 
     /**
      * @param  array<double>  $vectors
-     * @return array<mixed>
+     * @return array{Collection<array-key, array<array-key, mixed>>, array<array-key, mixed>}
      */
     public function knnSearch(array $vectors, int $limit = 3): array
     {
@@ -113,7 +114,7 @@ class OpenSearch implements SearchInterface
             ],
         ]);
 
-        /** @var array<mixed> $hits */
+        /** @var array<array-key, array<array-key, mixed>> $hits */
         $hits = $json['hits']['hits'];
 
         return [collect($hits), $json];

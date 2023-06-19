@@ -137,6 +137,7 @@ class Backend extends ActiveRecord
      * @param  array<array-key, mixed>  $body
      * @param  array<array-key, mixed>  $headers
      * @param  array<array-key, mixed>  $multipart
+     *
      * @return array<array-key, mixed>
      */
     public function post(string $uri, array $body = [], array $headers = [], ?string $rawBody = null, array $multipart = []): array
@@ -168,13 +169,16 @@ class Backend extends ActiveRecord
 
             $response = $this->getClient()->request('POST', $uri, $params);
 
-            return json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
+            /** @var array<mixed> $json */
+            $json = json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
+
+            return $json;
         } catch (ClientException|ServerException $e) {
             $this->handleErrorResponse($e);
         }
     }
 
-    public function handleErrorResponse(ClientException|ServerException $e): void
+    public function handleErrorResponse(ClientException|ServerException $e): never
     {
         throw $e;
     }

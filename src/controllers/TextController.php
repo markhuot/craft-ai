@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\controllers;
 
+use yii\web\Response;
 use markhuot\craftai\features\Completion;
 use markhuot\craftai\features\EditText;
 use markhuot\craftai\models\Backend;
@@ -14,12 +15,12 @@ use markhuot\craftai\stubs\Request;
  */
 class TextController extends \markhuot\craftai\web\Controller
 {
-    public function actionIndex()
+    public function actionIndex(): Response
     {
         return $this->renderTemplate('ai/_text/index');
     }
 
-    public function actionComplete()
+    public function actionComplete(): Response
     {
         $this->requirePostRequest();
         $data = $this->request->getBodyParamObject(TextCompletionPostRequest::class);
@@ -36,7 +37,7 @@ class TextController extends \markhuot\craftai\web\Controller
         );
     }
 
-    public function actionEdit()
+    public function actionEdit(): Response
     {
         $this->requirePostRequest();
         $data = $this->request->getBodyParamObject(TextEditPostRequest::class);

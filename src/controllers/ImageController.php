@@ -13,8 +13,8 @@ use markhuot\craftai\models\Backend;
 use markhuot\craftai\models\EditImagePostRequest;
 use markhuot\craftai\models\GenerateImagePostRequest;
 use markhuot\craftai\stubs\Request;
-use yii\web\Response;
 use function markhuot\openai\helpers\throw_if;
+use yii\web\Response;
 
 /**
  * @property Request $request

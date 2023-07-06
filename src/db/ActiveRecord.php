@@ -3,7 +3,6 @@
 namespace markhuot\craftai\db;
 
 use yii\db\Expression;
-use function markhuot\openai\helpers\resolve;
 
 class ActiveRecord extends \craft\db\ActiveRecord
 {
@@ -28,7 +27,7 @@ class ActiveRecord extends \craft\db\ActiveRecord
     }
 
     /**
-     * @param array<mixed>|Expression $condition
+     * @param  array<mixed>|Expression  $condition
      */
     public static function firstOrNew(array|Expression $condition): self
     {
@@ -45,7 +44,7 @@ class ActiveRecord extends \craft\db\ActiveRecord
     }
 
     /**
-     * @param array<mixed>|Expression $condition
+     * @param  array<mixed>|Expression  $condition
      */
     public static function firstOrFail(array|Expression $condition): self
     {
@@ -66,7 +65,7 @@ class ActiveRecord extends \craft\db\ActiveRecord
     }
 
     /**
-     * @param array<mixed> $record
+     * @param  array<mixed>  $record
      */
     public static function make(array $record = []): self
     {
@@ -80,8 +79,7 @@ class ActiveRecord extends \craft\db\ActiveRecord
     }
 
     /**
-     * @param array<mixed> $row
-     *
+     * @param  array<mixed>  $row
      * @return self
      */
     public static function instantiate($row)

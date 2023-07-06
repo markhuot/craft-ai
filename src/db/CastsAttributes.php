@@ -19,7 +19,7 @@ trait CastsAttributes
     }
 
     /**
-     * @param array<array-key, mixed> $values
+     * @param  array<array-key, mixed>  $values
      */
     public function setAttributes($values, $safeOnly = true): void
     {

@@ -2,13 +2,13 @@
 
 namespace markhuot\craftai\controllers;
 
-use yii\web\Response;
 use markhuot\craftai\features\Completion;
 use markhuot\craftai\features\EditText;
 use markhuot\craftai\models\Backend;
 use markhuot\craftai\models\TextCompletionPostRequest;
 use markhuot\craftai\models\TextEditPostRequest;
 use markhuot\craftai\stubs\Request;
+use yii\web\Response;
 
 /**
  * @property Request $request

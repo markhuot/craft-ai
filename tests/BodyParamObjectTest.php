@@ -17,8 +17,10 @@ it('converts request data to value objects', function () {
     $request = new Request();
     $request->headers->add('X-Http-Method-Override', 'POST');
     $request->attachBehaviors([BodyParamObjectBehavior::class]);
-    $dataObject = new class extends \craft\base\Model {
+    $dataObject = new class extends \craft\base\Model
+    {
         public $name;
+
         public function rules(): array
         {
             return [

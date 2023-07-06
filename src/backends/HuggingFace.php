@@ -22,6 +22,7 @@ class HuggingFace extends Backend implements Caption
     public function rules(): array
     {
         return array_merge(parent::rules(), [
+            ['settings', 'required'],
             ['settings', JsonValidator::class, 'rules' => [
                 [['baseUrl', 'apiKey'], 'required'],
             ]],

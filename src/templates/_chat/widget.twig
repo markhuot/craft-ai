@@ -1,13 +1,15 @@
 {% import '_includes/forms.twig' as forms %}
 
 <div data-chat-widget-container class="ai-fixed ai-bottom-0 ai-tranform-popover ai-right-0 ai-pl-md ai-pr-xl ai-w-sidebar ai-z-top ai-transform-popover">
-    <div class="ai-rounded-t-lg ai-overflow-hidden ai-bg-gray ai-shadow-sidebar">
+    <div class="ai-rounded-t-lg ai-max-h-screen ai-overflow-hidden ai-bg-gray ai-shadow-sidebar ai-flex ai-flex-col">
         <button data-chat-widget-toggle class="ai-py-m ai-px ai-flex ai-justify-between ai-w-full group hover:ai-bg-gray-800">
             <strong class="ai-text-base">Chat</strong>
             <span data-chat-widget-toggle-arrow class="menubtn ai-bg-gray ai-rounded ai-bg-gray-800 group-hover:ai-bg-gray ai-w-1.5rem ai-h-1.5rem ai-overflow-hidden ai-flex ai-items-center ai-justify-center ai-rotate-180"></span>
         </button>
-        <div class="ai-pb-m ai-px">
+        <div class="ai-px ai-overflow-auto">
             {% include "ai/_chat/_widget-messages" with { messages: messages|default([]) } %}
+        </div>
+        <div class="ai-px ai-pb-m">
             <form class="ai-flex ai-flex-gap ai-mt-md" data-chat-widget>
                 {{ forms.hidden({
                     name: 'elementId',

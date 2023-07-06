@@ -5,6 +5,7 @@ namespace markhuot\craftai\actions;
 use Craft;
 use craft\elements\Asset;
 use craft\models\Volume;
+use function markhuot\openai\helpers\throw_if;
 
 class CreateAssetsForImages
 {
@@ -24,10 +25,7 @@ class CreateAssetsForImages
             $asset->uploaderId = Craft::$app->getUser()->getId();
             $asset->avoidFilenameConflicts = true;
             $asset->setScenario(Asset::SCENARIO_CREATE);
-            if (! Craft::$app->elements->saveElement($asset)) {
-                // @todo, deal with this and show errors
-                continue;
-            }
+            throw_if(! Craft::$app->elements->saveElement($asset), 'Could not save generated asset');
 
             $assets[] = $asset;
         }

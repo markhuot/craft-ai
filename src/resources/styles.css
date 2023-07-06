@@ -6,6 +6,7 @@
 .ai-mb-md { margin-bottom: var(--m); }
 .ai-block { display: block; }
 .ai-flex { display: flex; }
+.ai-flex-col { flex-direction: column; }
 .ai-flex-grow { flex-grow: 1; }
 .ai-flex-gap { gap: 1rem; }
 .ai-justify-between { justify-content: space-between; }
@@ -45,12 +46,14 @@ table:not(.data).\[\&_td\]\:ai-p-l :is(td,th) { padding: 1rem; }
 .ai-w-full { width: 100%; }
 .ai-h-1\.5rem, .menubtn:not(.btn).ai-h-1\.5rem { height: 1.5rem; }
 .ai-overflow-hidden { overflow: hidden; }
+.ai-overflow-auto { overflow: auto; }
 .ai-z-top { z-index: 100; }
 .ai-transition-transform { transition: transform 0.2s ease-in-out; }
 .ai-transform-popover { transform: translateY(calc(100% - 32px - 1rem)) }
 .ai-rotate-180 { transform: rotate(180deg); }
 .ai-text-base { font-size: 1rem; }
 .ai-space-x-md > * + * { margin-top: var(--m); }
+.ai-max-h-screen { max-height: 100vh; }
 
 .group:hover .group-hover\:filter-none { filter: none; }
 .group:hover .group-hover\:scale-1\.1 { transform: scale(1.1); }

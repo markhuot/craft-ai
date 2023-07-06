@@ -3,6 +3,7 @@
 namespace markhuot\craftai\behaviors;
 
 use Craft;
+use craft\helpers\App;
 use craft\web\Request;
 use craft\web\Response;
 use markhuot\craftai\db\ActiveRecord;
@@ -47,9 +48,11 @@ class BodyParamObjectBehavior extends Behavior
         $model->load($bodyParams, $formName);
 
         if (! $model->validate()) {
-            $this->owner->getAcceptsJson() ?
-                $this->errorJson($model) :
-                $this->errorBack($model);
+            if (! App::env('YII_ENV_TEST')) {
+                $this->owner->getAcceptsJson() ?
+                    $this->errorJson($model) :
+                    $this->errorBack($model);
+            }
         }
 
         return $model;

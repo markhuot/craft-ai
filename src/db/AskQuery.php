@@ -35,10 +35,10 @@ class AskQuery
 
         $documents = $this->getMatchingDocuments();
 
-        $context = $documents->pluck('_source._keywords')->map(fn ($k) => 'the context is '.$k)->join("\n");
+        $context = $documents->pluck('_source._keywords')->join("\n");
         $prompt = implode("\n\n", [
-            'Given the following context attempt to answer the question below. If you do not know the answer with certainity respond with "I don\'t know".',
-            "Context\n{$context}",
+            'Given the following context attempt to answer the question below. You may use additional context from your own knowledge but you must trust the context first.',
+            "Context:\n{$context}\n\n",
             "Question: {$this->prompt}",
             'Answer: ',
         ]);

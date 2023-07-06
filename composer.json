@@ -28,7 +28,8 @@
         },
         "files": [
             "./src/helpers/event.php",
-            "./src/helpers/container.php"
+            "./src/helpers/container.php",
+            "./src/helpers/exception.php"
         ]
     },
     "extra": {

@@ -14,6 +14,7 @@ use markhuot\craftai\models\EditImagePostRequest;
 use markhuot\craftai\models\GenerateImagePostRequest;
 use markhuot\craftai\stubs\Request;
 use yii\web\Response;
+use function markhuot\openai\helpers\throw_if;
 
 /**
  * @property Request $request
@@ -22,7 +23,10 @@ class ImageController extends Controller
 {
     public function actionGenerate(): Response
     {
-        $assetIds = array_filter($this->request->getQueryParam('assets', []));
+        $assetIds = $this->request->getQueryParam('assets', []);
+        throw_if(! is_array($assetIds), 'Unexpected asset param');
+
+        $assetIds = array_filter($assetIds);
         $assets = ! empty($assetIds) ? Asset::find()->id($assetIds)->all() : [];
 
         return $this->renderTemplate('ai/_images/generate', [

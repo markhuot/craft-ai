@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\listeners;
 
+use Craft;
 use craft\controllers\ElementsController;
 use markhuot\craftai\assetbundles\CraftAi;
 use markhuot\craftai\controllers\ChatController;
@@ -19,6 +20,10 @@ class AddChatWidget
             return;
         }
 
+        if (! Craft::$app->getUser()->getIdentity()) {
+            return;
+        }
+
         if (! Backend::can(Chat::class)) {
             return;
         }
@@ -26,8 +31,8 @@ class AddChatWidget
         view()->registerAssetBundle(CraftAi::class);
 
         $elementId = null;
-        if (is_a(\Craft::$app->controller, ElementsController::class)) {
-            $elementId = \Craft::$app->controller->element->id; // @phpstan-ignore-line Ignored because ID isn't on the element interface, but in most cases it'll be there anyway
+        if (is_a(Craft::$app->controller, ElementsController::class)) {
+            $elementId = Craft::$app->controller->element->id; // @phpstan-ignore-line Ignored because ID isn't on the element interface, but in most cases it'll be there anyway
         }
 
         echo view()->renderTemplate('ai/_chat/widget', [

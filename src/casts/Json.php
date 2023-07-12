@@ -7,7 +7,7 @@ use function markhuot\openai\helpers\throw_if;
 
 class Json implements CastInterface
 {
-    public function get(ActiveRecord $model, string $key, mixed $value): mixed
+    public function get(ActiveRecord|\yii\base\Model $model, string $key, mixed $value): mixed
     {
         throw_if(! is_string($value), 'Expected a string to be cast to JSON');
 
@@ -25,7 +25,7 @@ class Json implements CastInterface
     // Ideally I'd like to flip/flop this and store the data in it's casted/expanded form so that
     // changes to a nested value can be serialized back, but the infra just isn't there in Yii so
     // we have to work within the confines of the framework.
-    public function set(ActiveRecord $model, string $key, mixed $value): mixed
+    public function set(ActiveRecord|\yii\base\Model $model, string $key, mixed $value): mixed
     {
         return $value; // json_encode($value, JSON_THROW_ON_ERROR);
     }

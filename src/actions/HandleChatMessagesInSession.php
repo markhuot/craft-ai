@@ -27,12 +27,12 @@ class HandleChatMessagesInSession
     /**
      * @param  array<array-key, array{role: string, content: string}>  $messages
      */
-    public function set(array $messages)
+    public function set(array $messages): void
     {
         session()->set(self::CACHE_KEY, $messages);
     }
 
-    public function clear()
+    public function clear(): void
     {
         session()->remove(self::CACHE_KEY);
     }

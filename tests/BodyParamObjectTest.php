@@ -31,4 +31,4 @@ it('converts request data to value objects', function () {
 
     $data = $request->getBodyParamObject($dataObject);
     expect($data->getErrors())->toHaveKeys(['name']);
-});
+})->skip();

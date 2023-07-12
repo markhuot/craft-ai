@@ -9,6 +9,7 @@ trait OpenAiCompletion
 {
     public function completeText(string $text): TextCompletionResponse
     {
+        /** @var array{choices: array<array{text: string}>} $response */
         $response = $this->post('completions', [
             'model' => 'text-davinci-003',
             'prompt' => strip_tags($text),
@@ -25,6 +26,9 @@ trait OpenAiCompletion
         return $model;
     }
 
+    /**
+     * @return array<mixed>
+     */
     public function completeTextFake(string $text): array
     {
         return [

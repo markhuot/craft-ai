@@ -3,11 +3,11 @@
 namespace markhuot\craftai\controllers;
 
 use markhuot\craftai\db\AskQuery;
+use function markhuot\craftai\helpers\app;
 use markhuot\craftai\models\AskPostRequest;
 use markhuot\craftai\stubs\Request;
 use markhuot\craftai\web\Controller;
 use yii\web\Response;
-use function markhuot\craftai\helpers\app;
 
 /**
  * @property Request $request

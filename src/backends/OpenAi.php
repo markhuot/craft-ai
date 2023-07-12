@@ -28,6 +28,9 @@ class OpenAi extends \markhuot\craftai\models\Backend implements Completion, Edi
         'settings' => ['baseUrl' => 'https://api.openai.com/v1/'],
     ];
 
+    /**
+     * @return array<mixed>
+     */
     public function rules(): array
     {
         return array_merge(parent::rules(), [
@@ -40,6 +43,7 @@ class OpenAi extends \markhuot\craftai\models\Backend implements Completion, Edi
 
     public function handleErrorResponse(ClientException|ServerException $e): never
     {
+        /** @var array{error: array{message: ?string}|null} $response */
         $response = json_decode($e->getResponse()->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
         throw new RuntimeException($response['error']['message'] ?? 'Unknown API error');
     }

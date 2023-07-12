@@ -7,12 +7,10 @@ use craft\helpers\App;
 use craft\web\Request;
 use craft\web\Response;
 use markhuot\craftai\db\ActiveRecord;
-use markhuot\craftai\db\Model;
-use yii\base\Behavior;
-use yii\web\BadRequestHttpException;
 use function markhuot\openai\helpers\throw_if;
 use function markhuot\openai\helpers\web\app;
-use function PHPStan\dumpType;
+use yii\base\Behavior;
+use yii\web\BadRequestHttpException;
 
 /**
  * @property Request $owner;
@@ -22,7 +20,7 @@ class BodyParamObjectBehavior extends Behavior
     public function getQueryParamString(string $name, string $defaultValue = ''): string
     {
         $value = $this->owner->getQueryParam($name, $defaultValue);
-        throw_if(! is_string($value), 'Could not convert [' . $name . '] to a string');
+        throw_if(! is_string($value), 'Could not convert ['.$name.'] to a string');
 
         return $value;
     }
@@ -30,7 +28,7 @@ class BodyParamObjectBehavior extends Behavior
     /**
      * @template T of \craft\base\Model|ActiveRecord
      *
-     * @param  class-string<T> $class
+     * @param  class-string<T>  $class
      * @return T
      */
     public function getBodyParamObject(string $class, string $formName = '')
@@ -99,7 +97,7 @@ class BodyParamObjectBehavior extends Behavior
     }
 
     /**
-     * @param array<mixed> $array
+     * @param  array<mixed>  $array
      */
     protected function setOldFlashes(array $array, string $prefix = ''): void
     {

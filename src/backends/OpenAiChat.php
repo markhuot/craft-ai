@@ -8,6 +8,7 @@ trait OpenAiChat
 {
     public function chat(array $messages): ChatMessageResponse
     {
+        /** @var array{choices: array<array{message: array{content: string}}>} $response */
         $response = $this->post('chat/completions', [
             'model' => 'gpt-4',
             'messages' => $messages,
@@ -22,7 +23,7 @@ trait OpenAiChat
     /**
      * @return array<array-key, mixed>
      */
-    public function chatFake(array $messages): array
+    public function chatFake(): array
     {
         return [
             'choices' => [

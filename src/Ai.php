@@ -4,7 +4,7 @@ namespace markhuot\craftai;
 
 use craft\base\Element;
 use craft\elements\Asset;
-use craft\web\Application;
+use craft\web\Application as WebApplication;
 use craft\web\UrlManager;
 use craft\web\View;
 use markhuot\craftai\base\Plugin;
@@ -31,7 +31,7 @@ class Ai extends Plugin
         parent::init();
 
         listen(
-            fn () => [Application::class, Application::EVENT_BEFORE_REQUEST, AddBodyParamObjectBehavior::class],
+            fn () => [WebApplication::class, WebApplication::EVENT_BEFORE_REQUEST, AddBodyParamObjectBehavior::class],
             fn () => [UrlManager::class, UrlManager::EVENT_REGISTER_CP_URL_RULES, RegisterCpUrlRules::class],
             fn () => [Asset::class, Asset::EVENT_DEFINE_SIDEBAR_HTML, AddAssetSidebarWidgets::class],
             fn () => [Element::class, Element::EVENT_AFTER_PROPAGATE, GenerateEmbeddings::class],
@@ -43,6 +43,8 @@ class Ai extends Plugin
 
         Backend::fake($this->getSettings()->useFakes);
 
-        \Craft::$app->getView()->registerTwigExtension(new Extension);
+        if (\Craft::$app instanceof WebApplication) {
+            \Craft::$app->getView()->registerTwigExtension(new Extension);
+        }
     }
 }

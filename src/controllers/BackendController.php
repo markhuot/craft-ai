@@ -3,7 +3,6 @@
 namespace markhuot\craftai\controllers;
 
 use craft\helpers\UrlHelper;
-use yii\web\Response;
 use markhuot\craftai\Ai;
 use markhuot\craftai\backends\HuggingFace;
 use markhuot\craftai\backends\OpenAi;
@@ -11,8 +10,8 @@ use markhuot\craftai\backends\StableDiffusion;
 use markhuot\craftai\models\Backend;
 use markhuot\craftai\stubs\Request;
 use markhuot\craftai\web\Controller;
-use function markhuot\openai\helpers\throw_if;
 use function markhuot\openai\helpers\web\app;
+use yii\web\Response;
 
 /**
  * @property Request $request

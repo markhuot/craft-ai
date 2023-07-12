@@ -6,13 +6,11 @@ use Craft;
 use craft\controllers\ElementsController;
 use markhuot\craftai\actions\HandleChatMessagesInSession;
 use markhuot\craftai\assetbundles\CraftAi;
-use markhuot\craftai\controllers\ChatController;
 use markhuot\craftai\features\Chat;
-use markhuot\craftai\models\Backend;
 use function markhuot\craftai\helpers\app;
+use markhuot\craftai\models\Backend;
 use function markhuot\openai\helpers\web\auth;
 use function markhuot\openai\helpers\web\request;
-use function markhuot\openai\helpers\web\session;
 use function markhuot\openai\helpers\web\view;
 
 class AddChatWidget

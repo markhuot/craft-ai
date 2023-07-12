@@ -12,6 +12,7 @@ trait CastsAttributes
     public function __get($key)
     {
         if ($caster = ($this->casts[$key] ?? false)) {
+            // @phpstan-ignore-next-line
             return (new $caster)->get($this, $key, $this->getAttribute($key));
         }
 

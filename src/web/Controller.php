@@ -3,16 +3,15 @@
 namespace markhuot\craftai\web;
 
 use markhuot\craftai\db\ActiveRecord;
+use function markhuot\openai\helpers\throw_if;
 use yii\base\InlineAction;
 use yii\web\Response;
-use function markhuot\openai\helpers\throw_if;
 
 class Controller extends \craft\web\Controller
 {
     /**
-     * @param InlineAction $action
-     * @param array<mixed> $params
-     *
+     * @param  InlineAction  $action
+     * @param  array<mixed>  $params
      * @return array<mixed>
      */
     public function bindActionParams($action, $params): array

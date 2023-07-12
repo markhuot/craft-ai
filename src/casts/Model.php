@@ -10,12 +10,12 @@ use function markhuot\openai\helpers\web\app;
 
 class Model implements CastInterface
 {
-    public function get(ActiveRecord $model, string $key, mixed $value): mixed
+    public function get(ActiveRecord|\yii\base\Model $model, string $key, mixed $value): mixed
     {
         return $value;
     }
 
-    public function set(ActiveRecord $model, string $key, mixed $value): mixed
+    public function set(ActiveRecord|\yii\base\Model $model, string $key, mixed $value): mixed
     {
         $reflect = new \ReflectionClass($model);
         $className = null;

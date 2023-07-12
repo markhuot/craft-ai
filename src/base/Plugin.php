@@ -27,7 +27,7 @@ class Plugin extends \craft\base\Plugin
     }
 
     /**
-     * @param array<mixed> $settings
+     * @param  array<mixed>  $settings
      */
     public function setSettings(array $settings): void
     {

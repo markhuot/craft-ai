@@ -4,13 +4,16 @@ namespace markhuot\craftai\listeners;
 
 use Craft;
 use craft\controllers\ElementsController;
+use markhuot\craftai\actions\HandleChatMessagesInSession;
 use markhuot\craftai\assetbundles\CraftAi;
 use markhuot\craftai\controllers\ChatController;
 use markhuot\craftai\features\Chat;
 use markhuot\craftai\models\Backend;
-use function markhuot\openai\helpers\request;
-use function markhuot\openai\helpers\session;
-use function markhuot\openai\helpers\view;
+use function markhuot\craftai\helpers\app;
+use function markhuot\openai\helpers\web\auth;
+use function markhuot\openai\helpers\web\request;
+use function markhuot\openai\helpers\web\session;
+use function markhuot\openai\helpers\web\view;
 
 class AddChatWidget
 {
@@ -20,7 +23,7 @@ class AddChatWidget
             return;
         }
 
-        if (! Craft::$app->getUser()->getIdentity()) {
+        if (! auth()->getIdentity()) {
             return;
         }
 
@@ -36,7 +39,7 @@ class AddChatWidget
         }
 
         echo view()->renderTemplate('ai/_chat/widget', [
-            'messages' => session()->get(ChatController::CACHE_KEY) ?? [],
+            'messages' => app(HandleChatMessagesInSession::class)->get(),
             'elementId' => $elementId,
         ]);
     }

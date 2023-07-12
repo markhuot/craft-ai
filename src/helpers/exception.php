@@ -3,7 +3,7 @@
 namespace markhuot\openai\helpers;
 
 /**
- * @phpstan-assert-if-true true $condition
+ * @phpstan-assert !true $condition
  */
 function throw_if(bool $condition, mixed $message): void
 {
@@ -19,7 +19,9 @@ function throw_if(bool $condition, mixed $message): void
         throw new \RuntimeException($message());
     }
 
-    if (is_a(\Throwable::class, $message)) {
+    if (is_object($message) && is_a($message, \Throwable::class)) {
         throw $message;
     }
+
+    throw new \RuntimeException('Invalid exception message type.');
 }

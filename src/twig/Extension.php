@@ -2,7 +2,7 @@
 
 namespace markhuot\craftai\twig;
 
-use function markhuot\openai\helpers\session;
+use function markhuot\openai\helpers\web\session;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFunction;
 

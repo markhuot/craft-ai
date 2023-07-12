@@ -27,9 +27,10 @@
             "markhuot\\craftai\\tests\\": "./tests"
         },
         "files": [
-            "./src/helpers/event.php",
             "./src/helpers/container.php",
-            "./src/helpers/exception.php"
+            "./src/helpers/event.php",
+            "./src/helpers/exception.php",
+            "./src/helpers/web/container.php"
         ]
     },
     "extra": {

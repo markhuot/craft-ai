@@ -62,7 +62,7 @@ $routes['backends'] = [
 ];
 
 $routes['backends.edit'] = [
-    'route' => 'ai/backend/<id:\d+>',
+    'route' => 'ai/backend/<backend:\d+>',
     'controller' => 'ai/backend/edit',
 ];
 

@@ -3,6 +3,7 @@
 namespace markhuot\craftai\controllers;
 
 use craft\helpers\UrlHelper;
+use yii\web\Response;
 use markhuot\craftai\Ai;
 use markhuot\craftai\backends\HuggingFace;
 use markhuot\craftai\backends\OpenAi;
@@ -10,15 +11,17 @@ use markhuot\craftai\backends\StableDiffusion;
 use markhuot\craftai\models\Backend;
 use markhuot\craftai\stubs\Request;
 use markhuot\craftai\web\Controller;
+use function markhuot\openai\helpers\throw_if;
+use function markhuot\openai\helpers\web\app;
 
 /**
  * @property Request $request
  */
 class BackendController extends Controller
 {
-    public function actionIndex()
+    public function actionIndex(): Response
     {
-        $config = \Craft::$app->config->getConfigFromFile('ai');
+        $config = app()->getConfig()->getConfigFromFile('ai');
 
         return $this->renderTemplate('ai/_backends/index', [
             'backends' => Backend::find()->all(),
@@ -27,11 +30,11 @@ class BackendController extends Controller
         ]);
     }
 
-    public function actionToggleFakes()
+    public function actionToggleFakes(): Response
     {
         $settings = Ai::getInstance()->getSettings();
         $settings->useFakes = ! $settings->useFakes;
-        \Craft::$app->getPlugins()->savePluginSettings(Ai::getInstance(), $settings->toArray());
+        app()->getPlugins()->savePluginSettings(Ai::getInstance(), $settings->toArray());
 
         return $this->response(
             json: ['success' => true, 'value' => $settings->useFakes],
@@ -39,7 +42,7 @@ class BackendController extends Controller
         );
     }
 
-    public function actionCreate(string $type)
+    public function actionCreate(string $type): Response
     {
         return $this->cpEditScreen(match ($type) {
             'openai' => new OpenAi,
@@ -49,21 +52,21 @@ class BackendController extends Controller
         });
     }
 
-    public function actionEdit(int $id)
+    public function actionEdit(Backend $backend): Response
     {
-        return $this->cpEditScreen(Backend::find()->where(['id' => $id])->one());
+        return $this->cpEditScreen($backend);
     }
 
-    protected function cpEditScreen(?Backend $backend = null)
+    protected function cpEditScreen(Backend $backend): Response
     {
         $screen = $this->asCpScreen()
-            ->title(($backend?->isNewRecord ? 'Create' : 'Edit').' Backend')
+            ->title(($backend->isNewRecord ? 'Create' : 'Edit').' Backend')
             ->selectedSubnavItem('backends')
             ->addCrumb('Backends', UrlHelper::cpUrl('ai/backends'))
             ->action('ai/backend/store')
             ->redirectUrl('ai/backends')
             ->saveShortcutRedirectUrl('ai/backend/{id}')
-            ->editUrl($backend?->id ? 'ai/backend/'.$backend?->id : null)
+            ->editUrl($backend->id ? 'ai/backend/'.$backend->id : null)
             ->contentTemplate('ai/_backends/create', [
                 'backend' => $backend,
             ]);
@@ -72,13 +75,13 @@ class BackendController extends Controller
             $screen
                 ->addAltAction('Save and continue editing', [
                     'action' => 'ai/backend/store',
-                    'redirect' => 'ai/backend/'.$backend?->id,
+                    'redirect' => 'ai/backend/'.$backend->id,
                     'shortcut' => 's',
                 ])
                 ->addAltAction('Delete', [
                     'destructive' => true,
                     'action' => 'ai/backend/delete',
-                    'params' => ['backend' => $backend?->id],
+                    'params' => ['backend' => $backend->id],
                     'redirect' => 'ai/backends',
                     'confirm' => 'Are you sure you want to delete this backend?',
                 ]);
@@ -87,7 +90,7 @@ class BackendController extends Controller
         return $screen;
     }
 
-    public function actionStore()
+    public function actionStore(): Response
     {
         $backend = $this->request->getBodyParamObject(Backend::class);
         $backend->save();
@@ -95,7 +98,7 @@ class BackendController extends Controller
         return $this->asModelSuccess($backend, 'Backend saved');
     }
 
-    public function actionDelete()
+    public function actionDelete(): Response
     {
         $this->request
             ->getBodyParamObject(Backend::class)

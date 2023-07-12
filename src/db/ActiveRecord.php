@@ -4,6 +4,9 @@ namespace markhuot\craftai\db;
 
 use yii\db\Expression;
 
+/**
+ * @property string $id
+ */
 class ActiveRecord extends \craft\db\ActiveRecord
 {
     use CastsAttributes;

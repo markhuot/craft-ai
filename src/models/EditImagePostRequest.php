@@ -5,18 +5,19 @@ namespace markhuot\craftai\models;
 use craft\elements\Asset;
 use markhuot\craftai\casts\Model as ModelCast;
 use markhuot\craftai\db\Model;
+use markhuot\craftai\features\EditImage;
 
 class EditImagePostRequest extends Model
 {
-    public ?string $prompt = null;
+    public string $prompt;
 
-    public ?Asset $asset = null;
+    public Asset $asset;
 
-    public ?string $mask = null;
+    public string $mask;
 
-    public ?int $count = 1;
+    public int $count = 1;
 
-    public ?Backend $backend = null;
+    public EditImage|null $backend = null;
 
     protected array $casts = [
         'asset' => ModelCast::class,

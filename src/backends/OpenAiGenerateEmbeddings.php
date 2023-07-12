@@ -8,6 +8,7 @@ trait OpenAiGenerateEmbeddings
 {
     public function generateEmbeddings(string $text): EmbeddingsResponse
     {
+        /** @var array{data: array<array{embedding: array<float>}>} $response */
         $response = $this->post('embeddings', [
             'input' => $text,
             'model' => 'text-embedding-ada-002',
@@ -19,6 +20,9 @@ trait OpenAiGenerateEmbeddings
         return $model;
     }
 
+    /**
+     * @return array<mixed>
+     */
     public function generateEmbeddingsFake(string $text): array
     {
         $vectors = collect(range(1, 1536))->map(fn () => -0.00025898186)->toArray();

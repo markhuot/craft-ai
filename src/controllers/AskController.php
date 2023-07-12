@@ -6,23 +6,25 @@ use markhuot\craftai\db\AskQuery;
 use markhuot\craftai\models\AskPostRequest;
 use markhuot\craftai\stubs\Request;
 use markhuot\craftai\web\Controller;
+use yii\web\Response;
+use function markhuot\craftai\helpers\app;
 
 /**
  * @property Request $request
  */
 class AskController extends Controller
 {
-    public function actionIndex()
+    public function actionIndex(): Response
     {
-        $prompt = $this->request->getQueryParam('prompt', '');
+        $prompt = $this->request->getQueryParamString('prompt');
 
         return $this->renderTemplate('ai/_ask/index', [
             'prompt' => $this->request->getQueryParam('prompt', ''),
-            'answer' => \Craft::$container->get(AskQuery::class)->prompt($prompt)->answer(),
+            'answer' => app(AskQuery::class)->prompt($prompt)->answer(),
         ]);
     }
 
-    public function actionAsk()
+    public function actionAsk(): Response
     {
         $data = $this->request->getBodyParamObject(AskPostRequest::class);
 

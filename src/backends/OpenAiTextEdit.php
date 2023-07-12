@@ -8,6 +8,7 @@ trait OpenAiTextEdit
 {
     public function editText(string $input, string $instruction): TextEditResponse
     {
+        /** @var array{choices: array<array{text: string}>} $response */
         $response = $this->post('edits', [
             'model' => 'text-davinci-edit-001',
             'input' => strip_tags($input),
@@ -20,6 +21,9 @@ trait OpenAiTextEdit
         return $model;
     }
 
+    /**
+     * @return array<mixed>
+     */
     public function editTextFake(string $input, string $instruction): array
     {
         return [

@@ -9,6 +9,7 @@ use markhuot\craftai\actions\CreateAssetsForImages;
 use markhuot\craftai\features\Caption;
 use markhuot\craftai\features\EditImage;
 use markhuot\craftai\features\GenerateImage;
+use function markhuot\craftai\helpers\app;
 use markhuot\craftai\models\Backend;
 use markhuot\craftai\models\EditImagePostRequest;
 use markhuot\craftai\models\GenerateImagePostRequest;
@@ -40,8 +41,10 @@ class ImageController extends Controller
     {
         $data = $this->request->getBodyParamObject(GenerateImagePostRequest::class);
 
-        $response = ($data->backend ?? Backend::for(GenerateImage::class))->generateImage($data->prompt, $data->count);
-        $assets = \Craft::$container->get(CreateAssetsForImages::class)->handle($data->volume, $response->paths);
+        $backend = $data->backend ?? Backend::for(GenerateImage::class);
+
+        $response = $backend->generateImage($data->prompt, $data->count);
+        $assets = app(CreateAssetsForImages::class)->handle($data->volume, $response->paths);
 
         $this->setSuccessFlash('Generated '.count($assets).' assets');
         $params = array_map(fn ($a) => 'assets[]='.$a->id, $assets);
@@ -51,7 +54,10 @@ class ImageController extends Controller
 
     public function actionCaption(): Response
     {
+        /** @var ?Asset $asset */
         $asset = Asset::find()->id($this->request->getBodyParam('elementId'))->one();
+        throw_if(! $asset, 'Invalid asset id');
+
         $caption = Backend::for(Caption::class)->generateCaption($asset);
 
         \Craft::$app->db->createCommand()
@@ -75,8 +81,9 @@ class ImageController extends Controller
         $this->requirePostRequest();
         $data = $this->request->getBodyParamObject(EditImagePostRequest::class);
 
-        $response = ($data->backend ?? Backend::for(EditImage::class))->editImage($data->prompt, $data->asset, $data->mask, $data->count);
-        $assets = \Craft::$container->get(CreateAssetsForImages::class)->handle($data->asset->volume, $response->paths);
+        $backend = $data->backend ?? Backend::for(EditImage::class);
+        $response = $backend->editImage($data->prompt, $data->asset, $data->mask, $data->count);
+        $assets = app(CreateAssetsForImages::class)->handle($data->asset->volume, $response->paths);
 
         $this->setSuccessFlash('Generated '.count($assets).' assets');
 

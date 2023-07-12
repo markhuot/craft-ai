@@ -19,7 +19,6 @@ use markhuot\craftai\models\Backend;
 use markhuot\craftai\models\Settings;
 use markhuot\craftai\twig\Extension;
 use function markhuot\openai\helpers\listen;
-use function markhuot\openai\helpers\view;
 
 /**
  * @method static self getInstance()
@@ -44,6 +43,6 @@ class Ai extends Plugin
 
         Backend::fake($this->getSettings()->useFakes);
 
-        view()->registerTwigExtension(new Extension);
+        \Craft::$app->getView()->registerTwigExtension(new Extension);
     }
 }

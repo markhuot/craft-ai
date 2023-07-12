@@ -7,7 +7,7 @@ use markhuot\craftai\models\ChatMessageResponse;
 interface Chat
 {
     /**
-     * @param  array{role: string, content: string}  $messages
+     * @param  array<array-key, array{role: string, content: string}>  $messages
      */
     public function chat(array $messages): ChatMessageResponse;
 }

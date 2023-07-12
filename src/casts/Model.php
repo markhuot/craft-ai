@@ -5,26 +5,37 @@ namespace markhuot\craftai\casts;
 use craft\base\ElementInterface;
 use craft\models\Volume;
 use markhuot\craftai\db\ActiveRecord;
+use function markhuot\openai\helpers\throw_if;
+use function markhuot\openai\helpers\web\app;
 
 class Model implements CastInterface
 {
-    public function get($model, $key, $value)
+    public function get(ActiveRecord $model, string $key, mixed $value): mixed
     {
         return $value;
     }
 
-    public function set($model, $key, $value)
+    public function set(ActiveRecord $model, string $key, mixed $value): mixed
     {
         $reflect = new \ReflectionClass($model);
+        $className = null;
         $property = $reflect->getProperty($key);
-        $className = $property->getType()?->getName();
-        if (! $className) {
-            return;
+        $propertyType = $property->getType();
+        if ($propertyType && is_a($propertyType, \ReflectionNamedType::class)) {
+            $className = $propertyType->getName();
         }
+        $casts = $property->getAttributes(CastTo::class);
+        if ($casts[0] ?? false) {
+            $arguments = $casts[0]->getArguments();
+            if ($arguments[0] ?? false) {
+                $className = $arguments[0];
+            }
+        }
+        throw_if(! $className, 'Can not determine the class name ['.$key.'] should be cast to');
 
         if (is_numeric($value)) {
             switch ($className) {
-                case Volume::class: return \Craft::$app->volumes->getVolumeById($value);
+                case Volume::class: return app()->volumes->getVolumeById((int) $value);
             }
 
             if (isset(class_implements($className)[ElementInterface::class])) {
@@ -38,7 +49,7 @@ class Model implements CastInterface
 
         if (is_string($value)) {
             switch ($className) {
-                case Volume::class: return \Craft::$app->volumes->getVolumeByHandle($value);
+                case Volume::class: return app()->volumes->getVolumeByHandle($value);
             }
         }
 

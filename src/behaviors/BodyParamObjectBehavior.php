@@ -7,22 +7,33 @@ use craft\helpers\App;
 use craft\web\Request;
 use craft\web\Response;
 use markhuot\craftai\db\ActiveRecord;
+use markhuot\craftai\db\Model;
 use yii\base\Behavior;
-use yii\base\Model;
 use yii\web\BadRequestHttpException;
+use function markhuot\openai\helpers\throw_if;
+use function markhuot\openai\helpers\web\app;
+use function PHPStan\dumpType;
 
 /**
  * @property Request $owner;
  */
 class BodyParamObjectBehavior extends Behavior
 {
+    public function getQueryParamString(string $name, string $defaultValue = ''): string
+    {
+        $value = $this->owner->getQueryParam($name, $defaultValue);
+        throw_if(! is_string($value), 'Could not convert [' . $name . '] to a string');
+
+        return $value;
+    }
+
     /**
-     * @template T
+     * @template T of \craft\base\Model|ActiveRecord
      *
-     * @param  class-string<T>  $class
+     * @param  class-string<T> $class
      * @return T
      */
-    public function getBodyParamObject(string|object $class, string $formName = '')
+    public function getBodyParamObject(string $class, string $formName = '')
     {
         if (! $this->owner->getIsPost()) {
             throw new BadRequestHttpException('Post request required');
@@ -33,10 +44,12 @@ class BodyParamObjectBehavior extends Behavior
         if (is_subclass_of($class, ActiveRecord::class)) {
             $key = $bodyParams[$class::$keyField] ?? null;
             if ($key) {
+                /** @var T $model */
                 $model = $class::find()->where([$class::$keyField => $key])->one();
             }
 
             if (empty($model)) {
+                /** @var T $model */
                 $model = $class::make(array_filter([
                     $class::$polymorphicKeyField => $bodyParams[$class::$polymorphicKeyField] ?? null,
                 ]));
@@ -58,7 +71,7 @@ class BodyParamObjectBehavior extends Behavior
         return $model;
     }
 
-    public function errorJson(Model $model)
+    public function errorJson(\yii\base\Model $model): never
     {
         $response = new Response();
         $response->setStatusCode(500);
@@ -67,29 +80,34 @@ class BodyParamObjectBehavior extends Behavior
             'errors' => $model->errors,
         ], JSON_THROW_ON_ERROR);
         Craft::$app->end(500, $response);
+        exit; // in most cases Craft::$app->end will terminate, but if we're in test mode or something, we'll terminate here
     }
 
-    public function errorBack(Model $model)
+    public function errorBack(\yii\base\Model $model): never
     {
         foreach ($model->errors as $key => $messages) {
-            Craft::$app->session->setFlash('error.'.$key, implode(',', $messages));
+            app()->getSession()->setFlash('error.'.$key, implode(',', $messages));
         }
 
-        $this->setOldFlashes(Craft::$app->request->getBodyParams());
+        $this->setOldFlashes(app()->getRequest()->getBodyParams());
 
         $response = new Response();
         $response->setStatusCode(302);
-        $response->headers->add('Location', Craft::$app->request->getUrl());
+        $response->headers->add('Location', app()->getRequest()->getUrl());
         Craft::$app->end(500, $response);
+        exit; // in most cases Craft::$app->end will terminate, but if we're in test mode or something, we'll terminate here
     }
 
-    protected function setOldFlashes($array, $prefix = '')
+    /**
+     * @param array<mixed> $array
+     */
+    protected function setOldFlashes(array $array, string $prefix = ''): void
     {
         foreach ($array as $key => $value) {
             if (is_array($value)) {
                 $this->setOldFlashes($value, implode('.', array_filter([$prefix, $key])));
             } else {
-                Craft::$app->session->setFlash('old.'.implode('.', array_filter([$prefix, $key])), $value);
+                app()->getSession()->setFlash('old.'.implode('.', array_filter([$prefix, $key])), $value);
             }
         }
     }

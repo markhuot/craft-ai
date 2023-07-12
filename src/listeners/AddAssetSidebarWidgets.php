@@ -8,7 +8,7 @@ use craft\elements\Asset;
 use craft\events\DefineHtmlEvent;
 use markhuot\craftai\features\Caption;
 use markhuot\craftai\models\Backend;
-use function markhuot\openai\helpers\view;
+use function markhuot\openai\helpers\web\view;
 use yii\base\Event;
 
 class AddAssetSidebarWidgets implements ListenerInterface

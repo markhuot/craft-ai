@@ -19,6 +19,9 @@ class StableDiffusion extends \markhuot\craftai\models\Backend implements Genera
         'settings' => ['baseUrl' => 'https://api.stability.ai/v1alpha/'],
     ];
 
+    /**
+     * @return array<mixed>
+     */
     public function rules(): array
     {
         return array_merge(parent::rules(), [
@@ -31,6 +34,7 @@ class StableDiffusion extends \markhuot\craftai\models\Backend implements Genera
 
     public function handleErrorResponse(ClientException|ServerException $e): never
     {
+        /** @var array{message: string} $response */
         $response = json_decode($e->getResponse()->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
         throw new \RuntimeException($response['message']);
     }

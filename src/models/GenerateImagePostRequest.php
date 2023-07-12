@@ -3,18 +3,21 @@
 namespace markhuot\craftai\models;
 
 use craft\models\Volume;
+use markhuot\craftai\casts\CastTo;
 use markhuot\craftai\casts\Model as ModelCast;
 use markhuot\craftai\db\Model;
+use markhuot\craftai\features\GenerateImage;
 
 class GenerateImagePostRequest extends Model
 {
-    public ?Backend $backend = null;
+    #[CastTo(Backend::class)]
+    public ?GenerateImage $backend = null;
 
-    public ?string $prompt = null;
+    public string $prompt;
 
-    public ?Volume $volume = null;
+    public Volume $volume;
 
-    public ?int $count = 1;
+    public int $count = 1;
 
     protected array $casts = [
         'backend' => ModelCast::class,

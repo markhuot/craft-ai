@@ -72,6 +72,8 @@ jobs:
           key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-php-
+      - name: debug
+        run: cat src/fields/Ai.php
       - name: Run Pint
         run: vendor/bin/pint --test
   lintPhpstan:

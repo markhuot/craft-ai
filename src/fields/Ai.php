@@ -9,7 +9,7 @@ use function markhuot\openai\helpers\web\view;
 
 class Ai extends Field implements FieldInterface
 {
-    protected function inputHtml(mixed $value, ?ElementInterface $element = null): string
+    protected function inputHtml(mixed $value, ElementInterface $element = null): string
     {
         return view()->renderTemplate('ai/_cp/fields/ai');
     }

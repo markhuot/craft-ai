@@ -16,7 +16,7 @@ class Extension extends AbstractExtension
         ];
     }
 
-    public function old(string $key, object|string|null $default = null): ?string
+    public function old(string $key, object|string $default = null): ?string
     {
         /** @var array<array-key, string> $flashes */
         $flashes = session()->getAllFlashes();

@@ -139,7 +139,7 @@ class Backend extends ActiveRecord
      * @param  array<array-key, mixed>  $multipart
      * @return array<array-key, mixed>
      */
-    public function post(string $uri, array $body = [], array $headers = [], ?string $rawBody = null, array $multipart = []): array
+    public function post(string $uri, array $body = [], array $headers = [], string $rawBody = null, array $multipart = []): array
     {
         try {
             if (static::$faked) {

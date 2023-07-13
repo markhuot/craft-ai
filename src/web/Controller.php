@@ -50,7 +50,7 @@ class Controller extends \craft\web\Controller
     /**
      * @param  array<array-key, string>  $settings Such as `icon` and `iconLabel`
      */
-    public function flash(?string $default = null, array $settings = []): self
+    public function flash(string $default = null, array $settings = []): self
     {
         $this->setSuccessFlash($default, $settings);
 

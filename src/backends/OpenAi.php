@@ -13,6 +13,9 @@ use markhuot\craftai\features\GenerateImage;
 use markhuot\craftai\validators\Json as JsonValidator;
 use RuntimeException;
 
+/**
+ * @property array{enabledFeatures: string[], baseUrl: string, apiKey: string, completionModel: string, chatModel: string} $settings
+ */
 class OpenAi extends \markhuot\craftai\models\Backend implements Completion, EditText, GenerateImage, Chat, EditImage, GenerateEmbeddings
 {
     use OpenAiCompletion;

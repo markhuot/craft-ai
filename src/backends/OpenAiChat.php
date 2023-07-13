@@ -6,11 +6,16 @@ use markhuot\craftai\models\ChatMessageResponse;
 
 trait OpenAiChat
 {
+    public function chatModel(): string
+    {
+        return ! empty($this->settings['chatModel']) ? $this->settings['chatModel'] : 'gpt-4';
+    }
+
     public function chat(array $messages): ChatMessageResponse
     {
         /** @var array{choices: array<array{message: array{content: string}}>} $response */
         $response = $this->post('chat/completions', [
-            'model' => 'gpt-4',
+            'model' => $this->chatModel(),
             'messages' => $messages,
         ]);
 

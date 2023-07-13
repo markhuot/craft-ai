@@ -10,6 +10,7 @@ trait OpenAiEditImage
 {
     public function editImage(string $prompt, Asset $asset, string $mask, int $count = 1): EditImageResponse
     {
+        /** @var array{data: array<array{url: string}>} $body */
         $body = $this->post(
             uri: 'images/edits',
             multipart: [
@@ -34,6 +35,9 @@ trait OpenAiEditImage
         return $response;
     }
 
+    /**
+     * @return array<mixed>
+     */
     public function editImageFake(string $prompt, Asset $asset, string $mask, int $count = 1): array
     {
         return [

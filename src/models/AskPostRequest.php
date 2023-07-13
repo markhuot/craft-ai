@@ -8,6 +8,9 @@ class AskPostRequest extends Model
 {
     public string $prompt;
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function rules(): array
     {
         return [

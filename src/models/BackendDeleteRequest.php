@@ -13,6 +13,9 @@ class BackendDeleteRequest extends Model
         'backend' => ModelCast::class,
     ];
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function rules(): array
     {
         return [

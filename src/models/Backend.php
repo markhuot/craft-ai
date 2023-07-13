@@ -15,7 +15,7 @@ use ReflectionClass;
 use RuntimeException;
 
 /**
- * @property array $settings
+ * @property array{enabledFeatures: string[], baseUrl: string, apiKey: string} $settings
  */
 class Backend extends ActiveRecord
 {
@@ -29,28 +29,32 @@ class Backend extends ActiveRecord
         'settings' => JsonCast::class,
     ];
 
+    /** @var array<string, mixed> */
     protected array $defaultValues = [
         'type' => self::class,
     ];
 
-    public static $polymorphicKeyField = 'type';
+    public static ?string $polymorphicKeyField = 'type';
 
     public static function tableName()
     {
         return Table::BACKENDS;
     }
 
-    public static function fake(bool $value = true)
+    public static function fake(bool $value = true): void
     {
         static::$faked = $value;
     }
 
-    public static function isFaked()
+    public static function isFaked(): bool
     {
         return static::$faked;
     }
 
-    public static function allFor(string $interface)
+    /**
+     * @return array<Backend>
+     */
+    public static function allFor(string $interface): array
     {
         $found = [];
         /** @var Backend[] $possibilities */
@@ -72,16 +76,16 @@ class Backend extends ActiveRecord
      * @param  class-string<T>  $interface
      * @return T
      */
-    public static function for(string $interface, $silence = false)
+    public static function for(string $interface)
     {
+        /** @var T[] $backends */
         $backends = static::allFor($interface);
+
         if (isset($backends[0])) {
             return $backends[0];
         }
 
-        if ($silence === false) {
-            throw new RuntimeException('No backend found supporting ['.$interface.']');
-        }
+        throw new RuntimeException('No backend found supporting ['.$interface.']');
     }
 
     public static function can(string $interface): bool
@@ -89,14 +93,17 @@ class Backend extends ActiveRecord
         return count(static::allFor($interface)) > 0;
     }
 
-    public function init()
+    public function init(): void
     {
         parent::init();
 
         $this->faker = Factory::create();
     }
 
-    public function rules()
+    /**
+     * @return array<array-key, string[]>
+     */
+    public function rules(): array
     {
         return [
             ['name', 'required'],
@@ -104,19 +111,19 @@ class Backend extends ActiveRecord
         ];
     }
 
-    public function getTypeHandle()
+    public function getTypeHandle(): string
     {
         return strtolower((new ReflectionClass($this))->getShortName());
     }
 
-    public function getSettingsView()
+    public function getSettingsView(): string
     {
         $shortName = (new ReflectionClass($this))->getShortName();
 
         return 'ai/_backends/_'.strtolower($shortName);
     }
 
-    public function getClient()
+    public function getClient(): Client
     {
         return new Client([
             'base_uri' => Craft::parseEnv($this->settings['baseUrl']),
@@ -126,11 +133,20 @@ class Backend extends ActiveRecord
         ]);
     }
 
-    public function post($uri, array $body = [], array $headers = [], ?string $rawBody = null, array $multipart = [])
+    /**
+     * @param  array<array-key, mixed>  $body
+     * @param  array<array-key, mixed>  $headers
+     * @param  array<array-key, mixed>  $multipart
+     * @return array<array-key, mixed>
+     */
+    public function post(string $uri, array $body = [], array $headers = [], string $rawBody = null, array $multipart = []): array
     {
         try {
             if (static::$faked) {
-                ['function' => $methodName, 'args' => $args] = debug_backtrace(! DEBUG_BACKTRACE_PROVIDE_OBJECT, 2)[1];
+                $backtrace = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 2)[1];
+                $methodName = $backtrace['function'];
+                $args = $backtrace['args'] ?? [];
+
                 $fakeMethodName = $methodName.'Fake';
                 if (method_exists($this, $fakeMethodName)) {
                     return $this->$fakeMethodName(...$args);
@@ -152,18 +168,21 @@ class Backend extends ActiveRecord
 
             $response = $this->getClient()->request('POST', $uri, $params);
 
-            return json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
+            /** @var array<mixed> $json */
+            $json = json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
+
+            return $json;
         } catch (ClientException|ServerException $e) {
             $this->handleErrorResponse($e);
         }
     }
 
-    public function handleErrorResponse(ClientException|ServerException $e)
+    public function handleErrorResponse(ClientException|ServerException $e): never
     {
         throw $e;
     }
 
-    public static function factory()
+    public static function factory(): \markhuot\craftpest\factories\Factory
     {
         $shortName = (new ReflectionClass(static::class))->getShortName();
         $fqcn = 'markhuot\\craftai\\tests\\factories\\'.$shortName;

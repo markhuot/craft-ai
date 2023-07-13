@@ -9,6 +9,7 @@ trait StableDiffusionGenerateImage
 {
     public function generateImage(string $prompt, int $count = 1): ImageGenerationResponse
     {
+        /** @var array{artifacts: array<array{base64: string}>} $body */
         $body = $this->post(
             uri: 'generation/stable-diffusion-512-v2-1/text-to-image',
             headers: [

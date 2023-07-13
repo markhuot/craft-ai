@@ -9,11 +9,12 @@ use markhuot\craftpest\factories\User;
 beforeEach(fn () => Backend::fake());
 
 it('can complete a prompt', function () {
+    $user = User::factory()->admin(true);
     OpenAi::factory()->create();
     $prompt = 'Finish this sentence, Craft is great because...';
 
-    $this->actingAs(User::factory()->admin(true))
-        ->get('/admin/ai/text')
+    $this->actingAs($user)
+        ->get('admin/ai/text')
         ->assertOk()
         ->form('#main-form')
         ->fill('content', $prompt)

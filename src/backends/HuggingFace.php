@@ -19,17 +19,22 @@ class HuggingFace extends Backend implements Caption
         'settings' => ['baseUrl' => 'https://api-inference.huggingface.co/models/'],
     ];
 
-    public function rules()
+    /**
+     * @return array<mixed>
+     */
+    public function rules(): array
     {
         return array_merge(parent::rules(), [
+            ['settings', 'required'],
             ['settings', JsonValidator::class, 'rules' => [
                 [['baseUrl', 'apiKey'], 'required'],
             ]],
         ]);
     }
 
-    public function handleErrorResponse(ClientException|ServerException $e)
+    public function handleErrorResponse(ClientException|ServerException $e): never
     {
+        /** @var array{error: ?string} $response */
         $response = json_decode($e->getResponse()->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
         throw new RuntimeException($response['error'] ?? 'Unknown API error');
     }

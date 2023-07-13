@@ -19,7 +19,7 @@ class Install extends Migration
             'uid' => $this->uid(),
         ]);
 
-        $this->addColumn(CraftTables::ASSETS, 'caption', 'varchar(255)');
+        $this->addColumn(CraftTables::ASSETS, 'caption', 'varchar(512)');
 
         return true;
     }

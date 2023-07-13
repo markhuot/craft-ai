@@ -8,6 +8,9 @@ class ImageCaptionResponse extends Model
 {
     public string $caption;
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function rules(): array
     {
         return [

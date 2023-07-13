@@ -13,7 +13,7 @@
         on: not settings.useFakes,
         disabled: isFakesSetInFileConfig,
         instructions: 'Control whether the Craft AI system will reach out to the configured back-ends or use fake local data. Disabling live data can reduce cost during testing and development.',
-        warning: isFakesSetInFileConfig ? 'Live data is ' ~ (settings.useFakes ? 'disabled' : 'enabled') ~ ' in the <code>config/ai.php</code> file. To ' ~ (settings.useFakes ? 'use' : 'disable') ~ ' live data you must edit the config file directly.' : '',
+        warning: isFakesSetInFileConfig ? 'Live data is ' ~ (settings.useFakes ? 'disabled' : 'enabled') ~ ' in <code>config/ai.php</code>. To ' ~ (settings.useFakes ? 'use' : 'disable') ~ ' live data you must edit the config file directly.' : '',
     }) }}
     <hr>
 

@@ -6,10 +6,13 @@ use craft\base\Model;
 
 class TextEditPostRequest extends Model
 {
-    public ?string $input = null;
+    public string $input;
 
-    public ?string $instructions = null;
+    public string $instructions;
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function rules(): array
     {
         return [

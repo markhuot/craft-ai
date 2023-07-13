@@ -2,30 +2,42 @@
 
 namespace markhuot\craftai\listeners;
 
+use Craft;
 use craft\controllers\ElementsController;
-use craft\web\Request;
+use markhuot\craftai\actions\HandleChatMessagesInSession;
 use markhuot\craftai\assetbundles\CraftAi;
-use markhuot\craftai\controllers\ChatController;
 use markhuot\craftai\features\Chat;
+use function markhuot\craftai\helpers\app;
 use markhuot\craftai\models\Backend;
-use yii\base\Event;
+use function markhuot\openai\helpers\web\auth;
+use function markhuot\openai\helpers\web\request;
+use function markhuot\openai\helpers\web\view;
 
 class AddChatWidget
 {
-    function handle(Event $event) {
-        if (!Backend::can(Chat::class)) {
+    public function handle(): void
+    {
+        if (! request()->isCpRequest) {
             return;
         }
 
-        \Craft::$app->view->registerAssetBundle(CraftAi::class);
-
-        $elementId = null;
-        if (is_a(\Craft::$app->controller, ElementsController::class)) {
-            $elementId = \Craft::$app->controller->element->id;
+        if (! auth()->getIdentity()) {
+            return;
         }
 
-        echo \Craft::$app->view->renderTemplate('ai/_chat/widget', [
-            'messages' => \Craft::$app->session->get(ChatController::CACHE_KEY) ?? [],
+        if (! Backend::can(Chat::class)) {
+            return;
+        }
+
+        view()->registerAssetBundle(CraftAi::class);
+
+        $elementId = null;
+        if (is_a(Craft::$app->controller, ElementsController::class)) {
+            $elementId = Craft::$app->controller->element->id; // @phpstan-ignore-line Ignored because ID isn't on the element interface, but in most cases it'll be there anyway
+        }
+
+        echo view()->renderTemplate('ai/_chat/widget', [
+            'messages' => app(HandleChatMessagesInSession::class)->get(),
             'elementId' => $elementId,
         ]);
     }

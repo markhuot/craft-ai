@@ -15,13 +15,30 @@
 }) }}
 
 {{ forms.autosuggestField({
-    first: true,
     label: 'API Key',
     name: 'settings[apiKey]',
     value: old('settings.apiKey', backend),
     errors: [flash('error.settings.apiKey')]|filter,
     suggestEnvVars: true,
     instructions: 'You can sign up for an API token at https://platform.openai.com/account/api-keys',
+}) }}
+
+{{ forms.autosuggestField({
+    label: 'Completion Model',
+    name: 'settings[completionModel]',
+    value: old('settings.completionModel', backend),
+    errors: [flash('error.settings.completionModel')]|filter,
+    placeholder: backend.completionModel(),
+    instructions: 'The model to use for completions and "Ask" queries',
+}) }}
+
+{{ forms.autosuggestField({
+    label: 'Chat Model',
+    name: 'settings[chatModel]',
+    value: old('settings.chatModel', backend),
+    errors: [flash('error.settings.chatModel')]|filter,
+    placeholder: backend.chatModel(),
+    instructions: 'The model to use for chat interactions',
 }) }}
 
 {% include 'ai/_backends/_features' with {

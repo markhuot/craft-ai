@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\search;
 
+use Illuminate\Support\Collection;
 use markhuot\craftai\Ai;
 use OpenSearch\Client;
 use OpenSearch\ClientBuilder;
@@ -18,6 +19,8 @@ class OpenSearch implements SearchInterface
     protected function connect(): self
     {
         $settings = Ai::getInstance()->getSettings();
+
+        /** @var array<array-key, mixed> $config */
         $config = $settings->get('searchDrivers.opensearch');
         unset($config['class']);
 
@@ -69,10 +72,12 @@ class OpenSearch implements SearchInterface
 
     /**
      * @param  array<double>  $vectors
-     * @return array<mixed>
+     * @return array{Collection<array-key, array<array-key, mixed>>, array<array-key, mixed>}
      */
     public function knnSearch(array $vectors, int $limit = 3): array
     {
+        $this->ensureIndex()->ensureMapping();
+
         $json = $this->client->search([
             'index' => 'craft',
             'body' => [
@@ -109,7 +114,7 @@ class OpenSearch implements SearchInterface
             ],
         ]);
 
-        /** @var array<mixed> $hits */
+        /** @var array<array-key, array<array-key, mixed>> $hits */
         $hits = $json['hits']['hits'];
 
         return [collect($hits), $json];

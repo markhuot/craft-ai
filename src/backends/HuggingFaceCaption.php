@@ -9,6 +9,7 @@ trait HuggingFaceCaption
 {
     public function generateCaption(Asset $asset): ImageCaptionResponse
     {
+        /** @var array<array{generated_text: string}> $body */
         $body = $this->post(
             uri: 'nlpconnect/vit-gpt2-image-captioning',
             rawBody: $asset->getContents(),
@@ -20,6 +21,9 @@ trait HuggingFaceCaption
         return $response;
     }
 
+    /**
+     * @return array<mixed>
+     */
     public function generateCaptionFake(Asset $asset): array
     {
         return [

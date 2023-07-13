@@ -6,7 +6,7 @@ use craft\redactor\events\RegisterPluginPathsEvent;
 
 class RegisterPluginPaths
 {
-    public function handle(RegisterPluginPathsEvent $event)
+    public function handle(RegisterPluginPathsEvent $event): void
     {
         $event->paths[] = __DIR__.'/../../redactor/';
     }

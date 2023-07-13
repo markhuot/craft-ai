@@ -9,13 +9,13 @@ use markhuot\craftai\models\Backend;
 
 class DefineRedactorConfig
 {
-    public function handle(ModifyRedactorConfigEvent $event)
+    public function handle(ModifyRedactorConfigEvent $event): void
     {
         if (empty($event->config)) {
-            if (Backend::for(Completion::class, true)) {
+            if (Backend::can(Completion::class)) {
                 $event->config['plugins'][] = 'craftai-complete';
             }
-            if (Backend::for(EditText::class, true)) {
+            if (Backend::can(EditText::class)) {
                 $event->config['plugins'][] = 'craftai-edit';
             }
         }

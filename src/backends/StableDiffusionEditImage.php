@@ -10,6 +10,7 @@ trait StableDiffusionEditImage
 {
     public function editImage(string $prompt, Asset $asset, string $mask, int $count = 1): EditImageResponse
     {
+        /** @var array{artifacts: array<array{base64: string}>} $body */
         $body = $this->post(
             uri: 'generation/stable-diffusion-512-v2-1/image-to-image/masking',
             headers: [

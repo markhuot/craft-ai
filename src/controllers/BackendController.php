@@ -4,6 +4,7 @@ namespace markhuot\craftai\controllers;
 
 use craft\helpers\UrlHelper;
 use markhuot\craftai\Ai;
+use markhuot\craftai\backends\Dalai;
 use markhuot\craftai\backends\HuggingFace;
 use markhuot\craftai\backends\OpenAi;
 use markhuot\craftai\backends\StableDiffusion;
@@ -47,6 +48,7 @@ class BackendController extends Controller
             'openai' => new OpenAi,
             'stable-diffusion' => new StableDiffusion,
             'hugging-face' => new HuggingFace,
+            'dalai' => new Dalai,
             default => throw new \RuntimeException('Could not find backend for ['.$type.']'),
         });
     }

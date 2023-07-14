@@ -1,0 +1,40 @@
+{% import '_includes/forms.twig' as forms %}
+
+{{ forms.hidden({
+    name: 'type',
+    value: 'markhuot\\craftai\\backends\\Dalai',
+}) }}
+
+{{ forms.autosuggestField({
+    first: true,
+    label: 'Path to main executable',
+    name: 'settings[mainPath]',
+    value: old('settings.mainPath', backend),
+    errors: [flash('error.settings.mainPath')]|filter,
+    placeholder: '/home/me/llama.cpp/main',
+    suggestEnvVars: true,
+}) }}
+
+{{ forms.autosuggestField({
+    first: true,
+    label: 'Path to model',
+    name: 'settings[modelPath]',
+    value: old('settings.modelPath', backend),
+    errors: [flash('error.settings.modelPath')]|filter,
+    placeholder: '/home/me/llama.cpp/models/llama-13b.ggmlv3.q4_0.bin',
+    suggestEnvVars: true,
+}) }}
+
+{{ forms.autosuggestField({
+    first: true,
+    label: 'Additional arguments',
+    name: 'settings[additionalArguments]',
+    value: old('settings.additionalArguments', backend),
+    errors: [flash('error.settings.additionalArguments')]|filter,
+    placeholder: '-t 6 -n 32 -b 2',
+    suggestEnvVars: true,
+}) }}
+
+{% include 'ai/_backends/_features' with {
+    enable: ['Completion', 'EditText', 'Chat'],
+} %}

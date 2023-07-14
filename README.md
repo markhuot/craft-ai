@@ -122,3 +122,20 @@ To use the "Ask" feature you must configure a search backend such as OpenSearch.
 
 Once configured the search backend will be updated with a vector embedding based on the element's "search keywords" every
 time that element is saved.
+
+# LLaMA.cpp
+
+To run LLaMA.cpp you can follow many of the setup instructions from here,
+
+https://til.simonwillison.net/llms/llama-7b-m2
+
+You can download pre-quantized models from here,
+
+https://huggingface.co/TheBloke/LLaMa-13B-GGML/tree/main
+https://huggingface.co/CRD716/ggml-vicuna-1.1-quantized/tree/main
+
+Then you'll run the following command,
+
+```bash
+./main -m ./models/llama-13b.ggmlv3.q4_0.bin -t 8 -n 128 -p "The winner of the 1980 World Series was "
+```

@@ -43,4 +43,5 @@
 
 {% include 'ai/_backends/_features' with {
     disable: ['Caption'],
+    instructions: 'To utilize "semantic search" you must have an OpenSearch cluster to store the embeddings. Access credentials can be configured in <code>config/ai.php</code>. Disable "semantic search" if you do not have access to an OpenSearch cluster.',
 } %}

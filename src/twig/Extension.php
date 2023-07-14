@@ -33,7 +33,7 @@ class Extension extends AbstractExtension
                 } elseif (is_array($default)) {
                     $default = $default[$prop] ?? null;
                 } else {
-                    throw new \RuntimeException('Could not find default value.');
+                    $default = null;
                 }
             }
 

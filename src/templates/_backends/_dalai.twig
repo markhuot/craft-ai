@@ -8,6 +8,16 @@
 {{ forms.autosuggestField({
     first: true,
     label: 'Path to main executable',
+    name: 'settings[baseUrl]',
+    value: old('settings.baseUrl', backend),
+    errors: [flash('error.settings.baseUrl')]|filter,
+    placeholder: 'http://localhost:3000/',
+    suggestEnvVars: true,
+}) }}
+
+{{ forms.autosuggestField({
+    first: true,
+    label: 'Path to main executable',
     name: 'settings[mainPath]',
     value: old('settings.mainPath', backend),
     errors: [flash('error.settings.mainPath')]|filter,

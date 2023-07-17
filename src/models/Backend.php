@@ -32,6 +32,7 @@ class Backend extends ActiveRecord
     /** @var array<string, mixed> */
     protected array $defaultValues = [
         'type' => self::class,
+        'settings' => [],
     ];
 
     public static ?string $polymorphicKeyField = 'type';

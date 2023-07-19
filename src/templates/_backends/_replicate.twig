@@ -1,0 +1,40 @@
+{% import '_includes/forms.twig' as forms %}
+
+{{ forms.hidden({
+    name: 'type',
+    value: 'markhuot\\craftai\\backends\\Replicate',
+}) }}
+
+{{ forms.autosuggestField({
+    first: true,
+    label: 'Base URL',
+    name: 'settings[baseUrl]',
+    value: old('settings.baseUrl', backend),
+    errors: [flash('error.settings.baseUrl')]|filter,
+    suggestEnvVars: true,
+}) }}
+
+{{ forms.autosuggestField({
+    first: true,
+    label: 'API Key',
+    name: 'settings[apiKey]',
+    value: old('settings.apiKey', backend),
+    errors: [flash('error.settings.apiKey')]|filter,
+    suggestEnvVars: true,
+    instructions: 'You can sign up for an API token at https://huggingface.co/settings/tokens',
+}) }}
+
+{{ forms.autosuggestField({
+    first: true,
+    label: 'Text Generation Model Version',
+    name: 'settings[textGenerationModelVersion]',
+    value: old('settings.textGenerationModelVersion', backend),
+    errors: [flash('error.settings.textGenerationModelVersion')]|filter,
+    suggestEnvVars: true,
+    placeholder: 'e951f18578850b652510200860fc4ea62b3b16fac280f83ff32282f87bbd2e48',
+    instructions: 'The version hash of the model to use for text generation. The defualt is from the <code>replicate/llama70b-v2-chat</code> model.',
+}) }}
+
+{% include 'ai/_backends/_features' with {
+    enable: ['Completion'],
+} %}

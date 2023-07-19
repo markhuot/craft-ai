@@ -6,6 +6,7 @@ use craft\helpers\UrlHelper;
 use markhuot\craftai\Ai;
 use markhuot\craftai\backends\HuggingFace;
 use markhuot\craftai\backends\OpenAi;
+use markhuot\craftai\backends\Replicate;
 use markhuot\craftai\backends\StableDiffusion;
 use markhuot\craftai\models\Backend;
 use markhuot\craftai\stubs\Request;
@@ -47,6 +48,7 @@ class BackendController extends Controller
             'openai' => new OpenAi,
             'stable-diffusion' => new StableDiffusion,
             'hugging-face' => new HuggingFace,
+            'replicate' => new Replicate,
             default => throw new \RuntimeException('Could not find backend for ['.$type.']'),
         });
     }

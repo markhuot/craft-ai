@@ -2,7 +2,7 @@
 
 namespace markhuot\craftai\models;
 
-use Craft;
+use craft\helpers\App;
 use Faker\Factory;
 use Faker\Generator;
 use GuzzleHttp\Client;
@@ -129,11 +129,19 @@ class Backend extends ActiveRecord
     public function getClient(): Client
     {
         return new Client([
-            'base_uri' => Craft::parseEnv($this->settings['baseUrl']),
-            'headers' => [
-                'Authorization' => 'Bearer '.Craft::parseEnv($this->settings['apiKey']),
-            ],
+            'base_uri' => App::parseEnv($this->settings['baseUrl']),
+            'headers' => $this->getClientHeaders(),
         ]);
+    }
+
+    /**
+     * @return string[]
+     */
+    public function getClientHeaders(): array
+    {
+        return [
+            'Authorization' => 'Bearer '.App::parseEnv($this->settings['apiKey']),
+        ];
     }
 
     /**

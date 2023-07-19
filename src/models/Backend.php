@@ -8,11 +8,13 @@ use Faker\Generator;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\ServerException;
+use GuzzleHttp\Psr7\Response;
 use markhuot\craftai\casts\Json as JsonCast;
 use markhuot\craftai\db\ActiveRecord;
 use markhuot\craftai\db\Table;
 use ReflectionClass;
 use RuntimeException;
+use function markhuot\openai\helpers\throw_if;
 
 /**
  * @property array{enabledFeatures: string[], baseUrl: string, apiKey: string} $settings
@@ -141,6 +143,17 @@ class Backend extends ActiveRecord
      */
     public function post(string $uri, array $body = [], array $headers = [], string $rawBody = null, array $multipart = []): array
     {
+        $response = $this->postRaw($uri, $body, $headers, $rawBody, $multipart);
+        throw_if($response->getHeaderLine('Content-Type') !== 'application/json', 'Response was not JSON');
+
+        /** @var array<mixed> $json */
+        $json = json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
+
+        return $json;
+    }
+
+    public function postRaw(string $uri, array $body = [], array $headers = [], string $rawBody = null, array $multipart = []): Response
+    {
         try {
             if (static::$faked) {
                 $backtrace = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 2)[1];
@@ -166,12 +179,7 @@ class Backend extends ActiveRecord
                 $params['multipart'] = $multipart;
             }
 
-            $response = $this->getClient()->request('POST', $uri, $params);
-
-            /** @var array<mixed> $json */
-            $json = json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
-
-            return $json;
+            return $this->getClient()->request('POST', $uri, $params);
         } catch (ClientException|ServerException $e) {
             $this->handleErrorResponse($e);
         }

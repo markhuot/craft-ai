@@ -2,11 +2,27 @@
 
 namespace markhuot\craftai\models;
 
-use craft\base\Model;
+use markhuot\craftai\casts\CastTo;
+use markhuot\craftai\casts\Model as ModelCast;
+use markhuot\craftai\db\Model;
+use markhuot\craftai\features\Completion;
+use markhuot\craftai\features\EditText;
 
 class TextCompletionPostRequest extends Model
 {
     public string $content;
+
+    #[CastTo(Backend::class)]
+    public ?Completion $backend = null;
+
+    protected array $casts = [
+        'backend' => ModelCast::class,
+    ];
+
+    public function safeAttributes()
+    {
+        return array_merge(parent::safeAttributes(), ['backend']);
+    }
 
     /**
      * @return array<array-key, mixed>

@@ -17,7 +17,9 @@ class TextController extends \markhuot\craftai\web\Controller
 {
     public function actionIndex(): Response
     {
-        return $this->renderTemplate('ai/_text/index');
+        return $this->renderTemplate('ai/_text/index', [
+            'backends' => Backend::allFor(Completion::class),
+        ]);
     }
 
     public function actionComplete(): Response
@@ -25,7 +27,7 @@ class TextController extends \markhuot\craftai\web\Controller
         $this->requirePostRequest();
         $data = $this->request->getBodyParamObject(TextCompletionPostRequest::class);
 
-        $response = Backend::for(Completion::class)->completeText($data->content);
+        $response = ($data->backend ?? Backend::for(Completion::class))->completeText($data->content);
 
         return $this->response(
             json: fn () => ['text' => $response->text],

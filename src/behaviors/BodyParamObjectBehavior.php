@@ -59,7 +59,12 @@ class BodyParamObjectBehavior extends Behavior
         $model->load($bodyParams, $formName);
 
         if (! $model->validate()) {
-            if (! App::env('YII_ENV_TEST')) {
+            if (App::env('YII_ENV_TEST')) {
+                if (function_exists('test') && test()->shouldSkipExceptionHandling() && ! empty($model->errors)) {
+                    throw new \RuntimeException(collect($model->errors)->flatten()->join(' '));
+                }
+            }
+            else {
                 $this->owner->getAcceptsJson() ?
                     $this->errorJson($model) :
                     $this->errorBack($model);

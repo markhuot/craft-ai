@@ -14,4 +14,7 @@
             <directory suffix=".php">./src</directory>
         </include>
     </coverage>
+    <php>
+        <env name="SEARCH_DRIVER" value="null" />
+    </php>
 </phpunit>

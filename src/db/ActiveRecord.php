@@ -92,4 +92,9 @@ class ActiveRecord extends \craft\db\ActiveRecord
 
         return \Craft::$container->get($type); // @phpstan-ignore-line
     }
+
+    public function fresh(): self
+    {
+        return static::find()->where([static::$keyField => $this->{static::$keyField}])->one();
+    }
 }

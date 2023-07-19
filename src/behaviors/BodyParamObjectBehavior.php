@@ -7,8 +7,6 @@ use craft\helpers\App;
 use craft\web\Request;
 use craft\web\Response;
 use markhuot\craftai\db\ActiveRecord;
-use yii\base\ExitException;
-use yii\web\HttpException;
 use function markhuot\openai\helpers\throw_if;
 use function markhuot\openai\helpers\web\app;
 use yii\base\Behavior;
@@ -71,8 +69,7 @@ class BodyParamObjectBehavior extends Behavior
                 if (function_exists('test') && test()->shouldSkipExceptionHandling() && ! empty($model->errors)) {
                     throw new \RuntimeException(collect($model->errors)->flatten()->join(' '));
                 }
-            }
-            else {
+            } else {
                 $this->owner->getAcceptsJson() ?
                     $this->errorJson($model) :
                     $this->errorBack($model);

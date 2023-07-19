@@ -12,10 +12,10 @@ use GuzzleHttp\Psr7\Response;
 use markhuot\craftai\casts\Json as JsonCast;
 use markhuot\craftai\db\ActiveRecord;
 use markhuot\craftai\db\Table;
+use function markhuot\openai\helpers\throw_if;
 use Psr\Http\Message\ResponseInterface;
 use ReflectionClass;
 use RuntimeException;
-use function markhuot\openai\helpers\throw_if;
 
 /**
  * @property array{enabledFeatures: string[], baseUrl: string, apiKey: string} $settings

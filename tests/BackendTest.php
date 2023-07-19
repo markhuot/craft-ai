@@ -3,7 +3,6 @@
 use markhuot\craftai\backends\HuggingFace;
 use markhuot\craftai\backends\OpenAi;
 use markhuot\craftai\backends\StableDiffusion;
-use markhuot\craftai\models\Backend;
 use markhuot\craftpest\factories\User;
 
 it('shows backends', function () {

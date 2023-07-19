@@ -10,6 +10,7 @@ trait OpenAiChat
     {
         return ! empty($this->settings['chatModel']) ? $this->settings['chatModel'] : 'gpt-4';
     }
+
     public function chat(array $messages): ChatMessageResponse
     {
         /** @var array{choices: array<array{message: array{content: string}}>} $response */

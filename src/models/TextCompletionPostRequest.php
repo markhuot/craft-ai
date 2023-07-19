@@ -6,7 +6,6 @@ use markhuot\craftai\casts\CastTo;
 use markhuot\craftai\casts\Model as ModelCast;
 use markhuot\craftai\db\Model;
 use markhuot\craftai\features\Completion;
-use markhuot\craftai\features\EditText;
 
 class TextCompletionPostRequest extends Model
 {

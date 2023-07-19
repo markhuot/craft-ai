@@ -41,17 +41,17 @@ class HuggingFace extends Backend implements Caption, Completion, GenerateImage
 
     public function getTextGenerationModel(): string
     {
-        return !empty($this->settings['textGenerationModel']) ? $this->settings['textGenerationModel'] : 'tiiuae/falcon-7b-instruct';
+        return ! empty($this->settings['textGenerationModel']) ? $this->settings['textGenerationModel'] : 'tiiuae/falcon-7b-instruct';
     }
 
     public function getImageToTextModel(): string
     {
-        return !empty($this->settings['imageToTextModel']) ? $this->settings['imageToTextModel'] : 'nlpconnect/vit-gpt2-image-captioning';
+        return ! empty($this->settings['imageToTextModel']) ? $this->settings['imageToTextModel'] : 'nlpconnect/vit-gpt2-image-captioning';
     }
 
     public function getTextToImageModel(): string
     {
-        return !empty($this->settings['textToImageModel']) ? $this->settings['textToImageModel'] : 'stabilityai/stable-diffusion-2-1';
+        return ! empty($this->settings['textToImageModel']) ? $this->settings['textToImageModel'] : 'stabilityai/stable-diffusion-2-1';
     }
 
     public function handleErrorResponse(ClientException|ServerException $e): never

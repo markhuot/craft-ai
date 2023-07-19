@@ -2,11 +2,8 @@
 
 namespace markhuot\craftai\backends;
 
-use craft\elements\Asset;
 use Faker\Factory;
-use markhuot\craftai\models\ImageCaptionResponse;
 use markhuot\craftai\models\TextCompletionResponse;
-use markhuot\craftai\models\TextEditResponse;
 
 trait HuggingFaceCompletion
 {

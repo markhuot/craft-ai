@@ -2,8 +2,8 @@
 
 namespace markhuot\craftai\db;
 
-use yii\db\Expression;
 use function markhuot\openai\helpers\throw_if;
+use yii\db\Expression;
 
 /**
  * @property string $id

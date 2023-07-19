@@ -12,6 +12,7 @@ use GuzzleHttp\Psr7\Response;
 use markhuot\craftai\casts\Json as JsonCast;
 use markhuot\craftai\db\ActiveRecord;
 use markhuot\craftai\db\Table;
+use Psr\Http\Message\ResponseInterface;
 use ReflectionClass;
 use RuntimeException;
 use function markhuot\openai\helpers\throw_if;
@@ -152,17 +153,26 @@ class Backend extends ActiveRecord
         return $json;
     }
 
-    public function postRaw(string $uri, array $body = [], array $headers = [], string $rawBody = null, array $multipart = []): Response
+    /**
+     * @param  array<array-key, mixed>  $body
+     * @param  array<array-key, mixed>  $headers
+     * @param  array<array-key, mixed>  $multipart
+     */
+    public function postRaw(string $uri, array $body = [], array $headers = [], string $rawBody = null, array $multipart = []): ResponseInterface
     {
         try {
             if (static::$faked) {
-                $backtrace = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 2)[1];
-                $methodName = $backtrace['function'];
-                $args = $backtrace['args'] ?? [];
+                $backtrace = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 3);
+                $backtraceRow = $backtrace[1];
+                if ($backtraceRow['function'] === 'post') {
+                    $backtraceRow = $backtrace[2];
+                }
+                $methodName = $backtraceRow['function'];
+                $args = $backtraceRow['args'] ?? [];
 
                 $fakeMethodName = $methodName.'Fake';
                 if (method_exists($this, $fakeMethodName)) {
-                    return $this->$fakeMethodName(...$args);
+                    return new Response(200, ['Content-Type' => 'application/json'], json_encode($this->$fakeMethodName(...$args), JSON_THROW_ON_ERROR));
                 }
             }
 

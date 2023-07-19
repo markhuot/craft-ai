@@ -3,6 +3,7 @@
 namespace markhuot\craftai\db;
 
 use yii\db\Expression;
+use function markhuot\openai\helpers\throw_if;
 
 /**
  * @property string $id
@@ -95,6 +96,10 @@ class ActiveRecord extends \craft\db\ActiveRecord
 
     public function fresh(): self
     {
-        return static::find()->where([static::$keyField => $this->{static::$keyField}])->one();
+        /** @var ?self $model */
+        $model = static::find()->where([static::$keyField => $this->{static::$keyField}])->one();
+        throw_if(! $model, 'No fresh model found');
+
+        return $model;
     }
 }

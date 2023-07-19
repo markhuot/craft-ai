@@ -12,7 +12,6 @@ trait HuggingFaceGenerateImage
 {
     public function generateImage(string $prompt, int $count = 1): ImageGenerationResponse
     {
-        /** @var array{data: array<array{url: string}>} $body */
         $body = $this->postRaw(
             uri: $this->getTextToImageModel(),
             body: [

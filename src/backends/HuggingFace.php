@@ -11,6 +11,9 @@ use markhuot\craftai\models\Backend;
 use markhuot\craftai\validators\Json as JsonValidator;
 use RuntimeException;
 
+/**
+ * @property array{enabledFeatures: string[], baseUrl: string, apiKey: string, textGenerationModel: ?string, imageToTextModel: ?string, textToImageModel: ?string } $settings
+ */
 class HuggingFace extends Backend implements Caption, Completion, GenerateImage
 {
     use HuggingFaceCaption,
@@ -55,6 +58,6 @@ class HuggingFace extends Backend implements Caption, Completion, GenerateImage
     {
         /** @var array{error: ?string[]} $response */
         $response = json_decode($e->getResponse()->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
-        throw new RuntimeException(implode('. ', $response['error']) ?? 'Unknown API error');
+        throw new RuntimeException(implode('. ', ($response['error'] ?? ['Unknown Error'])));
     }
 }

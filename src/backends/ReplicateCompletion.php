@@ -2,20 +2,26 @@
 
 namespace markhuot\craftai\backends;
 
+use markhuot\craftai\models\PendingCall;
 use markhuot\craftai\models\TextCompletionResponse;
 
 trait ReplicateCompletion
 {
     public function completeText(string $text): TextCompletionResponse
     {
-        /** @var array{choices: array<array{text: string}>} $response */
+        /** @var array{id: string} $response */
         $response = $this->post('', [
             'version' => $this->getTextGenerationModelVersion(),
             'input' => ['prompt' => strip_tags($text)],
         ]);
 
         $model = new TextCompletionResponse;
-        $model->text = $response['choices'][0]['text'] ?? null;
+        $model->backend_id = $this->id;
+        $model->pending = true;
+        $model->remote_id = $response['id'];
+        $model->pending_payload = $response;
+        $model->text = null;
+        $model->save();
 
         return $model;
     }

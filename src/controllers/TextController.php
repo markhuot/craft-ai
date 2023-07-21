@@ -5,7 +5,9 @@ namespace markhuot\craftai\controllers;
 use markhuot\craftai\features\Completion;
 use markhuot\craftai\features\EditText;
 use markhuot\craftai\models\Backend;
+use markhuot\craftai\models\PendingCall;
 use markhuot\craftai\models\TextCompletionPostRequest;
+use markhuot\craftai\models\TextCompletionResponse;
 use markhuot\craftai\models\TextEditPostRequest;
 use markhuot\craftai\stubs\Request;
 use yii\web\Response;
@@ -17,6 +19,9 @@ class TextController extends \markhuot\craftai\web\Controller
 {
     public function actionIndex(): Response
     {
+        $response = \markhuot\craftai\models\Response::find()->where(['id' => 1])->one();
+        dd($response->finish()->text);
+
         return $this->renderTemplate('ai/_text/index', [
             'backends' => Backend::allFor(Completion::class),
         ]);
@@ -24,7 +29,6 @@ class TextController extends \markhuot\craftai\web\Controller
 
     public function actionComplete(): Response
     {
-        $this->requirePostRequest();
         $data = $this->request->getBodyParamObject(TextCompletionPostRequest::class);
 
         $response = ($data->backend ?? Backend::for(Completion::class))->completeText($data->content);

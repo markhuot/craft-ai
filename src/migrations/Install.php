@@ -21,12 +21,26 @@ class Install extends Migration
 
         $this->addColumn(CraftTables::ASSETS, 'caption', 'varchar(512)');
 
+        $this->createTable(Table::RESPONSES, [
+            'id' => $this->primaryKey(),
+            'backend_id' => $this->integer()->notNull(),
+            'type' => $this->string(),
+            'pending' => $this->boolean()->defaultValue(false),
+            'remote_id' => $this->string(),
+            'pending_payload' => $this->text()->notNull(),
+            'final_payload' => $this->text(),
+            'dateCreated' => $this->dateTime()->notNull(),
+            'dateUpdated' => $this->dateTime()->notNull(),
+            'uid' => $this->uid(),
+        ]);
+
         return true;
     }
 
     public function safeDown()
     {
         $this->dropTableIfExists(Table::BACKENDS);
+        $this->dropTableIfExists(Table::RESPONSES);
         $this->dropColumn(CraftTables::ASSETS, 'caption');
 
         return true;

@@ -144,6 +144,11 @@ class Backend extends ActiveRecord
         ];
     }
 
+    public function get(string $uri): array
+    {
+        return json_decode($this->getClient()->request('GET', $uri)->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
+    }
+
     /**
      * @param  array<array-key, mixed>  $body
      * @param  array<array-key, mixed>  $headers

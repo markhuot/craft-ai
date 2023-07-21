@@ -4,6 +4,7 @@ namespace markhuot\craftai\backends;
 
 use craft\helpers\App;
 use markhuot\craftai\features\Completion;
+use markhuot\craftai\models\Response;
 use markhuot\craftai\validators\Json as JsonValidator;
 
 /**
@@ -45,5 +46,22 @@ class Replicate extends \markhuot\craftai\models\Backend implements Completion
         return [
             'Authorization' => 'Token '.App::parseEnv($this->settings['apiKey']),
         ];
+    }
+
+    public function finish(Response $response): void
+    {
+        if (!$response->pending) {
+            return;
+        }
+
+        $data = $this->get('/v1/predictions/' . $response->remote_id);
+
+        if ($data['status'] !== 'succeeded') {
+            return;
+        }
+
+        $response->final_payload = $data;
+        $response->pending = false;
+        $response->save();
     }
 }

@@ -9,17 +9,18 @@
             "email": "mark@markhuot.com"
         }
     ],
+    "minimum-stability": "dev",
     "require": {
-        "craftcms/cms": "^4.3",
         "guzzlehttp/guzzle": "7.5.x-dev",
         "opensearch-project/opensearch-php": "^2.1",
         "phpstan/phpstan": "^1.10"
     },
     "require-dev": {
-        "markhuot/craft-pest": "dev-session-fixes",
+        "markhuot/craft-pest": "dev-master",
         "craftcms/redactor": "^3.0",
         "craftcms/craft": "dev-main",
-        "laravel/pint": "^1.6"
+        "laravel/pint": "^1.6",
+        "craftcms/cms": "^4.2"
     },
     "autoload": {
         "psr-4": {

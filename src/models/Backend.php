@@ -2,15 +2,18 @@
 
 namespace markhuot\craftai\models;
 
-use Craft;
+use craft\helpers\App;
 use Faker\Factory;
 use Faker\Generator;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\ServerException;
+use GuzzleHttp\Psr7\Response;
 use markhuot\craftai\casts\Json as JsonCast;
 use markhuot\craftai\db\ActiveRecord;
 use markhuot\craftai\db\Table;
+use function markhuot\openai\helpers\throw_if;
+use Psr\Http\Message\ResponseInterface;
 use ReflectionClass;
 use RuntimeException;
 
@@ -127,11 +130,24 @@ class Backend extends ActiveRecord
     public function getClient(): Client
     {
         return new Client([
-            'base_uri' => Craft::parseEnv($this->settings['baseUrl']),
-            'headers' => [
-                'Authorization' => 'Bearer '.Craft::parseEnv($this->settings['apiKey']),
-            ],
+            'base_uri' => App::parseEnv($this->settings['baseUrl']),
+            'headers' => $this->getClientHeaders(),
         ]);
+    }
+
+    /**
+     * @return string[]
+     */
+    public function getClientHeaders(): array
+    {
+        return [
+            'Authorization' => 'Bearer '.App::parseEnv($this->settings['apiKey']),
+        ];
+    }
+
+    public function get(string $uri): array
+    {
+        return json_decode($this->getClient()->request('GET', $uri)->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
     }
 
     /**
@@ -142,15 +158,35 @@ class Backend extends ActiveRecord
      */
     public function post(string $uri, array $body = [], array $headers = [], string $rawBody = null, array $multipart = []): array
     {
+        $response = $this->postRaw($uri, $body, $headers, $rawBody, $multipart);
+        throw_if($response->getHeaderLine('Content-Type') !== 'application/json', 'Response was not JSON');
+
+        /** @var array<mixed> $json */
+        $json = json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
+
+        return $json;
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $body
+     * @param  array<array-key, mixed>  $headers
+     * @param  array<array-key, mixed>  $multipart
+     */
+    public function postRaw(string $uri, array $body = [], array $headers = [], string $rawBody = null, array $multipart = []): ResponseInterface
+    {
         try {
             if (static::$faked) {
-                $backtrace = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 2)[1];
-                $methodName = $backtrace['function'];
-                $args = $backtrace['args'] ?? [];
+                $backtrace = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 3);
+                $backtraceRow = $backtrace[1];
+                if ($backtraceRow['function'] === 'post') {
+                    $backtraceRow = $backtrace[2];
+                }
+                $methodName = $backtraceRow['function'];
+                $args = $backtraceRow['args'] ?? [];
 
                 $fakeMethodName = $methodName.'Fake';
                 if (method_exists($this, $fakeMethodName)) {
-                    return $this->$fakeMethodName(...$args);
+                    return new Response(200, ['Content-Type' => 'application/json'], json_encode($this->$fakeMethodName(...$args), JSON_THROW_ON_ERROR));
                 }
             }
 
@@ -167,12 +203,7 @@ class Backend extends ActiveRecord
                 $params['multipart'] = $multipart;
             }
 
-            $response = $this->getClient()->request('POST', $uri, $params);
-
-            /** @var array<mixed> $json */
-            $json = json_decode($response->getBody()->getContents(), true, 512, JSON_THROW_ON_ERROR);
-
-            return $json;
+            return $this->getClient()->request('POST', $uri, $params);
         } catch (ClientException|ServerException $e) {
             $this->handleErrorResponse($e);
         }

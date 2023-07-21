@@ -59,7 +59,17 @@ class BodyParamObjectBehavior extends Behavior
         $model->load($bodyParams, $formName);
 
         if (! $model->validate()) {
-            if (! App::env('YII_ENV_TEST')) {
+            if (App::env('YII_ENV_TEST')) {
+                // This should be cleaned up. Craft really should allow me to throw an
+                // exception that can be a redirect. Then Pest would handle all of this for me and I wouldn't have
+                // this conditional. I would always return the exception and pest would either handle the exception
+                // and render HTML or throw the exception if it's called ->withoutExceptionHandling, but that's
+                // not possible today so we're going to ignore it and come back to it later.
+                // @phpstan-ignore-next-line
+                if (function_exists('test') && test()->shouldSkipExceptionHandling() && ! empty($model->errors)) {
+                    throw new \RuntimeException(collect($model->errors)->flatten()->join(' '));
+                }
+            } else {
                 $this->owner->getAcceptsJson() ?
                     $this->errorJson($model) :
                     $this->errorBack($model);

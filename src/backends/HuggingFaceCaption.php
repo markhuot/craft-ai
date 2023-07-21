@@ -11,7 +11,7 @@ trait HuggingFaceCaption
     {
         /** @var array<array{generated_text: string}> $body */
         $body = $this->post(
-            uri: 'nlpconnect/vit-gpt2-image-captioning',
+            uri: $this->getImageToTextModel(),
             rawBody: $asset->getContents(),
         );
 

@@ -37,18 +37,32 @@ it('saves new backends', function () {
         ->errors->toBeEmpty();
 });
 
-it('saves a backend', function () {
-    $user = User::factory()->admin(true);
+it('saves a new backend')
+    ->actingAsAdmin()
+    ->get('admin/ai/backend/create/stable-diffusion')
+    ->assertOk()
+    ->form('#main-form')
+    ->addField('settings[baseUrl]', 'http://...')
+    ->addField('settings[apiKey]', '$STABLE_DIFFUSION_API_KEY')
+    ->submit()
+    ->followRedirects()
+    ->assertOk();
 
-    $this->actingAs($user)
-        ->get('admin/ai/backend/create/stable-diffusion')
-        ->assertOk()
-        ->form('#main-form')
-        ->addField('settings[baseUrl]', 'http://...')
-        ->addField('settings[apiKey]', '$STABLE_DIFFUSION_API_KEY')
-        ->submit()
-        ->followRedirects()
-        ->assertOk();
+it('saves an existing backend', function () {
+    $backend = OpenAi::factory()->create();
+    $backendData = $backend->toArray();
+
+    $this->actingAsAdmin()
+        ->withoutExceptionHandling()
+        ->action('ai/backend/store', [
+            ...$backendData,
+            'settings' => [
+                ...$backendData['settings'],
+                'baseUrl' => 'foo bar',
+            ],
+        ]);
+
+    expect($backend->fresh())->settings->baseUrl->toBe('foo bar');
 });
 
 it('processes backend errors', function () {

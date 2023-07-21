@@ -24,6 +24,39 @@
     instructions: 'You can sign up for an API token at https://huggingface.co/settings/tokens',
 }) }}
 
+{{ forms.autosuggestField({
+    first: true,
+    label: 'Text Generation Model',
+    name: 'settings[textGenerationModel]',
+    value: old('settings.textGenerationModel', backend),
+    errors: [flash('error.settings.textGenerationModel')]|filter,
+    suggestEnvVars: true,
+    placeholder: 'tiiuae/falcon-7b-instruct',
+    instructions: 'The model that should be used for text generation. This must be a "Text Generation" model on the Hugging Face platform',
+}) }}
+
+{{ forms.autosuggestField({
+    first: true,
+    label: 'Text to Image Model',
+    name: 'settings[textToImageModel]',
+    value: old('settings.textToImageModel', backend),
+    errors: [flash('error.settings.textToImageModel')]|filter,
+    suggestEnvVars: true,
+    placeholder: 'stabilityai/stable-diffusion-2-1',
+    instructions: 'The model that should be used for converting input text to a rendered image. This must be a "Text-to-Image" model on the Hugging Face platform',
+}) }}
+
+{{ forms.autosuggestField({
+    first: true,
+    label: 'Image to Text Model',
+    name: 'settings[imageToTextModel]',
+    value: old('settings.imageToTextModel', backend),
+    errors: [flash('error.settings.imageToTextModel')]|filter,
+    suggestEnvVars: true,
+    placeholder: 'nlpconnect/vit-gpt2-image-captioning',
+    instructions: 'The model that should be used for converting an image in to a text caption. This must be an "Image-to-Text" model on the Hugging Face platform',
+}) }}
+
 {% include 'ai/_backends/_features' with {
-    enable: ['Caption'],
+    disable: ['EditImage', 'EditText', 'Chat', 'GenerateEmbeddings'],
 } %}

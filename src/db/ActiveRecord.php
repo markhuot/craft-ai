@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\db;
 
+use function markhuot\openai\helpers\throw_if;
 use yii\db\Expression;
 
 /**
@@ -91,5 +92,14 @@ class ActiveRecord extends \craft\db\ActiveRecord
         $type = static::$polymorphicKeyField ? ($row[static::$polymorphicKeyField] ?? static::class) : static::class;
 
         return \Craft::$container->get($type); // @phpstan-ignore-line
+    }
+
+    public function fresh(): self
+    {
+        /** @var ?self $model */
+        $model = static::find()->where([static::$keyField => $this->{static::$keyField}])->one();
+        throw_if(! $model, 'No fresh model found');
+
+        return $model;
     }
 }

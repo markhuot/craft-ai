@@ -2,19 +2,7 @@
 
 namespace markhuot\craftai\models;
 
-use craft\base\Model;
-
-class TextCompletionResponse extends Model
+class TextCompletionResponse extends Response
 {
-    public ?string $text = '';
-
-    /**
-     * @return array<array-key, mixed>
-     */
-    public function rules(): array
-    {
-        return [
-            ['text', 'required'],
-        ];
-    }
+    public string $text = '';
 }

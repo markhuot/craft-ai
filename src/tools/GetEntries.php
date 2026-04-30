@@ -113,9 +113,8 @@ class GetEntries extends Tool
             $query->offset($offset);
         }
 
-        return array_map(
-            static fn (Entry $entry) => $entry->toArray(),
-            $query->all(),
-        );
+        return $query->collect()
+            ->map(fn (Entry $entry) => $entry->toArray())
+            ->all();
     }
 }

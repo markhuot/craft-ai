@@ -1,0 +1,31 @@
+{% extends "_layouts/cp.twig" %}
+
+{% set title = "AI Sessions"|t('craft-ai') %}
+{% set selectedSubnavItem = 'sessions' %}
+
+{% block content %}
+    {% if sessions|length %}
+        <table class="data fullwidth">
+            <thead>
+                <tr>
+                    <th>{{ "Session"|t('craft-ai') }}</th>
+                    <th>{{ "Messages"|t('craft-ai') }}</th>
+                    <th>{{ "Started"|t('craft-ai') }}</th>
+                    <th>{{ "Last activity"|t('craft-ai') }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in sessions %}
+                    <tr>
+                        <td><code>{{ session.sessionId }}</code></td>
+                        <td>{{ session.messageCount }}</td>
+                        <td>{{ session.firstMessage ? session.firstMessage|date('short') ~ ' ' ~ session.firstMessage|time('short') : '' }}</td>
+                        <td>{{ session.lastMessage ? session.lastMessage|date('short') ~ ' ' ~ session.lastMessage|time('short') : '' }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>{{ "No sessions yet."|t('craft-ai') }}</p>
+    {% endif %}
+{% endblock %}

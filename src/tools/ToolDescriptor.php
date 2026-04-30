@@ -3,12 +3,18 @@
 namespace markhuot\craftai\tools;
 
 use markhuot\craftai\attributes\Description;
+use markhuot\craftai\attributes\Tool as ToolAttribute;
+use phpDocumentor\Reflection\DocBlockFactory;
 use ReflectionClass;
 use ReflectionNamedType;
 use ReflectionParameter;
 use ReflectionUnionType;
 
-class ToolSchema
+/**
+ * Single source of truth for a tool's metadata. Built once via reflection and
+ * adapted to the shape each consumer (Anthropic, OpenAI, MCP) expects.
+ */
+class ToolDescriptor
 {
     public readonly string $name;
 
@@ -18,19 +24,37 @@ class ToolSchema
     public readonly array $inputSchema;
 
     /**
-     * @param class-string $toolClass
+     * @param class-string<Tool> $toolClass
      */
     public function __construct(
         public readonly string $toolClass,
     ) {
         $reflection = new ReflectionClass($toolClass);
-        $this->name = self::deriveName($reflection);
-        $this->description = self::extractDescription($reflection);
+        $attribute = self::readToolAttribute($reflection);
+
+        $this->name = $attribute === null
+            ? self::deriveName($reflection)
+            : ($attribute->name ?? self::deriveName($reflection));
+        $this->description = $attribute === null
+            ? self::extractDescription($reflection)
+            : ($attribute->description ?? self::extractDescription($reflection));
         $this->inputSchema = self::buildInputSchema($reflection);
     }
 
     /**
-     * @param ReflectionClass<object> $reflection
+     * @template T of object
+     * @param ReflectionClass<T> $reflection
+     */
+    private static function readToolAttribute(ReflectionClass $reflection): ?ToolAttribute
+    {
+        $attrs = $reflection->getAttributes(ToolAttribute::class);
+
+        return $attrs === [] ? null : $attrs[0]->newInstance();
+    }
+
+    /**
+     * @template T of object
+     * @param ReflectionClass<T> $reflection
      */
     private static function deriveName(ReflectionClass $reflection): string
     {
@@ -40,21 +64,31 @@ class ToolSchema
     }
 
     /**
-     * @param ReflectionClass<object> $reflection
+     * @template T of object
+     * @param ReflectionClass<T> $reflection
      */
     private static function extractDescription(ReflectionClass $reflection): string
     {
-        $attributes = $reflection->getAttributes(Description::class);
-
-        if ($attributes === []) {
+        $docComment = $reflection->getDocComment();
+        if ($docComment === false) {
             return '';
         }
 
-        return $attributes[0]->newInstance()->value;
+        try {
+            $factory = DocBlockFactory::createInstance();
+            $docBlock = $factory->create($docComment);
+            $summary = trim($docBlock->getSummary());
+            $description = trim((string) $docBlock->getDescription());
+
+            return $description !== '' ? $summary."\n\n".$description : $summary;
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /**
-     * @param ReflectionClass<object> $reflection
+     * @template T of object
+     * @param ReflectionClass<T> $reflection
      * @return array{type: string, properties: array<string, array<string, mixed>>, required: list<string>}
      */
     private static function buildInputSchema(ReflectionClass $reflection): array
@@ -133,6 +167,21 @@ class ToolSchema
             'name' => $this->name,
             'description' => $this->description,
             'input_schema' => $this->inputSchema,
+        ];
+    }
+
+    /**
+     * @return array{type: string, function: array{name: string, description: string, parameters: array{type: string, properties: array<string, array<string, mixed>>, required: list<string>}}}
+     */
+    public function toOpenAiTool(): array
+    {
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => $this->name,
+                'description' => $this->description,
+                'parameters' => $this->inputSchema,
+            ],
         ];
     }
 

@@ -2,11 +2,9 @@
 
 namespace markhuot\craftai\queue;
 
-use craft\helpers\App;
+use Craft;
 use craft\queue\BaseJob;
 use markhuot\craftai\agent\AgentLoop;
-use markhuot\craftai\agent\AnthropicClient;
-use markhuot\craftai\Plugin;
 
 class AgentJob extends BaseJob
 {
@@ -19,16 +17,8 @@ class AgentJob extends BaseJob
      */
     public function execute($queue): void
     {
-        $apiKey = App::env('ANTHROPIC_API_KEY');
-
-        if (! is_string($apiKey) || $apiKey === '') {
-            throw new \RuntimeException('ANTHROPIC_API_KEY environment variable is not set');
-        }
-
-        $client = new AnthropicClient($apiKey);
-        $registry = Plugin::getInstance()->getToolRegistry();
-
-        $loop = new AgentLoop($client, $registry);
+        /** @var AgentLoop $loop */
+        $loop = Craft::$container->get(AgentLoop::class);
         $loop->run($this->sessionId, $this->userMessage);
     }
 

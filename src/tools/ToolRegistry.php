@@ -2,31 +2,42 @@
 
 namespace markhuot\craftai\tools;
 
+use Craft;
 use ReflectionMethod;
+use Throwable;
 
 class ToolRegistry
 {
-    /** @var array<string, class-string> */
+    /** @var array<string, class-string<Tool>> */
     private array $tools = [];
 
     /**
-     * @param class-string $toolClass
+     * @param class-string<Tool> $toolClass
      */
     public function register(string $toolClass): void
     {
-        $schema = new ToolSchema($toolClass);
-        $this->tools[$schema->name] = $toolClass;
+        $descriptor = new ToolDescriptor($toolClass);
+        $this->tools[$descriptor->name] = $toolClass;
     }
 
     /**
-     * @return list<ToolSchema>
+     * @return list<ToolDescriptor>
      */
-    public function schemas(): array
+    public function descriptors(): array
     {
         return array_values(array_map(
-            static fn (string $class): ToolSchema => new ToolSchema($class),
+            static fn (string $class): ToolDescriptor => new ToolDescriptor($class),
             $this->tools,
         ));
+    }
+
+    public function describe(string $name): ?ToolDescriptor
+    {
+        if (! isset($this->tools[$name])) {
+            return null;
+        }
+
+        return new ToolDescriptor($this->tools[$name]);
     }
 
     /**
@@ -39,22 +50,60 @@ class ToolRegistry
         }
 
         $toolClass = $this->tools[$name];
-        $tool = new $toolClass();
-        $method = new ReflectionMethod($tool, '__invoke');
 
-        $ordered = [];
-        foreach ($method->getParameters() as $param) {
-            $paramName = $param->getName();
-            if (array_key_exists($paramName, $arguments)) {
-                $ordered[] = $arguments[$paramName];
-            } elseif ($param->isDefaultValueAvailable()) {
-                $ordered[] = $param->getDefaultValue();
+        try {
+            $tool = $this->instantiate($toolClass);
+            $method = new ReflectionMethod($tool, '__invoke');
+
+            $ordered = [];
+            foreach ($method->getParameters() as $param) {
+                $paramName = $param->getName();
+                if (array_key_exists($paramName, $arguments)) {
+                    $ordered[] = $arguments[$paramName];
+                } elseif ($param->isDefaultValueAvailable()) {
+                    $ordered[] = $param->getDefaultValue();
+                } elseif ($param->allowsNull()) {
+                    $ordered[] = null;
+                }
             }
+
+            $result = $method->invokeArgs($tool, $ordered);
+        } catch (Throwable $e) {
+            return new ToolOutput($e->getMessage(), isError: true);
         }
 
-        $result = $method->invokeArgs($tool, $ordered);
-        assert($result instanceof ToolOutput);
+        return $this->coerce($result);
+    }
 
-        return $result;
+    /**
+     * @param class-string<Tool> $toolClass
+     */
+    private function instantiate(string $toolClass): Tool
+    {
+        /** @var Tool $instance */
+        $instance = Craft::$container->get($toolClass);
+
+        return $instance;
+    }
+
+    private function coerce(mixed $result): ToolOutput
+    {
+        if ($result instanceof ToolOutput) {
+            return $result;
+        }
+
+        if (is_string($result)) {
+            return new ToolOutput($result);
+        }
+
+        if (is_scalar($result)) {
+            return new ToolOutput((string) $result);
+        }
+
+        if ($result === null) {
+            return new ToolOutput('');
+        }
+
+        return new ToolOutput(json_encode($result, JSON_THROW_ON_ERROR));
     }
 }

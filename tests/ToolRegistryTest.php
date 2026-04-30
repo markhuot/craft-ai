@@ -1,27 +1,36 @@
 <?php
 
-use markhuot\craftai\attributes\Description;
 use markhuot\craftai\tools\GetHealth;
+use markhuot\craftai\tools\Tool;
 use markhuot\craftai\tools\ToolOutput;
 use markhuot\craftai\tools\ToolRegistry;
 
-#[Description('Echo back the input for testing')]
-class ToolRegistryEchoFixture
+/** Echo back the input for testing */
+class ToolRegistryEchoFixture extends Tool
 {
-    public function __invoke(string $message, int $repeat = 1): ToolOutput
+    public function __invoke(string $message, int $repeat = 1): string
     {
-        return new ToolOutput(str_repeat($message, $repeat));
+        return str_repeat($message, $repeat);
     }
 }
 
-it('registers a tool and lists its schema', function () {
+/** Always throws to verify error handling */
+class ToolRegistryThrowingFixture extends Tool
+{
+    public function __invoke(): string
+    {
+        throw new \RuntimeException('boom');
+    }
+}
+
+it('registers a tool and lists its descriptor', function () {
     $registry = new ToolRegistry();
     $registry->register(GetHealth::class);
 
-    $schemas = $registry->schemas();
+    $descriptors = $registry->descriptors();
 
-    expect($schemas)->toHaveCount(1);
-    expect($schemas[0]->name)->toBe('get_health');
+    expect($descriptors)->toHaveCount(1);
+    expect($descriptors[0]->name)->toBe('get_health');
 });
 
 it('executes a tool by name with named arguments', function () {
@@ -56,4 +65,14 @@ it('returns an error ToolOutput when the tool is unknown', function () {
 
     expect($output->isError)->toBeTrue();
     expect($output->text)->toContain('Unknown tool');
+});
+
+it('catches exceptions thrown by tools and returns an error ToolOutput', function () {
+    $registry = new ToolRegistry();
+    $registry->register(ToolRegistryThrowingFixture::class);
+
+    $output = $registry->execute('tool_registry_throwing_fixture', []);
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toBe('boom');
 });

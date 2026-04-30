@@ -2,14 +2,14 @@
 
 namespace markhuot\craftai\agent;
 
+use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\records\MessageRecord;
 use markhuot\craftai\tools\ToolRegistry;
-use markhuot\craftai\tools\ToolSchema;
 
 class AgentLoop
 {
     public function __construct(
-        private readonly AnthropicClient $client,
+        private readonly LlmProvider $provider,
         private readonly ToolRegistry $registry,
     ) {}
 
@@ -18,24 +18,20 @@ class AgentLoop
         $this->saveMessage($sessionId, 'user', [['type' => 'text', 'text' => $userMessage]]);
 
         $messages = $this->loadMessages($sessionId);
-
-        $tools = array_map(
-            static fn (ToolSchema $schema): array => $schema->toAnthropicTool(),
-            $this->registry->schemas(),
-        );
+        $tools = $this->registry->descriptors();
 
         while (true) {
-            $response = $this->client->createMessage($messages, $tools);
+            $response = $this->provider->createMessage($messages, $tools);
 
-            $this->saveMessage($sessionId, 'assistant', $response['content']);
-            $messages[] = ['role' => 'assistant', 'content' => $response['content']];
+            $this->saveMessage($sessionId, 'assistant', $response->content);
+            $messages[] = ['role' => 'assistant', 'content' => $response->content];
 
-            if ($response['stop_reason'] !== 'tool_use') {
+            if ($response->stopReason !== 'tool_use') {
                 break;
             }
 
             $toolResults = [];
-            foreach ($response['content'] as $block) {
+            foreach ($response->content as $block) {
                 if (($block['type'] ?? '') !== 'tool_use') {
                     continue;
                 }

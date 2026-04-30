@@ -3,15 +3,16 @@
 namespace markhuot\craftai\tools;
 
 use Craft;
-use markhuot\craftai\attributes\Description;
 
-#[Description('Check the health of the Craft CMS installation and confirm the system is operational')]
-class GetHealth
+/**
+ * Check the health of the Craft CMS installation and confirm the system is operational.
+ */
+class GetHealth extends Tool
 {
-    public function __invoke(): ToolOutput
+    public function __invoke(): string
     {
         $version = Craft::$app->getVersion();
 
-        return new ToolOutput("Craft CMS {$version} is running and all systems are operational.");
+        return "Craft CMS {$version} is running and all systems are operational.";
     }
 }

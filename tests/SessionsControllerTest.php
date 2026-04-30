@@ -45,7 +45,7 @@ it('renders the sessions index with grouped session rows', function () {
     $c->content = json_encode([['type' => 'text', 'text' => 'yo']]);
     $c->save();
 
-    $response = $this->get('admin?action=craft-ai/sessions/index');
+    $response = $this->get('admin/ai/sessions');
 
     $response->assertOk();
     $response->assertSee('aaaa-1');
@@ -70,10 +70,7 @@ it('renders the chat view with prior messages for the requested session', functi
     $record->content = json_encode([['type' => 'text', 'text' => 'hello world']]);
     $record->save();
 
-    $response = test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody(['action' => 'craft-ai/sessions/view', 'uuid' => 'session-view-1'])
-        ->send();
+    $response = $this->get('admin/ai/session/session-view-1');
 
     $response->assertOk();
     $response->assertSee('session-view-1');

@@ -1,0 +1,32 @@
+{
+    "name": "markhuot/craft-ai",
+    "description": "A multi-agent AI interface for Craft CMS",
+    "type": "craft-plugin",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "craftcms/cms": "^5.0"
+    },
+    "require-dev": {
+        "markhuot/craft-pest-core": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "markhuot\\craftai\\": "src/"
+        }
+    },
+    "extra": {
+        "handle": "craft-ai",
+        "name": "Craft AI",
+        "developer": "Mark Huot",
+        "developerEmail": "mark@happycog.com",
+        "class": "markhuot\\craftai\\Plugin"
+    },
+    "config": {
+        "allow-plugins": {
+            "craftcms/plugin-installer": true,
+            "yiisoft/yii2-composer": true,
+            "pestphp/pest-plugin": true
+        }
+    }
+}

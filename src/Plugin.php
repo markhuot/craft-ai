@@ -10,6 +10,8 @@ use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\agent\providers\AnthropicProvider;
 use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\agent\providers\OpenAiProvider;
+use markhuot\craftai\tools\GetEntries;
+use markhuot\craftai\tools\GetEntry;
 use markhuot\craftai\tools\GetHealth;
 use markhuot\craftai\tools\ToolRegistry;
 use yii\base\Event;
@@ -37,6 +39,8 @@ class Plugin extends BasePlugin
 
         $this->toolRegistry = new ToolRegistry();
         $this->toolRegistry->register(GetHealth::class);
+        $this->toolRegistry->register(GetEntries::class);
+        $this->toolRegistry->register(GetEntry::class);
 
         $this->registerContainerBindings();
 

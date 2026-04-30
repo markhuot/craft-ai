@@ -16,6 +16,11 @@
             "markhuot\\craftai\\": "src/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
     "extra": {
         "handle": "craft-ai",
         "name": "Craft AI",

@@ -40,15 +40,6 @@ class FakeAnthropicClient extends AnthropicClient
 }
 
 beforeEach(function () {
-    static $tableEnsured = false;
-    if (! $tableEnsured) {
-        $tableEnsured = true;
-        $schema = Craft::$app->getDb()->getSchema()->getTableSchema('{{%craftai_messages}}', true);
-        if ($schema === null) {
-            (new markhuot\craftai\migrations\Install())->safeUp();
-        }
-    }
-
     $this->registry = new ToolRegistry();
     $this->registry->register(GetHealth::class);
 });

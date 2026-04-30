@@ -1,0 +1,23 @@
+<div class="craftai-message craftai-message--{{ message.role }}">
+    <div class="craftai-message__role">{{ message.role|title }}</div>
+    <div class="craftai-message__body">
+        {% for block in message.content %}
+            {% set type = block.type ?? '' %}
+            {% if type == 'text' %}
+                <div class="craftai-block craftai-block--text">{{ block.text|nl2br }}</div>
+            {% elseif type == 'tool_use' %}
+                <div class="craftai-block craftai-block--tool-use">
+                    <strong>{{ "Tool call"|t('craft-ai') }}:</strong> <code>{{ block.name }}</code>
+                    <pre>{{ block.input|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+                </div>
+            {% elseif type == 'tool_result' %}
+                <div class="craftai-block craftai-block--tool-result {{ block.is_error ? 'is-error' : '' }}">
+                    <strong>{{ "Tool result"|t('craft-ai') }}{{ block.is_error ? ' (error)' : '' }}:</strong>
+                    <pre>{{ block.content }}</pre>
+                </div>
+            {% else %}
+                <pre>{{ block|json_encode(constant('JSON_PRETTY_PRINT')) }}</pre>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>

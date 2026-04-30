@@ -1,7 +1,14 @@
 {% extends "_layouts/cp.twig" %}
 
 {% set title = "AI Sessions"|t('craft-ai') %}
-{% set selectedSubnavItem = 'sessions' %}
+
+{% block actionButton %}
+    <form method="post" accept-charset="UTF-8">
+        {{ csrfInput() }}
+        {{ actionInput('craft-ai/sessions/new') }}
+        <button type="submit" class="btn submit add icon">{{ "New Session"|t('craft-ai') }}</button>
+    </form>
+{% endblock %}
 
 {% block content %}
     {% if sessions|length %}
@@ -17,7 +24,11 @@
             <tbody>
                 {% for session in sessions %}
                     <tr>
-                        <td><code>{{ session.sessionId }}</code></td>
+                        <td>
+                            <a href="{{ cpUrl('ai/session/' ~ session.sessionId) }}">
+                                <code>{{ session.sessionId }}</code>
+                            </a>
+                        </td>
                         <td>{{ session.messageCount }}</td>
                         <td>{{ session.firstMessage ? session.firstMessage|date('short') ~ ' ' ~ session.firstMessage|time('short') : '' }}</td>
                         <td>{{ session.lastMessage ? session.lastMessage|date('short') ~ ' ' ~ session.lastMessage|time('short') : '' }}</td>
@@ -26,6 +37,6 @@
             </tbody>
         </table>
     {% else %}
-        <p>{{ "No sessions yet."|t('craft-ai') }}</p>
+        <p>{{ "No sessions yet. Start one with the New Session button above."|t('craft-ai') }}</p>
     {% endif %}
 {% endblock %}

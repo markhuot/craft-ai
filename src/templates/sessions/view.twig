@@ -1,0 +1,185 @@
+{% extends "_layouts/cp.twig" %}
+
+{% set title = "AI Session"|t('craft-ai') %}
+{% set crumbs = [
+    { label: "AI Sessions"|t('craft-ai'), url: cpUrl('ai/sessions') },
+] %}
+
+{% set lastId = messages|length ? messages|last.id : 0 %}
+{% set messagesUrl = actionUrl('craft-ai/messages') %}
+{% set sendUrl = actionUrl('craft-ai/sessions/send') %}
+
+{% block content %}
+    <div
+        class="craftai-chat"
+        data-craftai-chat
+        data-session-id="{{ sessionId }}"
+        data-messages-url="{{ messagesUrl }}"
+        data-send-url="{{ sendUrl }}"
+        data-last-id="{{ lastId }}"
+    >
+        <p class="light"><code>{{ sessionId }}</code></p>
+
+        <div class="craftai-messages" data-craftai-messages>
+            {% for message in messages %}
+                {% include 'craft-ai/sessions/_message' with { message: message } only %}
+            {% endfor %}
+        </div>
+
+        <div class="craftai-empty {{ messages|length ? 'hidden' }}" data-craftai-empty>
+            <p class="light">{{ "No messages yet — say something to start the conversation."|t('craft-ai') }}</p>
+        </div>
+
+        <div class="craftai-thinking hidden" data-craftai-thinking>
+            <p class="light">{{ "Agent is thinking…"|t('craft-ai') }}</p>
+        </div>
+
+        <form class="craftai-composer" data-craftai-composer>
+            <textarea name="message" rows="4" class="text fullwidth" placeholder="{{ 'Send a message…'|t('craft-ai') }}" required autofocus></textarea>
+            <div class="buttons">
+                <button type="submit" class="btn submit">{{ "Send"|t('craft-ai') }}</button>
+            </div>
+        </form>
+    </div>
+
+    <style>
+        .craftai-messages { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+        .craftai-message { padding: 12px 14px; border-radius: 6px; border: 1px solid #e3e5e8; background: #fff; }
+        .craftai-message--user { background: #f3f7fc; }
+        .craftai-message--assistant { background: #fff; }
+        .craftai-message__role { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #606d7b; margin-bottom: 6px; }
+        .craftai-block { margin-top: 6px; }
+        .craftai-block pre { background: #f3f3f4; padding: 8px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; }
+        .craftai-block--tool-result.is-error pre { background: #fdecea; }
+        .craftai-composer textarea { margin-bottom: 8px; }
+        .craftai-thinking { margin-bottom: 16px; }
+    </style>
+
+    {% js %}
+    (function () {
+        const root = document.querySelector('[data-craftai-chat]');
+        if (!root) return;
+
+        const sessionId = root.dataset.sessionId;
+        const messagesUrl = root.dataset.messagesUrl;
+        const sendUrl = root.dataset.sendUrl;
+        let lastId = parseInt(root.dataset.lastId, 10) || 0;
+
+        const messagesEl = root.querySelector('[data-craftai-messages]');
+        const emptyEl = root.querySelector('[data-craftai-empty]');
+        const thinkingEl = root.querySelector('[data-craftai-thinking]');
+        const form = root.querySelector('[data-craftai-composer]');
+        const textarea = form.querySelector('textarea[name=message]');
+        const button = form.querySelector('button[type=submit]');
+
+        let pollTimer = null;
+        let waitingForResponse = false;
+
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+            }[c]));
+        }
+
+        function renderBlock(block) {
+            const type = block.type || '';
+            if (type === 'text') {
+                return '<div class="craftai-block craftai-block--text">' + escapeHtml(block.text || '').replace(/\n/g, '<br>') + '</div>';
+            }
+            if (type === 'tool_use') {
+                return '<div class="craftai-block craftai-block--tool-use">'
+                    + '<strong>Tool call:</strong> <code>' + escapeHtml(block.name || '') + '</code>'
+                    + '<pre>' + escapeHtml(JSON.stringify(block.input || {}, null, 2)) + '</pre>'
+                    + '</div>';
+            }
+            if (type === 'tool_result') {
+                const cls = block.is_error ? ' is-error' : '';
+                return '<div class="craftai-block craftai-block--tool-result' + cls + '">'
+                    + '<strong>Tool result' + (block.is_error ? ' (error)' : '') + ':</strong>'
+                    + '<pre>' + escapeHtml(block.content || '') + '</pre>'
+                    + '</div>';
+            }
+            return '<pre>' + escapeHtml(JSON.stringify(block, null, 2)) + '</pre>';
+        }
+
+        function appendMessage(message) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'craftai-message craftai-message--' + escapeHtml(message.role);
+            const roleLabel = message.role.charAt(0).toUpperCase() + message.role.slice(1);
+            wrapper.innerHTML = '<div class="craftai-message__role">' + escapeHtml(roleLabel) + '</div>'
+                + '<div class="craftai-message__body">' + (message.content || []).map(renderBlock).join('') + '</div>';
+            messagesEl.appendChild(wrapper);
+        }
+
+        async function poll() {
+            try {
+                const url = messagesUrl + (messagesUrl.indexOf('?') === -1 ? '?' : '&')
+                    + 'sessionId=' + encodeURIComponent(sessionId)
+                    + '&after=' + encodeURIComponent(lastId);
+                const res = await fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (Array.isArray(data) && data.length) {
+                    emptyEl.classList.add('hidden');
+                    data.forEach((m) => {
+                        appendMessage(m);
+                        if (m.id > lastId) lastId = m.id;
+                    });
+                    const last = data[data.length - 1];
+                    if (waitingForResponse && last.role === 'assistant') {
+                        waitingForResponse = false;
+                        thinkingEl.classList.add('hidden');
+                        stopPolling();
+                    }
+                }
+            } catch (e) {
+                // ignore transient errors and keep polling
+            }
+        }
+
+        function startPolling() {
+            if (pollTimer) return;
+            pollTimer = setInterval(poll, 1500);
+        }
+
+        function stopPolling() {
+            if (pollTimer) clearInterval(pollTimer);
+            pollTimer = null;
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = textarea.value.trim();
+            if (!message) return;
+
+            button.disabled = true;
+            const body = new FormData();
+            body.append('sessionId', sessionId);
+            body.append('message', message);
+            body.append(window.Craft.csrfTokenName, window.Craft.csrfTokenValue);
+
+            try {
+                const res = await fetch(sendUrl, {
+                    method: 'POST',
+                    body,
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin',
+                });
+                if (!res.ok) throw new Error('Send failed');
+                textarea.value = '';
+                waitingForResponse = true;
+                thinkingEl.classList.remove('hidden');
+                startPolling();
+                poll();
+            } catch (err) {
+                window.Craft.cp.displayError(err.message || 'Failed to send message');
+            } finally {
+                button.disabled = false;
+            }
+        });
+
+        // Catch any messages added between page load and now (e.g. job already running).
+        startPolling();
+    })();
+    {% endjs %}
+{% endblock %}

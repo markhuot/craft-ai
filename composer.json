@@ -8,7 +8,8 @@
         "craftcms/cms": "^5.0"
     },
     "require-dev": {
-        "markhuot/craft-pest-core": "*"
+        "markhuot/craft-pest-core": "*",
+        "phpstan/phpstan": "^2.1"
     },
     "autoload": {
         "psr-4": {

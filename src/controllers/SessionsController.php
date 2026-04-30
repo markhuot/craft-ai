@@ -40,8 +40,9 @@ class SessionsController extends Controller
         return $this->redirect(UrlHelper::cpUrl("ai/session/{$uuid}"));
     }
 
-    public function actionView(string $uuid): Response
+    public function actionView(?string $uuid = null): Response
     {
+        $uuid = $uuid ?? $this->request->getRequiredParam('uuid');
         /** @var list<MessageRecord> $records */
         $records = MessageRecord::find()
             ->where(['sessionId' => $uuid])

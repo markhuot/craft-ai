@@ -16,9 +16,14 @@ class TestCase extends PestTestCase
         static $migrated = false;
         if (! $migrated) {
             $migrated = true;
-            $schema = Craft::$app->getDb()->getSchema()->getTableSchema('{{%craftai_messages}}', true);
-            if ($schema === null) {
-                (new Install())->safeUp();
+            $db = Craft::$app->getDb();
+            if ($db->getSchema()->getTableSchema('{{%craftai_messages}}', true) !== null) {
+                $db->createCommand()->dropTable('{{%craftai_messages}}')->execute();
+            }
+
+            $plugins = Craft::$app->getPlugins();
+            if ($plugins->getPlugin('craft-ai') === null) {
+                $plugins->installPlugin('craft-ai');
             }
         }
 

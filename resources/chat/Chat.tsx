@@ -127,7 +127,7 @@ export function Chat({ bootstrap, api: apiOverride, pollIntervalMs = 1500 }: Cha
           required
           autoFocus
           onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            if (e.key === "Enter" && !e.shiftKey && !e.altKey) {
               e.preventDefault();
               (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
             }
@@ -141,26 +141,69 @@ export function Chat({ bootstrap, api: apiOverride, pollIntervalMs = 1500 }: Cha
   );
 }
 
+// Blocks like thinking, tool_use, and tool_result render as their own
+// standalone visual elements rather than nesting inside the role bubble. We
+// keep text/error inside the bubble so they read as the assistant's voice.
+const STANDALONE_BLOCK_TYPES = new Set(["thinking", "tool_use", "tool_result"]);
+
 function RenderedMessage({ message }: { message: ChatMessage }) {
+  // Walk content blocks and group consecutive inline blocks together so we
+  // emit one bubble per run, with standalone blocks rendered as siblings in
+  // their original order.
+  const segments: Array<
+    { kind: "bubble"; blocks: ContentBlock[] } | { kind: "standalone"; block: ContentBlock }
+  > = [];
+  for (const block of message.content) {
+    if (STANDALONE_BLOCK_TYPES.has(block.type)) {
+      segments.push({ kind: "standalone", block });
+      continue;
+    }
+    const last = segments[segments.length - 1];
+    if (last && last.kind === "bubble") {
+      last.blocks.push(block);
+    } else {
+      segments.push({ kind: "bubble", blocks: [block] });
+    }
+  }
+
   return (
-    <Message from={message.role}>
-      <MessageContent from={message.role}>
-        <div className="ai:mb-1 ai:text-[10px] ai:font-medium ai:uppercase ai:tracking-wide ai:text-craftai-muted">
-          {message.role}
-        </div>
-        <div className="ai:space-y-2">
-          {message.content.map((block, i) => (
-            <RenderedBlock key={i} block={block} />
-          ))}
-        </div>
-      </MessageContent>
-    </Message>
+    <>
+      {segments.map((segment, i) =>
+        segment.kind === "bubble" ? (
+          <Message key={i} from={message.role}>
+            <MessageContent from={message.role}>
+              <div className="ai:mb-1 ai:text-[10px] ai:font-medium ai:uppercase ai:tracking-wide ai:text-craftai-muted">
+                {message.role}
+              </div>
+              <div className="ai:space-y-2">
+                {segment.blocks.map((block, j) => (
+                  <RenderedBlock key={j} block={block} />
+                ))}
+              </div>
+            </MessageContent>
+          </Message>
+        ) : (
+          <RenderedBlock key={i} block={segment.block} />
+        ),
+      )}
+    </>
   );
 }
 
 function RenderedBlock({ block }: { block: ContentBlock }) {
   if (block.type === "text" && typeof (block as { text?: unknown }).text === "string") {
     return <Response>{(block as { text: string }).text}</Response>;
+  }
+  if (block.type === "thinking" && typeof (block as { thinking?: unknown }).thinking === "string") {
+    const b = block as { thinking: string };
+    return (
+      <div className="ai:rounded ai:border ai:border-slate-200 ai:bg-slate-50 ai:p-2 ai:text-sm ai:text-slate-600">
+        <div className="ai:mb-1 ai:text-[10px] ai:font-medium ai:uppercase ai:tracking-wide ai:text-slate-500">
+          Thinking
+        </div>
+        <div className="ai:whitespace-pre-wrap ai:italic">{b.thinking}</div>
+      </div>
+    );
   }
   if (block.type === "tool_use") {
     const b = block as { name: string; input: Record<string, unknown> };
@@ -173,10 +216,24 @@ function RenderedBlock({ block }: { block: ContentBlock }) {
       </Tool>
     );
   }
+  if (block.type === "error") {
+    const b = block as { text?: string };
+    return (
+      <div
+        role="alert"
+        className="ai:rounded ai:border ai:border-red-300 ai:bg-red-50 ai:p-2 ai:text-sm ai:text-red-700"
+      >
+        <div className="ai:mb-1 ai:text-[10px] ai:font-medium ai:uppercase ai:tracking-wide">
+          Error
+        </div>
+        {b.text ?? "The agent job failed."}
+      </div>
+    );
+  }
   if (block.type === "tool_result") {
     const b = block as { content: string; is_error?: boolean };
     return (
-      <Tool defaultOpen>
+      <Tool>
         <ToolHeader name="Tool result" status={b.is_error ? "error" : "complete"} />
         <ToolContent>
           <ToolOutput output={b.content} isError={b.is_error} />

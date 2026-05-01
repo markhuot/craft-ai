@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { Chat } from "./Chat";
-import type { ChatBootstrap, ChatMessage } from "./types";
+import { Shell } from "./Shell";
+import type { ChatBootstrap, ChatMessage, SessionListItem } from "./types";
 
 declare global {
   interface Window {
@@ -24,14 +24,21 @@ function readBootstrap(root: HTMLElement): ChatBootstrap {
   const obj = parsed as Record<string, unknown>;
 
   const initial = Array.isArray(obj.initialMessages) ? (obj.initialMessages as ChatMessage[]) : [];
+  const initialSessions = Array.isArray(obj.initialSessions)
+    ? (obj.initialSessions as SessionListItem[])
+    : [];
 
   return {
     sessionId: String(obj.sessionId ?? ""),
     messagesUrl: String(obj.messagesUrl ?? ""),
     sendUrl: String(obj.sendUrl ?? ""),
+    sessionsUrl: String(obj.sessionsUrl ?? ""),
+    newSessionUrl: String(obj.newSessionUrl ?? ""),
+    sessionsIndexUrl: String(obj.sessionsIndexUrl ?? ""),
     csrfTokenName: String(obj.csrfTokenName ?? window.Craft?.csrfTokenName ?? "CRAFT_CSRF_TOKEN"),
     csrfTokenValue: String(obj.csrfTokenValue ?? window.Craft?.csrfTokenValue ?? ""),
     initialMessages: initial,
+    initialSessions,
   };
 }
 
@@ -43,7 +50,7 @@ function mount() {
     const bootstrap = readBootstrap(el);
     createRoot(el).render(
       <StrictMode>
-        <Chat bootstrap={bootstrap} />
+        <Shell bootstrap={bootstrap} />
       </StrictMode>,
     );
   });

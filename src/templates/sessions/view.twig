@@ -1,24 +1,44 @@
 {% extends "_layouts/cp.twig" %}
 
-{% set title = "AI Session"|t('craft-ai') %}
-{% set crumbs = [
-    { label: "AI Sessions"|t('craft-ai'), url: cpUrl('ai/sessions') },
-] %}
+{% set title = sessionTitle ?? "AI Sessions"|t('craft-ai') %}
+{% set fullPageForm = false %}
 
 {% do view.registerAssetBundle("markhuot\\craftai\\web\\assets\\chat\\ChatAsset") %}
+
+{% if sessionId %}
+    {% set actionMenu = disclosureMenu([
+        {
+            icon: 'trash',
+            label: 'Delete session'|t('craft-ai'),
+            destructive: true,
+            action: 'craft-ai/sessions/delete',
+            params: {sessionId: sessionId},
+            confirm: 'Are you sure you want to delete this session and all of its messages?'|t('craft-ai'),
+            redirect: 'ai/sessions',
+        },
+    ], {
+        hiddenLabel: 'Actions'|t('app'),
+        buttonAttributes: {
+            class: ['action-btn'],
+            title: 'Actions'|t('app'),
+        },
+    }) %}
+{% endif %}
 
 {% set bootstrap = {
     sessionId: sessionId,
     messagesUrl: actionUrl('craft-ai/messages'),
     sendUrl: actionUrl('craft-ai/sessions/send'),
+    sessionsUrl: actionUrl('craft-ai/sessions/data'),
+    newSessionUrl: actionUrl('craft-ai/sessions/new'),
+    sessionsIndexUrl: cpUrl('ai/sessions'),
     csrfTokenName: craft.app.config.general.csrfTokenName,
     csrfTokenValue: craft.app.request.csrfToken,
     initialMessages: messages,
+    initialSessions: initialSessions ?? [],
 } %}
 
 {% block content %}
-    <p class="light"><code>{{ sessionId }}</code></p>
-
     <div data-craftai-chat-root>
         <noscript>
             <p class="light">{{ "JavaScript is required to use the AI chat interface."|t('craft-ai') }}</p>

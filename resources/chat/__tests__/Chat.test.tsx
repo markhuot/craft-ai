@@ -11,9 +11,13 @@ function bootstrap(initialMessages: ChatMessage[] = []): ChatBootstrap {
     sessionId: "session-1",
     messagesUrl: "http://localhost/messages",
     sendUrl: "http://localhost/send",
+    sessionsUrl: "http://localhost/sessions/data",
+    newSessionUrl: "http://localhost/sessions/new",
+    sessionsIndexUrl: "http://localhost/sessions",
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
     initialMessages,
+    initialSessions: [],
   };
 }
 

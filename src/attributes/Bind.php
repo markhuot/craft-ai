@@ -7,8 +7,9 @@ use Attribute;
 /**
  * Marks a tool parameter for binding: the LLM passes a scalar (e.g. a handle)
  * which the named Binder resolves into a richer value (e.g. a model) before
- * the tool's __invoke is called. Schema generation uses the binder's
- * sourceSchema() so the wire-level shape stays scalar.
+ * the tool's __invoke is called. Declare the wire-level shape directly on the
+ * parameter's type union (e.g. Section|string|int) — the schema builder strips
+ * object variants so the LLM only sees the scalar forms.
  */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 class Bind

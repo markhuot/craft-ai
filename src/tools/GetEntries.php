@@ -4,6 +4,10 @@ namespace markhuot\craftai\tools;
 
 use craft\elements\Entry;
 use markhuot\craftai\attributes\Description;
+use markhuot\craftai\attributes\Validate;
+use markhuot\craftai\validators\ExistingEntryType;
+use markhuot\craftai\validators\ExistingSection;
+use markhuot\craftai\validators\ExistingSite;
 
 /**
  * Search for content entries in the CMS. Returns a list of entries matching
@@ -21,10 +25,13 @@ class GetEntries extends Tool
         #[Description('Full-text search query (e.g. "pricing page")')]
         ?string $search = null,
         #[Description('Section handle to filter by (e.g. "news", "blog")')]
+        #[Validate(ExistingSection::class)]
         ?string $section = null,
         #[Description('Entry type handle to filter by (e.g. "article", "page")')]
+        #[Validate(ExistingEntryType::class)]
         ?string $type = null,
         #[Description('Status filter: "live" (default), "pending", "expired", "disabled", or "any" for all')]
+        #[Validate('in', range: ['live', 'pending', 'expired', 'disabled', 'any'])]
         ?string $status = null,
         #[Description('Author user ID to filter by')]
         ?int $authorId = null,
@@ -35,6 +42,7 @@ class GetEntries extends Tool
         #[Description('Filter by URI path')]
         ?string $uri = null,
         #[Description('Site handle for multi-site installs (e.g. "english", "french")')]
+        #[Validate(ExistingSite::class)]
         ?string $site = null,
         #[Description('Return only entries posted before this date (e.g. "2024-01-01", "today", "3 months ago")')]
         ?string $before = null,

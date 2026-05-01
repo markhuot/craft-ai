@@ -6,11 +6,13 @@ use Craft;
 use craft\elements\Entry;
 use craft\models\EntryType;
 use craft\models\Section;
+use craft\models\Site;
 use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
 use markhuot\craftai\binders\EntryType as EntryTypeBinder;
 use markhuot\craftai\binders\Section as SectionBinder;
+use markhuot\craftai\binders\Site as SiteBinder;
 use markhuot\craftai\validators\ExistingEntryType;
 use markhuot\craftai\validators\ExistingSection;
 use markhuot\craftai\validators\ExistingSite;
@@ -49,21 +51,22 @@ class CreateEntry extends Tool
         bool $enabled = true,
         #[Description('Site handle for multi-site installs (e.g. "english", "french")')]
         #[Validate(ExistingSite::class)]
-        ?string $site = null,
+        #[Bind(SiteBinder::class)]
+        Site|string|int|null $site = null,
         #[Description('Custom field values keyed by field handle (e.g. {"body": "Hello", "summary": "..."})')]
         ?array $fields = null,
     ): array|ToolOutput {
         if (! $section instanceof Section) {
-            return new ToolOutput("Unknown section: {$section}.", isError: true);
+            throw new \LogicException('Section was not bound before invocation.');
         }
 
         $entryType = $type ?? $section->getEntryTypes()[0];
 
         if (! $entryType instanceof EntryType) {
-            return new ToolOutput("Unknown entry type: {$type}.", isError: true);
+            throw new \LogicException('Entry type was not bound before invocation.');
         }
 
-        if ($entryType->id === null || $section->id === null) {
+        if ($section->id === null || $entryType->id === null) {
             return new ToolOutput('Section or entry type is missing an ID.', isError: true);
         }
 
@@ -94,12 +97,8 @@ class CreateEntry extends Tool
                 ?: new \DateTime($expiryDate);
         }
 
-        if ($site !== null) {
-            $siteModel = Craft::$app->sites->getSiteByHandle($site);
-            if ($siteModel === null) {
-                return new ToolOutput("Unknown site: {$site}.", isError: true);
-            }
-            $entry->siteId = $siteModel->id;
+        if ($site instanceof Site) {
+            $entry->siteId = $site->id;
         }
 
         if ($fields !== null) {

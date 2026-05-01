@@ -21,6 +21,8 @@ class Plugin extends BasePlugin
 {
     public string $schemaVersion = '1.0.0';
 
+    public bool $hasCpSection = true;
+
     private ToolRegistry $toolRegistry;
 
     public static function getInstance(): static
@@ -70,6 +72,19 @@ class Plugin extends BasePlugin
                 $event->rules['OPTIONS craft-ai/mcp'] = 'craft-ai/mcp/handle';
             },
         );
+    }
+
+    public function getCpNavItem(): ?array
+    {
+        $item = parent::getCpNavItem();
+
+        if ($item === null) {
+            return null;
+        }
+
+        $item['url'] = 'ai/sessions';
+
+        return $item;
     }
 
     public function getToolRegistry(): ToolRegistry

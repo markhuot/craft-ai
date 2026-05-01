@@ -74,6 +74,9 @@ class Plugin extends BasePlugin
         );
     }
 
+    /**
+     * @return array<array-key, mixed>|null
+     */
     public function getCpNavItem(): ?array
     {
         $item = parent::getCpNavItem();
@@ -82,9 +85,7 @@ class Plugin extends BasePlugin
             return null;
         }
 
-        $item['url'] = 'ai/sessions';
-
-        return $item;
+        return [...$item, 'url' => 'ai/sessions'];
     }
 
     public function getToolRegistry(): ToolRegistry

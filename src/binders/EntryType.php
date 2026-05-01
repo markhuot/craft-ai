@@ -16,11 +16,11 @@ class EntryType implements Binder
             return null;
         }
 
-        $isId = is_int($value) || (is_string($value) && ctype_digit($value));
-
-        if (! $isId && ! is_string($value)) {
+        if (! is_int($value) && ! is_string($value)) {
             return null;
         }
+
+        $isId = is_int($value) || ctype_digit($value);
 
         if ($this->inSection !== null) {
             $section = (new Section())->bind($arguments[$this->inSection] ?? null, $arguments);
@@ -37,8 +37,10 @@ class EntryType implements Binder
             return null;
         }
 
-        return $isId
-            ? Craft::$app->entries->getEntryTypeById((int) $value)
-            : Craft::$app->entries->getEntryTypeByHandle($value);
+        if (is_int($value) || ctype_digit($value)) {
+            return Craft::$app->entries->getEntryTypeById((int) $value);
+        }
+
+        return Craft::$app->entries->getEntryTypeByHandle($value);
     }
 }

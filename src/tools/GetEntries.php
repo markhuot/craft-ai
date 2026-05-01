@@ -15,7 +15,7 @@ use markhuot\craftai\attributes\Description;
 class GetEntries extends Tool
 {
     /**
-     * @return list<array<string, mixed>>
+     * @return list<array<array-key, mixed>>
      */
     public function __invoke(
         #[Description('Full-text search query (e.g. "pricing page")')]
@@ -113,8 +113,9 @@ class GetEntries extends Tool
             $query->offset($offset);
         }
 
-        return $query->collect()
-            ->map(fn (Entry $entry) => $entry->toArray())
-            ->all();
+        return array_values(array_map(
+            static fn (Entry $entry): array => $entry->toArray(),
+            $query->all(),
+        ));
     }
 }

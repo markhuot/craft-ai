@@ -12,7 +12,7 @@ use markhuot\craftai\attributes\Description;
 class GetEntry extends Tool
 {
     /**
-     * @return array<string, mixed>|ToolOutput
+     * @return array<array-key, mixed>|ToolOutput
      */
     public function __invoke(
         #[Description('The entry ID to look up')]
@@ -20,7 +20,7 @@ class GetEntry extends Tool
     ): array|ToolOutput {
         $entry = Entry::find()->id($id)->status(null)->one();
 
-        if ($entry === null) {
+        if (! $entry instanceof Entry) {
             return new ToolOutput("No entry found with ID {$id}.", isError: true);
         }
 

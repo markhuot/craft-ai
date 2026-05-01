@@ -23,7 +23,7 @@ class CreateEntry extends Tool
 {
     /**
      * @param  array<string, mixed>|null  $fields  Custom field values keyed by field handle
-     * @return array<string, mixed>|ToolOutput
+     * @return array<array-key, mixed>|ToolOutput
      */
     public function __invoke(
         #[Description('Section handle to create the entry in (e.g. "news", "blog")')]
@@ -53,7 +53,19 @@ class CreateEntry extends Tool
         #[Description('Custom field values keyed by field handle (e.g. {"body": "Hello", "summary": "..."})')]
         ?array $fields = null,
     ): array|ToolOutput {
+        if (! $section instanceof Section) {
+            return new ToolOutput("Unknown section: {$section}.", isError: true);
+        }
+
         $entryType = $type ?? $section->getEntryTypes()[0];
+
+        if (! $entryType instanceof EntryType) {
+            return new ToolOutput("Unknown entry type: {$type}.", isError: true);
+        }
+
+        if ($entryType->id === null || $section->id === null) {
+            return new ToolOutput('Section or entry type is missing an ID.', isError: true);
+        }
 
         $entry = new Entry();
         $entry->sectionId = $section->id;
@@ -68,7 +80,8 @@ class CreateEntry extends Tool
         if ($authorId !== null) {
             $entry->authorId = $authorId;
         } elseif (($user = Craft::$app->user->getIdentity()) !== null) {
-            $entry->authorId = $user->id;
+            $userId = $user->getId();
+            $entry->authorId = is_numeric($userId) ? (int) $userId : null;
         }
 
         if ($postDate !== null) {
@@ -82,7 +95,11 @@ class CreateEntry extends Tool
         }
 
         if ($site !== null) {
-            $entry->siteId = Craft::$app->sites->getSiteByHandle($site)->id;
+            $siteModel = Craft::$app->sites->getSiteByHandle($site);
+            if ($siteModel === null) {
+                return new ToolOutput("Unknown site: {$site}.", isError: true);
+            }
+            $entry->siteId = $siteModel->id;
         }
 
         if ($fields !== null) {

@@ -28,12 +28,17 @@ class McpController extends Controller
 
     public function actionHandle(): Response
     {
+        $app = Craft::$app;
+        if (! $app instanceof \craft\web\Application) {
+            throw new \RuntimeException('craft-ai: MCP endpoint requires a web request context.');
+        }
+
         $userId = Plugin::getInstance()->getSettingsArray()['mcpUserId'];
         $user = User::find()->id($userId)->one();
-        if ($user === null) {
+        if (! $user instanceof User) {
             throw new \RuntimeException("craft-ai: MCP stub user #{$userId} not found.");
         }
-        Craft::$app->getUser()->setIdentity($user);
+        $app->getUser()->setIdentity($user);
 
         $psr17 = new Psr17Factory();
         $creator = new ServerRequestCreator($psr17, $psr17, $psr17, $psr17);
@@ -51,7 +56,11 @@ class McpController extends Controller
 
     private function copyPsrToYii(ResponseInterface $psr): Response
     {
-        $yii = Craft::$app->getResponse();
+        $app = Craft::$app;
+        if (! $app instanceof \craft\web\Application) {
+            throw new \RuntimeException('craft-ai: MCP endpoint requires a web request context.');
+        }
+        $yii = $app->getResponse();
         $yii->statusCode = $psr->getStatusCode();
         foreach ($psr->getHeaders() as $name => $values) {
             $yii->getHeaders()->set($name, implode(', ', $values));

@@ -1,0 +1,2 @@
+[test]
+preload = ["./resources/chat/__tests__/setup.ts"]

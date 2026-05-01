@@ -1,0 +1,34 @@
+/*
+ * Tailwind v4 with an `ai` prefix so every utility (e.g. `ai:flex`,
+ * `ai:rounded-lg`) is namespaced and can't collide with anything Craft CP
+ * ships. We import the utilities and theme entry points directly rather than
+ * the `tailwindcss` umbrella — that gives us two things for free:
+ *
+ *   1. No preflight. Craft already has its own resets and ours would fight
+ *      them.
+ *   2. No `@layer utilities` wrap. The umbrella entry pre-declares the layer
+ *      order and emits utilities into `@layer utilities`, which (per the
+ *      cascade-layers spec) loses to Craft's unlayered preflight regardless
+ *      of specificity. The standalone `tailwindcss/utilities.css` entry
+ *      emits utilities unlayered, so a single-class selector beats Craft's
+ *      `*` resets on normal specificity — no `!important` needed.
+ */
+@import "tailwindcss/theme.css" layer(theme) prefix(ai);
+@import "tailwindcss/utilities.css" prefix(ai);
+
+@theme {
+  --color-craftai-bg: #ffffff;
+  --color-craftai-user: #f3f7fc;
+  --color-craftai-border: #e3e5e8;
+  --color-craftai-muted: #606d7b;
+  --color-craftai-error-bg: #fdecea;
+}
+
+/* Scope styles to the chat root so we don't bleed into Craft CP. */
+.craftai-chat {
+  font-family: inherit;
+}
+
+.craftai-chat pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}

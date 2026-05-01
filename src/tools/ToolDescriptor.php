@@ -2,8 +2,10 @@
 
 namespace markhuot\craftai\tools;
 
+use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Tool as ToolAttribute;
+use markhuot\craftai\binders\Binder;
 use phpDocumentor\Reflection\DocBlockFactory;
 use ReflectionClass;
 use ReflectionNamedType;
@@ -100,7 +102,12 @@ class ToolDescriptor
         $required = [];
 
         foreach ($method->getParameters() as $param) {
-            $properties[$param->getName()] = self::parameterToJsonSchema($param);
+            $schema = self::parameterToJsonSchema($param);
+            if ($schema === null) {
+                continue;
+            }
+
+            $properties[$param->getName()] = $schema;
 
             if (! $param->isOptional() && ! $param->allowsNull()) {
                 $required[] = $param->getName();
@@ -115,24 +122,37 @@ class ToolDescriptor
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<string, mixed>|null
      */
-    private static function parameterToJsonSchema(ReflectionParameter $param): array
+    private static function parameterToJsonSchema(ReflectionParameter $param): ?array
     {
-        $type = $param->getType();
-
-        if ($type instanceof ReflectionNamedType) {
-            $schema = self::namedTypeToSchema($type);
-        } elseif ($type instanceof ReflectionUnionType) {
-            $variants = [];
-            foreach ($type->getTypes() as $unionType) {
-                if ($unionType instanceof ReflectionNamedType) {
-                    $variants[] = self::namedTypeToSchema($unionType);
-                }
-            }
-            $schema = ['oneOf' => $variants];
+        $bindAttrs = $param->getAttributes(Bind::class);
+        if ($bindAttrs !== []) {
+            /** @var Bind $bind */
+            $bind = $bindAttrs[0]->newInstance();
+            /** @var Binder $binder */
+            $binder = new ($bind->binder)(...$bind->options);
+            $schema = $binder->sourceSchema();
         } else {
-            $schema = ['type' => 'string'];
+            $type = $param->getType();
+
+            if ($type instanceof ReflectionNamedType) {
+                $schema = self::namedTypeToSchema($type);
+            } elseif ($type instanceof ReflectionUnionType) {
+                $variants = [];
+                foreach ($type->getTypes() as $unionType) {
+                    if ($unionType instanceof ReflectionNamedType) {
+                        $variants[] = self::namedTypeToSchema($unionType);
+                    }
+                }
+                $schema = ['oneOf' => $variants];
+            } else {
+                $schema = ['type' => 'string'];
+            }
+
+            if (($schema['type'] ?? null) === 'object') {
+                return null;
+            }
         }
 
         $descAttrs = $param->getAttributes(Description::class);

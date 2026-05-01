@@ -3,6 +3,8 @@
 namespace markhuot\craftai\tools;
 
 use Craft;
+use markhuot\craftai\attributes\Bind;
+use markhuot\craftai\binders\Binder;
 use ReflectionMethod;
 use Throwable;
 
@@ -60,11 +62,28 @@ class ToolRegistry
 
             $method = new ReflectionMethod($tool, '__invoke');
 
+            $bound = $arguments;
+            foreach ($method->getParameters() as $param) {
+                $bindAttrs = $param->getAttributes(Bind::class);
+                if ($bindAttrs === []) {
+                    continue;
+                }
+
+                /** @var Bind $bind */
+                $bind = $bindAttrs[0]->newInstance();
+                /** @var Binder $binder */
+                $binder = new ($bind->binder)(...$bind->options);
+                $bound[$param->getName()] = $binder->bind(
+                    $arguments[$param->getName()] ?? null,
+                    $arguments,
+                );
+            }
+
             $ordered = [];
             foreach ($method->getParameters() as $param) {
                 $paramName = $param->getName();
-                if (array_key_exists($paramName, $arguments)) {
-                    $ordered[] = $arguments[$paramName];
+                if (array_key_exists($paramName, $bound)) {
+                    $ordered[] = $bound[$paramName];
                 } elseif ($param->isDefaultValueAvailable()) {
                     $ordered[] = $param->getDefaultValue();
                 } elseif ($param->allowsNull()) {

@@ -4,8 +4,13 @@ namespace markhuot\craftai\tools;
 
 use Craft;
 use craft\elements\Entry;
+use craft\models\EntryType;
+use craft\models\Section;
+use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
+use markhuot\craftai\binders\EntryTypeBinder;
+use markhuot\craftai\binders\SectionBinder;
 use markhuot\craftai\validators\ExistingEntryType;
 use markhuot\craftai\validators\ExistingSection;
 use markhuot\craftai\validators\ExistingSite;
@@ -24,14 +29,16 @@ class CreateEntry extends Tool
         #[Description('Section handle to create the entry in (e.g. "news", "blog")')]
         #[Validate('required')]
         #[Validate(ExistingSection::class)]
-        string $section,
+        #[Bind(SectionBinder::class)]
+        Section $section,
         #[Description('Entry title')]
         #[Validate('required')]
         #[Validate('string', max: 255)]
         string $title,
         #[Description('Entry type handle (defaults to the section\'s first entry type)')]
         #[Validate(ExistingEntryType::class, inSection: 'section')]
-        ?string $type = null,
+        #[Bind(EntryTypeBinder::class, inSection: 'section')]
+        ?EntryType $type = null,
         #[Description('URL slug (auto-generated from title if omitted)')]
         ?string $slug = null,
         #[Description('Author user ID (defaults to the current user)')]
@@ -48,11 +55,10 @@ class CreateEntry extends Tool
         #[Description('Custom field values keyed by field handle (e.g. {"body": "Hello", "summary": "..."})')]
         ?array $fields = null,
     ): array|ToolOutput {
-        $sectionModel = Craft::$app->entries->getSectionByHandle($section);
-        $entryType = $this->resolveEntryType($sectionModel, $type);
+        $entryType = $type ?? $section->getEntryTypes()[0];
 
         $entry = new Entry();
-        $entry->sectionId = $sectionModel->id;
+        $entry->sectionId = $section->id;
         $entry->typeId = $entryType->id;
         $entry->title = $title;
         $entry->enabled = $enabled;
@@ -95,20 +101,5 @@ class CreateEntry extends Tool
         }
 
         return $entry->toArray();
-    }
-
-    private function resolveEntryType($section, ?string $type)
-    {
-        if ($type === null) {
-            return $section->getEntryTypes()[0];
-        }
-
-        foreach ($section->getEntryTypes() as $candidate) {
-            if ($candidate->handle === $type) {
-                return $candidate;
-            }
-        }
-
-        return $section->getEntryTypes()[0];
     }
 }

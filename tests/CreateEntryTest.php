@@ -3,6 +3,7 @@
 use craft\elements\Entry;
 use markhuot\craftai\tools\CreateEntry;
 use markhuot\craftai\tools\ToolOutput;
+use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftpest\factories\Section;
 
 beforeEach(function () {
@@ -37,8 +38,10 @@ it('creates a disabled entry when enabled is false', function () {
 });
 
 it('returns an error for an unknown section', function () {
-    $tool = new CreateEntry();
-    $result = $tool(section: 'nope', title: 'Whatever');
+    $registry = new ToolRegistry();
+    $registry->register(CreateEntry::class);
+
+    $result = $registry->execute('create_entry', ['section' => 'nope', 'title' => 'Whatever']);
 
     expect($result)->toBeInstanceOf(ToolOutput::class);
     expect($result->isError)->toBeTrue();
@@ -46,8 +49,14 @@ it('returns an error for an unknown section', function () {
 });
 
 it('returns an error for an unknown entry type', function () {
-    $tool = new CreateEntry();
-    $result = $tool(section: 'posts', title: 'Whatever', type: 'nonsense');
+    $registry = new ToolRegistry();
+    $registry->register(CreateEntry::class);
+
+    $result = $registry->execute('create_entry', [
+        'section' => 'posts',
+        'title' => 'Whatever',
+        'type' => 'nonsense',
+    ]);
 
     expect($result)->toBeInstanceOf(ToolOutput::class);
     expect($result->isError)->toBeTrue();
@@ -71,4 +80,33 @@ it('creates an entry with a postDate', function () {
 
     $entry = Entry::find()->id($result['id'])->status(null)->one();
     expect($entry->postDate->format('Y-m-d H:i:s'))->toBe('2024-01-15 10:30:00');
+});
+
+it('rejects titles longer than 255 characters', function () {
+    $registry = new ToolRegistry();
+    $registry->register(CreateEntry::class);
+
+    $result = $registry->execute('create_entry', [
+        'section' => 'posts',
+        'title' => str_repeat('a', 256),
+    ]);
+
+    expect($result)->toBeInstanceOf(ToolOutput::class);
+    expect($result->isError)->toBeTrue();
+    expect($result->text)->toContain('Validation failed');
+});
+
+it('rejects an unknown site handle', function () {
+    $registry = new ToolRegistry();
+    $registry->register(CreateEntry::class);
+
+    $result = $registry->execute('create_entry', [
+        'section' => 'posts',
+        'title' => 'Hi',
+        'site' => 'klingon',
+    ]);
+
+    expect($result)->toBeInstanceOf(ToolOutput::class);
+    expect($result->isError)->toBeTrue();
+    expect($result->text)->toContain('klingon');
 });

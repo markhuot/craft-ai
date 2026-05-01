@@ -53,6 +53,11 @@ class ToolRegistry
 
         try {
             $tool = $this->instantiate($toolClass);
+
+            if (($error = $tool->validate($arguments)) !== null) {
+                return $error;
+            }
+
             $method = new ReflectionMethod($tool, '__invoke');
 
             $ordered = [];

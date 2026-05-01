@@ -5,6 +5,10 @@ namespace markhuot\craftai\tools;
 use Craft;
 use craft\elements\Entry;
 use markhuot\craftai\attributes\Description;
+use markhuot\craftai\attributes\Validate;
+use markhuot\craftai\validators\ExistingEntryType;
+use markhuot\craftai\validators\ExistingSection;
+use markhuot\craftai\validators\ExistingSite;
 
 /**
  * Create a new content entry in the CMS. Returns the created entry's full
@@ -18,10 +22,15 @@ class CreateEntry extends Tool
      */
     public function __invoke(
         #[Description('Section handle to create the entry in (e.g. "news", "blog")')]
+        #[Validate('required')]
+        #[Validate(ExistingSection::class)]
         string $section,
         #[Description('Entry title')]
+        #[Validate('required')]
+        #[Validate('string', max: 255)]
         string $title,
         #[Description('Entry type handle (defaults to the section\'s first entry type)')]
+        #[Validate(ExistingEntryType::class, inSection: 'section')]
         ?string $type = null,
         #[Description('URL slug (auto-generated from title if omitted)')]
         ?string $slug = null,
@@ -34,31 +43,13 @@ class CreateEntry extends Tool
         #[Description('Whether the entry is enabled (default true)')]
         bool $enabled = true,
         #[Description('Site handle for multi-site installs (e.g. "english", "french")')]
+        #[Validate(ExistingSite::class)]
         ?string $site = null,
         #[Description('Custom field values keyed by field handle (e.g. {"body": "Hello", "summary": "..."})')]
         ?array $fields = null,
     ): array|ToolOutput {
         $sectionModel = Craft::$app->entries->getSectionByHandle($section);
-
-        if ($sectionModel === null) {
-            return new ToolOutput("No section found with handle \"{$section}\".", isError: true);
-        }
-
-        $entryType = null;
-        if ($type !== null) {
-            foreach ($sectionModel->getEntryTypes() as $candidate) {
-                if ($candidate->handle === $type) {
-                    $entryType = $candidate;
-                    break;
-                }
-            }
-
-            if ($entryType === null) {
-                return new ToolOutput("No entry type \"{$type}\" found in section \"{$section}\".", isError: true);
-            }
-        } else {
-            $entryType = $sectionModel->getEntryTypes()[0];
-        }
+        $entryType = $this->resolveEntryType($sectionModel, $type);
 
         $entry = new Entry();
         $entry->sectionId = $sectionModel->id;
@@ -87,11 +78,7 @@ class CreateEntry extends Tool
         }
 
         if ($site !== null) {
-            $siteModel = Craft::$app->sites->getSiteByHandle($site);
-            if ($siteModel === null) {
-                return new ToolOutput("No site found with handle \"{$site}\".", isError: true);
-            }
-            $entry->siteId = $siteModel->id;
+            $entry->siteId = Craft::$app->sites->getSiteByHandle($site)->id;
         }
 
         if ($fields !== null) {
@@ -108,5 +95,20 @@ class CreateEntry extends Tool
         }
 
         return $entry->toArray();
+    }
+
+    private function resolveEntryType($section, ?string $type)
+    {
+        if ($type === null) {
+            return $section->getEntryTypes()[0];
+        }
+
+        foreach ($section->getEntryTypes() as $candidate) {
+            if ($candidate->handle === $type) {
+                return $candidate;
+            }
+        }
+
+        return $section->getEntryTypes()[0];
     }
 }

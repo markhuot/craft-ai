@@ -102,10 +102,22 @@ it('rejects an unknown site handle', function () {
     expect($result->text)->toContain('klingon');
 });
 
-it('exposes section and type as strings in the JSON schema', function () {
+it('exposes section and type as string-or-integer in the JSON schema', function () {
     $descriptor = $this->registry->describe('create_entry');
     $schema = $descriptor->inputSchema;
 
-    expect($schema['properties']['section']['type'])->toBe('string');
-    expect($schema['properties']['type']['type'])->toBe('string');
+    expect($schema['properties']['section']['oneOf'])->toBe([['type' => 'string'], ['type' => 'integer']]);
+    expect($schema['properties']['type']['oneOf'])->toBe([['type' => 'string'], ['type' => 'integer']]);
+});
+
+it('binds a section by numeric ID', function () {
+    $section = Craft::$app->entries->getSectionByHandle('posts');
+
+    $output = $this->registry->execute('create_entry', [
+        'section' => $section->id,
+        'title' => 'By ID',
+    ]);
+
+    expect($output->isError)->toBeFalse();
+    expect(decode($output)['title'])->toBe('By ID');
 });

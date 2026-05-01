@@ -4,17 +4,12 @@ namespace markhuot\craftai\binders;
 
 use Craft;
 
-class SectionBinder implements Binder
+class Section implements Binder
 {
-    public function sourceSchema(): array
-    {
-        return ['type' => 'string'];
-    }
-
     public function bind(mixed $value, array $arguments): mixed
     {
-        if (! is_string($value)) {
-            return null;
+        if (is_int($value) || ctype_digit($value)) {
+            return Craft::$app->entries->getSectionById((int) $value);
         }
 
         return Craft::$app->entries->getSectionByHandle($value);

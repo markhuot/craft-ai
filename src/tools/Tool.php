@@ -42,6 +42,10 @@ abstract class Tool
             $name = $param->getName();
             $values[$name] = $arguments[$name] ?? null;
 
+            if (! $param->isDefaultValueAvailable() && ! $param->allowsNull()) {
+                $rules[] = [[$name], 'required'];
+            }
+
             foreach ($param->getAttributes(Validate::class) as $attr) {
                 /** @var Validate $validate */
                 $validate = $attr->newInstance();

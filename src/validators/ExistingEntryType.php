@@ -6,9 +6,10 @@ use Craft;
 use yii\validators\Validator;
 
 /**
- * Validates that a string value matches the handle of an existing Craft entry
- * type. When `inSection` is set to another attribute name, the entry type must
- * also belong to the section identified by that sibling attribute's handle.
+ * Validates that a value identifies an existing Craft entry type, by handle
+ * (string) or ID (integer / numeric string). When `inSection` is set to a
+ * sibling attribute name, the entry type must also belong to the section
+ * identified by that attribute.
  */
 class ExistingEntryType extends Validator
 {
@@ -18,42 +19,55 @@ class ExistingEntryType extends Validator
 
     public function validateAttribute($model, $attribute)
     {
-        $handle = $model->{$attribute};
+        $value = $model->{$attribute};
+        $isId = is_int($value) || (is_string($value) && ctype_digit($value));
 
-        if (! is_string($handle)) {
-            $this->addError($model, $attribute, '{attribute} must be a string.');
+        if (! $isId && ! is_string($value)) {
+            $this->addError($model, $attribute, '{attribute} must be a string handle or numeric ID.');
 
             return;
         }
 
-        if ($this->inSection === null) {
-            if (Craft::$app->entries->getEntryTypeByHandle($handle) === null) {
-                $this->addError($model, $attribute, "No entry type found with handle \"{$handle}\".");
+        if ($this->inSection !== null) {
+            $section = $this->resolveSection($model->{$this->inSection} ?? null);
+            if ($section === null) {
+                return; // sibling-section validator will report the failure
             }
 
-            return;
-        }
-
-        $sectionHandle = $model->{$this->inSection} ?? null;
-        if (! is_string($sectionHandle)) {
-            return;
-        }
-
-        $section = Craft::$app->entries->getSectionByHandle($sectionHandle);
-        if ($section === null) {
-            return;
-        }
-
-        foreach ($section->getEntryTypes() as $candidate) {
-            if ($candidate->handle === $handle) {
-                return;
+            foreach ($section->getEntryTypes() as $candidate) {
+                if ($isId ? $candidate->id === (int) $value : $candidate->handle === $value) {
+                    return;
+                }
             }
+
+            $this->addError(
+                $model,
+                $attribute,
+                "No entry type \"{$value}\" found in section \"{$model->{$this->inSection}}\".",
+            );
+
+            return;
         }
 
-        $this->addError(
-            $model,
-            $attribute,
-            "No entry type \"{$handle}\" found in section \"{$sectionHandle}\".",
-        );
+        $found = $isId
+            ? Craft::$app->entries->getEntryTypeById((int) $value)
+            : Craft::$app->entries->getEntryTypeByHandle($value);
+
+        if ($found === null) {
+            $this->addError($model, $attribute, "No entry type found matching \"{$value}\".");
+        }
+    }
+
+    private function resolveSection(mixed $value): ?\craft\models\Section
+    {
+        if (is_int($value) || (is_string($value) && ctype_digit($value))) {
+            return Craft::$app->entries->getSectionById((int) $value);
+        }
+
+        if (is_string($value)) {
+            return Craft::$app->entries->getSectionByHandle($value);
+        }
+
+        return null;
     }
 }

@@ -9,8 +9,8 @@ use craft\models\Section;
 use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
-use markhuot\craftai\binders\EntryTypeBinder;
-use markhuot\craftai\binders\SectionBinder;
+use markhuot\craftai\binders\EntryType as EntryTypeBinder;
+use markhuot\craftai\binders\Section as SectionBinder;
 use markhuot\craftai\validators\ExistingEntryType;
 use markhuot\craftai\validators\ExistingSection;
 use markhuot\craftai\validators\ExistingSite;
@@ -27,18 +27,16 @@ class CreateEntry extends Tool
      */
     public function __invoke(
         #[Description('Section handle to create the entry in (e.g. "news", "blog")')]
-        #[Validate('required')]
         #[Validate(ExistingSection::class)]
         #[Bind(SectionBinder::class)]
-        Section $section,
+        Section|string|int $section,
         #[Description('Entry title')]
-        #[Validate('required')]
         #[Validate('string', max: 255)]
         string $title,
         #[Description('Entry type handle (defaults to the section\'s first entry type)')]
         #[Validate(ExistingEntryType::class, inSection: 'section')]
         #[Bind(EntryTypeBinder::class, inSection: 'section')]
-        ?EntryType $type = null,
+        EntryType|string|int|null $type = null,
         #[Description('URL slug (auto-generated from title if omitted)')]
         ?string $slug = null,
         #[Description('Author user ID (defaults to the current user)')]

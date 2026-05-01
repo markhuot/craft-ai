@@ -6,7 +6,8 @@ use Craft;
 use yii\validators\Validator;
 
 /**
- * Validates that a string value matches the handle of an existing Craft section.
+ * Validates that a value identifies an existing Craft section, by handle (string)
+ * or ID (integer / numeric string).
  */
 class ExistingSection extends Validator
 {
@@ -14,16 +15,24 @@ class ExistingSection extends Validator
 
     public function validateAttribute($model, $attribute)
     {
-        $handle = $model->{$attribute};
+        $value = $model->{$attribute};
 
-        if (! is_string($handle)) {
-            $this->addError($model, $attribute, '{attribute} must be a string.');
+        if (is_int($value) || (is_string($value) && ctype_digit($value))) {
+            if (Craft::$app->entries->getSectionById((int) $value) === null) {
+                $this->addError($model, $attribute, "No section found with ID {$value}.");
+            }
 
             return;
         }
 
-        if (Craft::$app->entries->getSectionByHandle($handle) === null) {
-            $this->addError($model, $attribute, "No section found with handle \"{$handle}\".");
+        if (! is_string($value)) {
+            $this->addError($model, $attribute, '{attribute} must be a string handle or numeric ID.');
+
+            return;
+        }
+
+        if (Craft::$app->entries->getSectionByHandle($value) === null) {
+            $this->addError($model, $attribute, "No section found with handle \"{$value}\".");
         }
     }
 }

@@ -83,6 +83,16 @@ it('emits the OpenAI-shaped tool definition with type=function and parameters', 
     expect($tool['function'])->toHaveKey('parameters');
 });
 
+it('serializes empty OpenAI tool parameters as a JSON object, not an array', function () {
+    // Strict OpenAI-compatible providers (DeepSeek via opencode.ai) reject
+    // `properties: []` and require `properties: {}`.
+    $tool = (new ToolDescriptor(GetHealth::class))->toOpenAiTool();
+    $json = json_encode($tool);
+
+    expect($json)->toContain('"properties":{}');
+    expect($json)->not->toContain('"properties":[]');
+});
+
 it('emits the MCP-shaped tool definition with inputSchema (camelCase)', function () {
     $tool = (new ToolDescriptor(GetHealth::class))->toMcpTool();
 

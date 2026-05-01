@@ -94,20 +94,42 @@ class Plugin extends BasePlugin
     }
 
     /**
-     * @return array{provider: ?string, apiKey: ?string, model: ?string, system: ?string, mcpUserId: int}
+     * @return array{provider: ?string, apiKey: ?string, model: ?string, smallModel: ?string, system: ?string, baseUrl: ?string, mcpUserId: int}
      */
     public function getSettingsArray(): array
     {
-        /** @var array{provider?: ?string, apiKey?: ?string, model?: ?string, system?: ?string, mcpUserId?: int} $config */
+        /** @var array{provider?: ?string, apiKey?: ?string, model?: ?string, smallModel?: ?string, system?: ?string, baseUrl?: ?string, mcpUserId?: int} $config */
         $config = Craft::$app->getConfig()->getConfigFromFile('craft-ai');
 
         return [
             'provider' => $config['provider'] ?? null,
             'apiKey' => $config['apiKey'] ?? null,
             'model' => $config['model'] ?? null,
+            'smallModel' => $config['smallModel'] ?? null,
             'system' => $config['system'] ?? null,
+            'baseUrl' => $config['baseUrl'] ?? null,
             'mcpUserId' => (int) ($config['mcpUserId'] ?? 1),
         ];
+    }
+
+    public function getSmallModelProvider(): LlmProvider
+    {
+        $settings = $this->getSettingsArray();
+        $provider = $settings['provider'];
+        $apiKey = $settings['apiKey'];
+
+        if ($provider === null) {
+            throw new \RuntimeException('craft-ai: no provider configured. Set "provider" in config/craft-ai.php to "anthropic" or "openai".');
+        }
+        if ($apiKey === null || $apiKey === '') {
+            throw new \RuntimeException("craft-ai: provider \"{$provider}\" is configured but apiKey is missing in config/craft-ai.php.");
+        }
+
+        return match ($provider) {
+            'anthropic' => new AnthropicProvider($apiKey, $settings['smallModel'] ?? $settings['model'] ?? 'claude-haiku-4-5-20251001'),
+            'openai' => new OpenAiProvider($apiKey, $settings['smallModel'] ?? $settings['model'] ?? 'gpt-4o-mini', baseUrl: $settings['baseUrl'] ?? null),
+            default => throw new \RuntimeException("craft-ai: unknown provider \"{$provider}\". Use \"anthropic\" or \"openai\"."),
+        };
     }
 
     private function registerContainerBindings(): void
@@ -128,7 +150,7 @@ class Plugin extends BasePlugin
 
             return match ($provider) {
                 'anthropic' => new AnthropicProvider($apiKey, $settings['model'] ?? 'claude-sonnet-4-20250514'),
-                'openai' => new OpenAiProvider($apiKey, $settings['model'] ?? 'gpt-4o'),
+                'openai' => new OpenAiProvider($apiKey, $settings['model'] ?? 'gpt-4o', baseUrl: $settings['baseUrl'] ?? null),
                 default => throw new \RuntimeException("craft-ai: unknown provider \"{$provider}\". Use \"anthropic\" or \"openai\"."),
             };
         });

@@ -91,6 +91,37 @@ it('executes tool_use blocks and persists tool_result before the next turn', fun
     expect($provider->calls)->toHaveCount(2);
 });
 
+it('persists the full provider payload on assistant messages but not user messages', function () {
+    $rawPayload = [
+        'id' => 'msg_raw',
+        'choices' => [['message' => ['role' => 'assistant', 'reasoning_content' => 'pondered']]],
+        'usage' => ['total_tokens' => 42],
+    ];
+    $provider = new FakeProvider([
+        new ProviderResponse(
+            'msg_raw',
+            [['type' => 'text', 'text' => 'hi']],
+            'end_turn',
+            $rawPayload,
+        ),
+    ]);
+
+    (new AgentLoop($provider, $this->registry))->run('session-raw', 'hello');
+
+    $records = MessageRecord::find()
+        ->where(['sessionId' => 'session-raw'])
+        ->orderBy(['id' => SORT_ASC])
+        ->all();
+
+    expect($records[0]->role)->toBe('user');
+    expect($records[0]->rawResponse)->toBeNull();
+
+    expect($records[1]->role)->toBe('assistant');
+    /** @var array<string, mixed> $stored */
+    $stored = json_decode($records[1]->rawResponse, true);
+    expect($stored)->toBe($rawPayload);
+});
+
 it('passes the tool descriptor catalog from the registry into every provider call', function () {
     $provider = new FakeProvider([
         new ProviderResponse('msg_1', [['type' => 'text', 'text' => 'Done.']], 'end_turn'),

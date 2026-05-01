@@ -19,9 +19,10 @@ class OpenAiProvider implements LlmProvider
         string $apiKey,
         private readonly string $model = 'gpt-4o',
         ?ClientInterface $http = null,
+        ?string $baseUrl = null,
     ) {
         $this->http = $http ?? new Client([
-            'base_uri' => 'https://api.openai.com/',
+            'base_uri' => rtrim($baseUrl ?? 'https://api.openai.com', '/').'/',
             'headers' => [
                 'Authorization' => 'Bearer '.$apiKey,
                 'content-type' => 'application/json',
@@ -59,6 +60,7 @@ class OpenAiProvider implements LlmProvider
             id: $payload['id'],
             content: $this->translateAssistantIn($message),
             stopReason: $this->translateStopReason($finishReason),
+            raw: $payload,
         );
     }
 
@@ -85,12 +87,16 @@ class OpenAiProvider implements LlmProvider
 
             if ($role === 'assistant') {
                 $text = '';
+                $reasoning = '';
                 $toolCalls = [];
                 foreach ($content as $block) {
                     $type = $block['type'] ?? '';
                     if ($type === 'text') {
                         $blockText = $block['text'] ?? '';
                         $text .= is_string($blockText) ? $blockText : '';
+                    } elseif ($type === 'thinking') {
+                        $blockText = $block['thinking'] ?? '';
+                        $reasoning .= is_string($blockText) ? $blockText : '';
                     } elseif ($type === 'tool_use') {
                         $toolCalls[] = [
                             'id' => $block['id'],
@@ -102,7 +108,25 @@ class OpenAiProvider implements LlmProvider
                         ];
                     }
                 }
-                $entry = ['role' => 'assistant', 'content' => $text === '' ? null : $text];
+                // Skip assistant turns with no real content. These come from
+                // historical `error` blocks (saved by AgentJob when a provider
+                // call failed) — replaying them as empty assistant messages
+                // poisons the conversation and gets rejected by strict
+                // OpenAI-compatible providers.
+                if ($text === '' && $reasoning === '' && $toolCalls === []) {
+                    continue;
+                }
+
+                $entry = ['role' => 'assistant'];
+                if ($text !== '') {
+                    $entry['content'] = $text;
+                }
+                if ($reasoning !== '') {
+                    // DeepSeek (and other reasoning-capable providers exposed via
+                    // OpenAI-compatible APIs) require the assistant's prior
+                    // `reasoning_content` to be echoed back on follow-up turns.
+                    $entry['reasoning_content'] = $reasoning;
+                }
                 if ($toolCalls !== []) {
                     $entry['tool_calls'] = $toolCalls;
                 }
@@ -142,6 +166,11 @@ class OpenAiProvider implements LlmProvider
     private function translateAssistantIn(array $message): array
     {
         $blocks = [];
+
+        $reasoning = $message['reasoning_content'] ?? null;
+        if (is_string($reasoning) && $reasoning !== '') {
+            $blocks[] = ['type' => 'thinking', 'thinking' => $reasoning];
+        }
 
         $textContent = $message['content'] ?? null;
         if (is_string($textContent) && $textContent !== '') {

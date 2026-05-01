@@ -9,6 +9,7 @@ use craft\db\ActiveRecord;
  * @property string $sessionId
  * @property string $role
  * @property string $content JSON-encoded message content blocks
+ * @property string|null $rawResponse JSON-encoded full provider payload (assistant turns only)
  * @property string $dateCreated
  * @property string $dateUpdated
  * @property string $uid

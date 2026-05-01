@@ -192,16 +192,24 @@ class ToolDescriptor
     }
 
     /**
-     * @return array{type: string, function: array{name: string, description: string, parameters: array{type: string, properties: array<string, array<string, mixed>>, required: list<string>}}}
+     * @return array{type: string, function: array{name: string, description: string, parameters: array{type: string, properties: array<string, array<string, mixed>>|\stdClass, required: list<string>}}}
      */
     public function toOpenAiTool(): array
     {
+        // Force `properties` to serialize as a JSON object (`{}`) rather than
+        // an array (`[]`) when empty. Strict OpenAI-compatible providers
+        // (e.g. DeepSeek via opencode.ai) reject `properties: []`.
+        $parameters = $this->inputSchema;
+        if ($parameters['properties'] === []) {
+            $parameters['properties'] = new \stdClass();
+        }
+
         return [
             'type' => 'function',
             'function' => [
                 'name' => $this->name,
                 'description' => $this->description,
-                'parameters' => $this->inputSchema,
+                'parameters' => $parameters,
             ],
         ];
     }

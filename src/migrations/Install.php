@@ -13,6 +13,7 @@ class Install extends Migration
             'sessionId' => $this->string(36)->notNull(),
             'role' => $this->string(20)->notNull(),
             'content' => $this->text()->notNull(),
+            'rawResponse' => $this->mediumText()->null(),
             'dateCreated' => $this->dateTime()->notNull(),
             'dateUpdated' => $this->dateTime()->notNull(),
             'uid' => $this->uid(),

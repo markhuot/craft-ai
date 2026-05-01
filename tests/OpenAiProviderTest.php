@@ -85,6 +85,78 @@ it('translates an OpenAI tool_calls response into Anthropic-shaped tool_use bloc
     ]);
 });
 
+it('captures reasoning_content from a DeepSeek-style assistant response as a thinking block', function () {
+    $cap = new OpenAiCapture(json_encode([
+        'id' => 'cc_r1',
+        'choices' => [[
+            'message' => [
+                'role' => 'assistant',
+                'content' => 'final answer',
+                'reasoning_content' => 'step by step thoughts',
+            ],
+            'finish_reason' => 'stop',
+        ]],
+    ]));
+
+    $response = $cap->provider->createMessage(
+        messages: [['role' => 'user', 'content' => [['type' => 'text', 'text' => 'hi']]]],
+    );
+
+    expect($response->content[0])->toBe(['type' => 'thinking', 'thinking' => 'step by step thoughts']);
+    expect($response->content[1])->toBe(['type' => 'text', 'text' => 'final answer']);
+});
+
+it('echoes reasoning_content back on follow-up turns when a thinking block is in history', function () {
+    // DeepSeek requires the prior turn's reasoning_content to be passed back.
+    $cap = new OpenAiCapture(json_encode([
+        'id' => 'cc_r2',
+        'choices' => [[
+            'message' => ['role' => 'assistant', 'content' => 'ok'],
+            'finish_reason' => 'stop',
+        ]],
+    ]));
+
+    $cap->provider->createMessage(messages: [
+        ['role' => 'user', 'content' => [['type' => 'text', 'text' => 'hi']]],
+        ['role' => 'assistant', 'content' => [
+            ['type' => 'thinking', 'thinking' => 'pondering...'],
+            ['type' => 'text', 'text' => 'hello'],
+        ]],
+        ['role' => 'user', 'content' => [['type' => 'text', 'text' => 'again']]],
+    ]);
+
+    $sent = json_decode((string) $cap->history[0]['request']->getBody(), true);
+    expect($sent['messages'][1]['role'])->toBe('assistant');
+    expect($sent['messages'][1]['reasoning_content'])->toBe('pondering...');
+    expect($sent['messages'][1]['content'])->toBe('hello');
+});
+
+it('skips replayed assistant turns that contain only error blocks', function () {
+    // AgentJob persists provider failures as `[{type: error, text: ...}]` on the
+    // assistant role. Those rows must not be re-sent to the API on subsequent
+    // turns — strict providers (DeepSeek) reject the resulting empty assistant
+    // entry, and even tolerant providers shouldn't see our internal markers.
+    $cap = new OpenAiCapture(json_encode([
+        'id' => 'cc_skip',
+        'choices' => [[
+            'message' => ['role' => 'assistant', 'content' => 'ok'],
+            'finish_reason' => 'stop',
+        ]],
+    ]));
+
+    $cap->provider->createMessage(messages: [
+        ['role' => 'user', 'content' => [['type' => 'text', 'text' => 'first try']]],
+        ['role' => 'assistant', 'content' => [
+            ['type' => 'error', 'text' => 'previous failure'],
+        ]],
+        ['role' => 'user', 'content' => [['type' => 'text', 'text' => 'second try']]],
+    ]);
+
+    $sent = json_decode((string) $cap->history[0]['request']->getBody(), true);
+    $roles = array_column($sent['messages'], 'role');
+    expect($roles)->toBe(['user', 'user']);
+});
+
 it('emits OpenAI tool_calls and role=tool messages when given an Anthropic tool_use/tool_result history', function () {
     $cap = new OpenAiCapture(json_encode([
         'id' => 'cc_3',
@@ -108,6 +180,10 @@ it('emits OpenAI tool_calls and role=tool messages when given an Anthropic tool_
     expect($sent['messages'][0])->toBe(['role' => 'user', 'content' => 'check']);
     expect($sent['messages'][1]['role'])->toBe('assistant');
     expect($sent['messages'][1]['tool_calls'][0]['function']['name'])->toBe('get_health');
+    // DeepSeek (and other strict OpenAI-compatible providers) reject assistant
+    // messages with `content: null`, so we omit the key entirely when there are
+    // tool_calls and no text.
+    expect($sent['messages'][1])->not->toHaveKey('content');
     expect($sent['messages'][2])->toBe([
         'role' => 'tool',
         'tool_call_id' => 'tu_1',

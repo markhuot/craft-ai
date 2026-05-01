@@ -23,7 +23,7 @@ class AgentLoop
         while (true) {
             $response = $this->provider->createMessage($messages, $tools);
 
-            $this->saveMessage($sessionId, 'assistant', $response->content);
+            $this->saveMessage($sessionId, 'assistant', $response->content, $response->raw);
             $messages[] = ['role' => 'assistant', 'content' => $response->content];
 
             if ($response->stopReason !== 'tool_use') {
@@ -61,13 +61,19 @@ class AgentLoop
 
     /**
      * @param list<array<string, mixed>> $content
+     * @param array<string, mixed>|null $rawResponse Full provider payload, persisted
+     *        on assistant turns to retain provider-specific fields (e.g.
+     *        DeepSeek `reasoning_content`) that the canonical block format drops.
      */
-    private function saveMessage(string $sessionId, string $role, array $content): void
+    private function saveMessage(string $sessionId, string $role, array $content, ?array $rawResponse = null): void
     {
         $record = new MessageRecord();
         $record->sessionId = $sessionId;
         $record->role = $role;
         $record->content = json_encode($content, JSON_THROW_ON_ERROR);
+        $record->rawResponse = $rawResponse === null
+            ? null
+            : json_encode($rawResponse, JSON_THROW_ON_ERROR);
         $record->save();
     }
 

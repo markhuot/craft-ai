@@ -54,6 +54,7 @@ class AnthropicProvider implements LlmProvider
             id: $payload['id'],
             content: $payload['content'],
             stopReason: $payload['stop_reason'] ?? 'end_turn',
+            raw: $payload,
         );
     }
 }

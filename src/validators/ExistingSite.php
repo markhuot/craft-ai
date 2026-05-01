@@ -12,7 +12,7 @@ class ExistingSite extends Validator
 {
     public $skipOnEmpty = true;
 
-    public function validateAttribute($model, $attribute)
+    public function validateAttribute($model, $attribute): void
     {
         $handle = $model->{$attribute};
 

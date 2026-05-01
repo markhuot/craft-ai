@@ -12,7 +12,7 @@ use markhuot\craftai\attributes\Description;
 class GetEntry extends Tool
 {
     /**
-     * @return array<string, mixed>
+     * @return array<string, mixed>|ToolOutput
      */
     public function __invoke(
         #[Description('The entry ID to look up')]

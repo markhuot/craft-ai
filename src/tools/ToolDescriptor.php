@@ -136,7 +136,7 @@ class ToolDescriptor
                     continue;
                 }
                 $variant = self::namedTypeToSchema($unionType);
-                if (($variant['type'] ?? null) === 'object') {
+                if ($variant['type'] === 'object') {
                     continue;
                 }
                 $variants[] = $variant;
@@ -149,7 +149,7 @@ class ToolDescriptor
             $schema = count($variants) === 1 ? $variants[0] : ['oneOf' => $variants];
         } elseif ($type instanceof ReflectionNamedType) {
             $schema = self::namedTypeToSchema($type);
-            if (($schema['type'] ?? null) === 'object') {
+            if ($schema['type'] === 'object') {
                 return null;
             }
         } else {

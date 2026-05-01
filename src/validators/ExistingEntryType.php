@@ -17,16 +17,17 @@ class ExistingEntryType extends Validator
 
     public ?string $inSection = null;
 
-    public function validateAttribute($model, $attribute)
+    public function validateAttribute($model, $attribute): void
     {
         $value = $model->{$attribute};
-        $isId = is_int($value) || (is_string($value) && ctype_digit($value));
 
-        if (! $isId && ! is_string($value)) {
+        if (! is_int($value) && ! is_string($value)) {
             $this->addError($model, $attribute, '{attribute} must be a string handle or numeric ID.');
 
             return;
         }
+
+        $isId = is_int($value) || ctype_digit($value);
 
         if ($this->inSection !== null) {
             $section = $this->resolveSection($model->{$this->inSection} ?? null);
@@ -43,7 +44,11 @@ class ExistingEntryType extends Validator
             $this->addError(
                 $model,
                 $attribute,
-                "No entry type \"{$value}\" found in section \"{$model->{$this->inSection}}\".",
+                sprintf(
+                    'No entry type "%s" found in section "%s".',
+                    $value,
+                    is_scalar($section = $model->{$this->inSection}) ? $section : '',
+                ),
             );
 
             return;

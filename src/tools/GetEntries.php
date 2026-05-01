@@ -15,7 +15,7 @@ use markhuot\craftai\attributes\Description;
 class GetEntries extends Tool
 {
     /**
-     * @return array<int, mixed>
+     * @return list<array<string, mixed>>
      */
     public function __invoke(
         #[Description('Full-text search query (e.g. "pricing page")')]

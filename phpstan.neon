@@ -2,5 +2,13 @@ parameters:
     level: max
     paths:
         - src
+    excludePaths:
+        analyseAndScan:
+            - phpstan-stubs/*
     bootstrapFiles:
         - phpstan-bootstrap.php
+    scanFiles:
+        - vendor/craftcms/cms/src/Craft.php
+        - vendor/yiisoft/yii2/Yii.php
+    stubFiles:
+        - phpstan-stubs/Craft.stub

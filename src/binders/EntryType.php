@@ -10,13 +10,17 @@ class EntryType implements Binder
         public readonly ?string $inSection = null,
     ) {}
 
-    public function bind(mixed $value, array $arguments): mixed
+    public function bind(mixed $value, array $arguments): ?\craft\models\EntryType
     {
         if ($value === null) {
             return null;
         }
 
-        $isId = is_int($value) || ctype_digit($value);
+        $isId = is_int($value) || (is_string($value) && ctype_digit($value));
+
+        if (! $isId && ! is_string($value)) {
+            return null;
+        }
 
         if ($this->inSection !== null) {
             $section = (new Section())->bind($arguments[$this->inSection] ?? null, $arguments);

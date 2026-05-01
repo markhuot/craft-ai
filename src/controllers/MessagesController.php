@@ -45,6 +45,10 @@ class MessagesController extends Controller
 
         $sessionId = $this->request->getRequiredBodyParam('sessionId');
         $userMessage = $this->request->getRequiredBodyParam('message');
+
+        if (! is_string($sessionId) || ! is_string($userMessage)) {
+            throw new \yii\web\BadRequestHttpException('sessionId and message must be strings.');
+        }
         $async = (bool) $this->request->getBodyParam('async', false);
 
         if ($async) {

@@ -13,7 +13,7 @@ class ExistingSection extends Validator
 {
     public $skipOnEmpty = true;
 
-    public function validateAttribute($model, $attribute)
+    public function validateAttribute($model, $attribute): void
     {
         $value = $model->{$attribute};
 

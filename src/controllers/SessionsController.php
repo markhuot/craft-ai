@@ -72,7 +72,13 @@ class SessionsController extends Controller
         $this->requireAcceptsJson();
 
         $sessionId = $this->request->getRequiredBodyParam('sessionId');
-        $message = trim((string) $this->request->getRequiredBodyParam('message'));
+        $message = $this->request->getRequiredBodyParam('message');
+
+        if (! is_string($sessionId) || ! is_string($message)) {
+            throw new \yii\web\BadRequestHttpException('sessionId and message must be strings.');
+        }
+
+        $message = trim($message);
 
         if ($message === '') {
             return $this->asJson(['queued' => false]);

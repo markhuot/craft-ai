@@ -56,7 +56,7 @@ class ToolRegistry
         try {
             $tool = $this->instantiate($toolClass);
 
-            if (($error = $tool->validate($arguments)) !== null) {
+            if (($error = $tool->validate($arguments, Tool::PHASE_UNBOUND)) !== null) {
                 return $error;
             }
 
@@ -77,6 +77,10 @@ class ToolRegistry
                     $arguments[$param->getName()] ?? null,
                     $arguments,
                 );
+            }
+
+            if (($error = $tool->validate($bound, Tool::PHASE_BOUND)) !== null) {
+                return $error;
             }
 
             $ordered = [];

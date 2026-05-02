@@ -3,6 +3,8 @@
 namespace markhuot\craftai\tools;
 
 use markhuot\craftai\attributes\Validate;
+use markhuot\craftai\validators\ValidatesBoundParameters;
+use markhuot\craftai\validators\ValidatesUnboundParameters;
 use ReflectionMethod;
 use yii\base\DynamicModel;
 
@@ -15,21 +17,26 @@ use yii\base\DynamicModel;
  * Tools may return any value; ToolRegistry coerces it into a ToolOutput. Throw
  * an exception (or return a ToolOutput with isError=true) to signal a failure.
  *
- * Parameter validation is declared with #[Validate(...)] attributes and runs
- * automatically before __invoke. Override validate() for runtime/cross-field
- * checks; call parent::validate() first to keep the attribute-driven rules.
+ * Parameter validation is declared with #[Validate(...)] attributes. The
+ * registry calls validate() twice — once with $phase='unbound' before binders
+ * run, and once with $phase='bound' after. Class-based rules opt into a phase
+ * by implementing ValidatesUnboundParameters and/or ValidatesBoundParameters;
+ * built-in Yii rule aliases (and class rules implementing neither interface)
+ * default to the unbound phase.
  */
 abstract class Tool
 {
-    // Subclasses MUST implement: public function __invoke(...): mixed
+    public const PHASE_UNBOUND = 'unbound';
+
+    public const PHASE_BOUND = 'bound';
 
     /**
-     * Validate the named arguments before __invoke is called. Returns a
-     * ToolOutput with isError=true to abort execution, or null to proceed.
+     * Validate the named arguments against the rules that apply to the given
+     * phase. Returns a ToolOutput with isError=true to abort, or null to proceed.
      *
      * @param  array<string, mixed>  $arguments
      */
-    public function validate(array $arguments): ?ToolOutput
+    public function validate(array $arguments, string $phase = self::PHASE_UNBOUND): ?ToolOutput
     {
         $reflection = new ReflectionMethod($this, '__invoke');
 
@@ -42,13 +49,19 @@ abstract class Tool
             $name = $param->getName();
             $values[$name] = $arguments[$name] ?? null;
 
-            if (! $param->isDefaultValueAvailable() && ! $param->allowsNull()) {
+            if ($phase === self::PHASE_UNBOUND
+                && ! $param->isDefaultValueAvailable()
+                && ! $param->allowsNull()
+            ) {
                 $rules[] = [[$name], 'required'];
             }
 
             foreach ($param->getAttributes(Validate::class) as $attr) {
                 /** @var Validate $validate */
                 $validate = $attr->newInstance();
+                if (! $this->ruleAppliesToPhase($validate->rule, $phase)) {
+                    continue;
+                }
                 $rules[] = array_merge([[$name], $validate->rule], $validate->options);
             }
         }
@@ -74,5 +87,21 @@ abstract class Tool
             'Validation failed: '.implode('; ', $messages),
             isError: true,
         );
+    }
+
+    private function ruleAppliesToPhase(string $rule, string $phase): bool
+    {
+        if (! class_exists($rule)) {
+            return $phase === self::PHASE_UNBOUND;
+        }
+
+        $unbound = is_subclass_of($rule, ValidatesUnboundParameters::class);
+        $bound = is_subclass_of($rule, ValidatesBoundParameters::class);
+
+        if (! $unbound && ! $bound) {
+            return $phase === self::PHASE_UNBOUND;
+        }
+
+        return $phase === self::PHASE_BOUND ? $bound : $unbound;
     }
 }

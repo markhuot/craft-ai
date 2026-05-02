@@ -1,16 +1,16 @@
 <?php
 
 use craft\elements\Entry;
-use markhuot\craftai\tools\CreateEntry;
 use markhuot\craftai\tools\ToolOutput;
 use markhuot\craftai\tools\ToolRegistry;
+use markhuot\craftai\tools\UpsertEntry;
 use markhuot\craftpest\factories\Section;
 
 beforeEach(function () {
     Section::factory()->name('Posts')->handle('posts')->create();
 
     $this->registry = new ToolRegistry();
-    $this->registry->register(CreateEntry::class);
+    $this->registry->register(UpsertEntry::class);
 });
 
 function decode(ToolOutput $output): array
@@ -19,7 +19,7 @@ function decode(ToolOutput $output): array
 }
 
 it('creates an entry with a title', function () {
-    $output = $this->registry->execute('create_entry', ['section' => 'posts', 'title' => 'Hello World']);
+    $output = $this->registry->execute('upsert_entry', ['section' => 'posts', 'title' => 'Hello World']);
 
     expect($output->isError)->toBeFalse();
     $result = decode($output);
@@ -30,7 +30,7 @@ it('creates an entry with a title', function () {
 });
 
 it('creates an entry with a custom slug', function () {
-    $output = $this->registry->execute('create_entry', [
+    $output = $this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'My Article', 'slug' => 'my-custom-slug',
     ]);
 
@@ -38,7 +38,7 @@ it('creates an entry with a custom slug', function () {
 });
 
 it('creates a disabled entry when enabled is false', function () {
-    $output = $this->registry->execute('create_entry', [
+    $output = $this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'Draft Post', 'enabled' => false,
     ]);
 
@@ -47,14 +47,14 @@ it('creates a disabled entry when enabled is false', function () {
 });
 
 it('returns an error for an unknown section', function () {
-    $result = $this->registry->execute('create_entry', ['section' => 'nope', 'title' => 'Whatever']);
+    $result = $this->registry->execute('upsert_entry', ['section' => 'nope', 'title' => 'Whatever']);
 
     expect($result->isError)->toBeTrue();
     expect($result->text)->toContain('nope');
 });
 
 it('returns an error for an unknown entry type', function () {
-    $result = $this->registry->execute('create_entry', [
+    $result = $this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'Whatever', 'type' => 'nonsense',
     ]);
 
@@ -66,7 +66,7 @@ it('creates an entry with a specific entry type handle', function () {
     $section = Craft::$app->entries->getSectionByHandle('posts');
     $entryType = $section->getEntryTypes()[0];
 
-    $output = $this->registry->execute('create_entry', [
+    $output = $this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'Typed', 'type' => $entryType->handle,
     ]);
 
@@ -76,7 +76,7 @@ it('creates an entry with a specific entry type handle', function () {
 });
 
 it('creates an entry with a postDate', function () {
-    $output = $this->registry->execute('create_entry', [
+    $output = $this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'Dated', 'postDate' => '2024-01-15 10:30:00',
     ]);
 
@@ -85,7 +85,7 @@ it('creates an entry with a postDate', function () {
 });
 
 it('rejects titles longer than 255 characters', function () {
-    $result = $this->registry->execute('create_entry', [
+    $result = $this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => str_repeat('a', 256),
     ]);
 
@@ -94,7 +94,7 @@ it('rejects titles longer than 255 characters', function () {
 });
 
 it('rejects an unknown site handle', function () {
-    $result = $this->registry->execute('create_entry', [
+    $result = $this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'Hi', 'site' => 'klingon',
     ]);
 
@@ -103,17 +103,78 @@ it('rejects an unknown site handle', function () {
 });
 
 it('exposes section and type as string-or-integer in the JSON schema', function () {
-    $descriptor = $this->registry->describe('create_entry');
+    $descriptor = $this->registry->describe('upsert_entry');
     $schema = $descriptor->inputSchema;
 
     expect($schema['properties']['section']['oneOf'])->toBe([['type' => 'string'], ['type' => 'integer']]);
     expect($schema['properties']['type']['oneOf'])->toBe([['type' => 'string'], ['type' => 'integer']]);
 });
 
+it('updates an existing entry by id', function () {
+    $created = decode($this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => 'Original',
+    ]));
+
+    $output = $this->registry->execute('upsert_entry', [
+        'id' => $created['id'], 'title' => 'Updated',
+    ]);
+
+    expect($output->isError)->toBeFalse();
+    expect(decode($output)['id'])->toBe($created['id']);
+
+    $entry = Entry::find()->id($created['id'])->status(null)->one();
+    expect($entry->title)->toBe('Updated');
+});
+
+it('leaves untouched fields alone on update', function () {
+    $created = decode($this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => 'Keep Slug', 'slug' => 'keep-slug',
+    ]));
+
+    $this->registry->execute('upsert_entry', [
+        'id' => $created['id'], 'title' => 'New Title',
+    ]);
+
+    $entry = Entry::find()->id($created['id'])->status(null)->one();
+    expect($entry->title)->toBe('New Title');
+    expect($entry->slug)->toBe('keep-slug');
+});
+
+it('returns an error for an unknown entry id', function () {
+    $result = $this->registry->execute('upsert_entry', ['id' => 999999, 'title' => 'Nope']);
+
+    expect($result->isError)->toBeTrue();
+    expect($result->text)->toContain('999999');
+});
+
+it('requires section and title when no id is given', function () {
+    $result = $this->registry->execute('upsert_entry', []);
+
+    expect($result->isError)->toBeTrue();
+});
+
+it('collects missing section and title into a single error response', function () {
+    $result = $this->registry->execute('upsert_entry', []);
+
+    expect($result->isError)->toBeTrue();
+    expect($result->text)->toContain('Section');
+    expect($result->text)->toContain('Title');
+});
+
+it('skips create-only required rules when updating', function () {
+    $created = decode($this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => 'Original',
+    ]));
+
+    $output = $this->registry->execute('upsert_entry', ['id' => $created['id']]);
+
+    expect($output->isError)->toBeFalse();
+});
+
 it('binds a section by numeric ID', function () {
     $section = Craft::$app->entries->getSectionByHandle('posts');
 
-    $output = $this->registry->execute('create_entry', [
+    $output = $this->registry->execute('upsert_entry', [
         'section' => $section->id,
         'title' => 'By ID',
     ]);

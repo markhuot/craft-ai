@@ -10,45 +10,54 @@ use craft\models\Site;
 use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
+use markhuot\craftai\binders\Entry as EntryBinder;
 use markhuot\craftai\binders\EntryType as EntryTypeBinder;
 use markhuot\craftai\binders\Section as SectionBinder;
 use markhuot\craftai\binders\Site as SiteBinder;
+use markhuot\craftai\validators\ExistingEntry;
 use markhuot\craftai\validators\ExistingEntryType;
 use markhuot\craftai\validators\ExistingSection;
 use markhuot\craftai\validators\ExistingSite;
 
 /**
- * Create a new content entry in the CMS. Returns the created entry's full
- * details on success, or an error describing why the entry could not be saved.
+ * Create or update a content entry. Pass `id` to update an existing entry;
+ * omit it to create a new one (in which case `section` and `title` are
+ * required). Returns the saved entry's full details on success.
  */
-class CreateEntry extends Tool
+class UpsertEntry extends Tool
 {
     /**
      * @param  array<string, mixed>|null  $fields  Custom field values keyed by field handle
      * @return array<array-key, mixed>|ToolOutput
      */
     public function __invoke(
-        #[Description('Section handle to create the entry in (e.g. "news", "blog")')]
+        #[Description('Existing entry ID to update. Omit to create a new entry.')]
+        #[Validate(ExistingEntry::class)]
+        #[Bind(EntryBinder::class)]
+        Entry|int|null $id = null,
+        #[Description('Section handle to create the entry in (e.g. "news", "blog"). Required when creating; ignored when updating.')]
+        #[Validate('required', whenMissing: 'id')]
         #[Validate(ExistingSection::class)]
         #[Bind(SectionBinder::class)]
-        Section|string|int $section,
-        #[Description('Entry title')]
+        Section|string|int|null $section = null,
+        #[Description('Entry title. Required when creating.')]
+        #[Validate('required', whenMissing: 'id')]
         #[Validate('string', max: 255)]
-        string $title,
-        #[Description('Entry type handle (defaults to the section\'s first entry type)')]
+        ?string $title = null,
+        #[Description('Entry type handle (defaults to the section\'s first entry type on create)')]
         #[Validate(ExistingEntryType::class, inSection: 'section')]
-        #[Bind(EntryTypeBinder::class, inSection: 'section')]
+        #[Bind(EntryTypeBinder::class, inSection: 'section', defaultToFirst: true)]
         EntryType|string|int|null $type = null,
-        #[Description('URL slug (auto-generated from title if omitted)')]
+        #[Description('URL slug (auto-generated from title on create if omitted)')]
         ?string $slug = null,
-        #[Description('Author user ID (defaults to the current user)')]
+        #[Description('Author user ID (defaults to the current user on create)')]
         ?int $authorId = null,
         #[Description('Post date (e.g. "2024-01-01 12:00:00", "now")')]
         ?string $postDate = null,
         #[Description('Expiry date (e.g. "2024-12-31 23:59:59")')]
         ?string $expiryDate = null,
-        #[Description('Whether the entry is enabled (default true)')]
-        bool $enabled = true,
+        #[Description('Whether the entry is enabled')]
+        ?bool $enabled = null,
         #[Description('Site handle for multi-site installs (e.g. "english", "french")')]
         #[Validate(ExistingSite::class)]
         #[Bind(SiteBinder::class)]
@@ -56,35 +65,41 @@ class CreateEntry extends Tool
         #[Description('Custom field values keyed by field handle (e.g. {"body": "Hello", "summary": "..."})')]
         ?array $fields = null,
     ): array|ToolOutput {
-        if (! $section instanceof Section) {
-            throw new \LogicException('Section was not bound before invocation.');
+        $isUpdate = $id instanceof Entry;
+
+        if ($isUpdate) {
+            $entry = $id;
+        } else {
+            assert($section instanceof Section);
+            assert($title !== null);
+            assert($type instanceof EntryType);
+
+            $entry = new Entry();
+            $entry->sectionId = $section->id;
+            $entry->typeId = $type->id;
+
+            if ($authorId !== null) {
+                $entry->authorId = $authorId;
+            } elseif (($user = Craft::$app->user->getIdentity()) !== null) {
+                $userId = $user->getId();
+                $entry->authorId = is_numeric($userId) ? (int) $userId : null;
+            }
         }
 
-        $entryType = $type ?? $section->getEntryTypes()[0];
-
-        if (! $entryType instanceof EntryType) {
-            throw new \LogicException('Entry type was not bound before invocation.');
+        if ($isUpdate && $type instanceof EntryType && $type->id !== null) {
+            $entry->typeId = $type->id;
         }
 
-        if ($section->id === null || $entryType->id === null) {
-            return new ToolOutput('Section or entry type is missing an ID.', isError: true);
+        if ($title !== null) {
+            $entry->title = $title;
         }
-
-        $entry = new Entry();
-        $entry->sectionId = $section->id;
-        $entry->typeId = $entryType->id;
-        $entry->title = $title;
-        $entry->enabled = $enabled;
 
         if ($slug !== null) {
             $entry->slug = $slug;
         }
 
-        if ($authorId !== null) {
+        if ($authorId !== null && $isUpdate) {
             $entry->authorId = $authorId;
-        } elseif (($user = Craft::$app->user->getIdentity()) !== null) {
-            $userId = $user->getId();
-            $entry->authorId = is_numeric($userId) ? (int) $userId : null;
         }
 
         if ($postDate !== null) {
@@ -95,6 +110,12 @@ class CreateEntry extends Tool
         if ($expiryDate !== null) {
             $entry->expiryDate = \DateTime::createFromFormat('Y-m-d H:i:s', $expiryDate)
                 ?: new \DateTime($expiryDate);
+        }
+
+        if ($enabled !== null) {
+            $entry->enabled = $enabled;
+        } elseif (! $isUpdate) {
+            $entry->enabled = true;
         }
 
         if ($site instanceof Site) {

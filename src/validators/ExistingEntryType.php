@@ -3,15 +3,17 @@
 namespace markhuot\craftai\validators;
 
 use Craft;
+use craft\models\EntryType;
 use yii\validators\Validator;
 
 /**
  * Validates that a value identifies an existing Craft entry type, by handle
  * (string) or ID (integer / numeric string). When `inSection` is set to a
  * sibling attribute name, the entry type must also belong to the section
- * identified by that attribute.
+ * identified by that attribute. After binding, also asserts the resolved
+ * EntryType has a non-null ID.
  */
-class ExistingEntryType extends Validator
+class ExistingEntryType extends Validator implements ValidatesUnboundParameters, ValidatesBoundParameters
 {
     public $skipOnEmpty = true;
 
@@ -20,6 +22,14 @@ class ExistingEntryType extends Validator
     public function validateAttribute($model, $attribute): void
     {
         $value = $model->{$attribute};
+
+        if ($value instanceof EntryType) {
+            if ($value->id === null) {
+                $this->addError($model, $attribute, '{attribute} is missing an ID.');
+            }
+
+            return;
+        }
 
         if (! is_int($value) && ! is_string($value)) {
             $this->addError($model, $attribute, '{attribute} must be a string handle or numeric ID.');

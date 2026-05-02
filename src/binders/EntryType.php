@@ -8,12 +8,22 @@ class EntryType implements Binder
 {
     public function __construct(
         public readonly ?string $inSection = null,
+        public readonly bool $defaultToFirst = false,
     ) {}
 
     public function bind(mixed $value, array $arguments): ?\craft\models\EntryType
     {
         if ($value === null) {
-            return null;
+            if (! $this->defaultToFirst || $this->inSection === null) {
+                return null;
+            }
+
+            $section = (new Section())->bind($arguments[$this->inSection] ?? null, $arguments);
+            if (! $section instanceof \craft\models\Section) {
+                return null;
+            }
+
+            return $section->getEntryTypes()[0] ?? null;
         }
 
         if (! is_int($value) && ! is_string($value)) {

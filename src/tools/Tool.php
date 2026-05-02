@@ -62,7 +62,16 @@ abstract class Tool
                 if (! $this->ruleAppliesToPhase($validate->rule, $phase)) {
                     continue;
                 }
-                $rules[] = array_merge([[$name], $validate->rule], $validate->options);
+                $options = $validate->options;
+                if ($validate->whenMissing !== null) {
+                    $sibling = $validate->whenMissing;
+                    $options['when'] = static fn ($model) => self::isEmpty($model->{$sibling} ?? null);
+                }
+                if ($validate->whenPresent !== null) {
+                    $sibling = $validate->whenPresent;
+                    $options['when'] = static fn ($model) => ! self::isEmpty($model->{$sibling} ?? null);
+                }
+                $rules[] = array_merge([[$name], $validate->rule], $options);
             }
         }
 
@@ -87,6 +96,11 @@ abstract class Tool
             'Validation failed: '.implode('; ', $messages),
             isError: true,
         );
+    }
+
+    private static function isEmpty(mixed $value): bool
+    {
+        return $value === null || $value === '' || $value === [];
     }
 
     private function ruleAppliesToPhase(string $rule, string $phase): bool

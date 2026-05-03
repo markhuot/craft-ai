@@ -68,6 +68,30 @@ it('reflects parameters into JSON Schema with correct types and required list', 
     expect($descriptor->inputSchema['required'])->toBe(['name', 'age']);
 });
 
+it('includes default values in the JSON schema for parameters with non-null defaults', function () {
+    $fixture = new class extends Tool {
+        public function __invoke(
+            bool $hasTitleField = true,
+            int $count = 5,
+            ?string $optional = null,
+        ): string {
+            return 'ok';
+        }
+    };
+
+    $descriptor = new ToolDescriptor($fixture::class);
+
+    expect($descriptor->inputSchema['properties']['hasTitleField'])->toMatchArray([
+        'type' => 'boolean',
+        'default' => true,
+    ]);
+    expect($descriptor->inputSchema['properties']['count'])->toMatchArray([
+        'type' => 'integer',
+        'default' => 5,
+    ]);
+    expect($descriptor->inputSchema['properties']['optional'])->not->toHaveKey('default');
+});
+
 it('emits the Anthropic-shaped tool definition with input_schema', function () {
     $tool = (new ToolDescriptor(GetHealth::class))->toAnthropicTool();
 

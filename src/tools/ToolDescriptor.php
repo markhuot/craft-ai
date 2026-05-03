@@ -161,6 +161,13 @@ class ToolDescriptor
             $schema['description'] = $descAttrs[0]->newInstance()->value;
         }
 
+        if ($param->isDefaultValueAvailable()) {
+            $default = $param->getDefaultValue();
+            if ($default !== null) {
+                $schema['default'] = $default;
+            }
+        }
+
         return $schema;
     }
 

@@ -3,6 +3,8 @@
 namespace markhuot\craftai\mcp;
 
 use Mcp\Server;
+use Mcp\Server\Session\Psr16SessionStore;
+use markhuot\craftai\Plugin;
 use markhuot\craftai\tools\ToolDescriptor;
 use markhuot\craftai\tools\ToolRegistry;
 
@@ -19,7 +21,10 @@ class ServerFactory
     public function build(): Server
     {
         $builder = Server::builder()
-            ->setServerInfo('craft-ai', '1.0.0', 'Craft CMS AI plugin');
+            ->setServerInfo('craft-ai', '1.0.0', 'Craft CMS AI plugin')
+            ->setSession(new Psr16SessionStore(
+                cache: new Psr16YiiCache(Plugin::getInstance()->getMcpSessionCache()),
+            ));
 
         foreach ($this->registry->descriptors() as $descriptor) {
             $this->registerTool($builder, $descriptor);

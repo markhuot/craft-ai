@@ -4,10 +4,11 @@ namespace markhuot\craftai\controllers;
 
 use Craft;
 use craft\elements\User;
+use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use Mcp\Server\Transport\StreamableHttpTransport;
 use markhuot\craftai\mcp\ServerFactory;
-use markhuot\craftai\Plugin;
+use markhuot\craftai\records\OauthTokenRecord;
 use markhuot\craftai\tools\ToolRegistry;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Nyholm\Psr7Server\ServerRequestCreator;
@@ -16,9 +17,9 @@ use yii\web\Response;
 
 /**
  * HTTP entrypoint for the MCP server. The mcp/sdk Streamable HTTP transport
- * handles JSON-RPC + SSE on a single endpoint. Auth is currently a hardcoded
- * stub (logs in user #1) so the MCP runs in the context of a Craft user; this
- * is the seam where OAuth will plug in later.
+ * handles JSON-RPC + SSE on a single endpoint. Requests must carry a
+ * Bearer access token issued by the plugin's OAuth endpoints; the token's
+ * userId determines which Craft user the MCP session runs as.
  */
 class McpController extends Controller
 {
@@ -33,10 +34,22 @@ class McpController extends Controller
             throw new \RuntimeException('craft-ai: MCP endpoint requires a web request context.');
         }
 
-        $userId = Plugin::getInstance()->getSettingsArray()['mcpUserId'];
-        $user = User::find()->id($userId)->one();
+        $token = $this->extractBearerToken();
+        if ($token === null) {
+            return $this->unauthorized('invalid_token', 'Bearer token required.');
+        }
+
+        $record = OauthTokenRecord::findOne(['accessToken' => $token]);
+        if (! $record instanceof OauthTokenRecord
+            || (bool) $record->revoked
+            || strtotime((string) $record->accessExpiresAt.' UTC') < time()
+        ) {
+            return $this->unauthorized('invalid_token', 'Access token is invalid or expired.');
+        }
+
+        $user = User::find()->id((int) $record->userId)->one();
         if (! $user instanceof User) {
-            throw new \RuntimeException("craft-ai: MCP stub user #{$userId} not found.");
+            return $this->unauthorized('invalid_token', 'Token is not associated with a valid user.');
         }
         $app->getUser()->setIdentity($user);
 
@@ -52,6 +65,38 @@ class McpController extends Controller
         $psrResponse = $server->run($transport);
 
         return $this->copyPsrToYii($psrResponse);
+    }
+
+    private function extractBearerToken(): ?string
+    {
+        $header = $this->request->getHeaders()->get('Authorization');
+        if (! is_string($header) || stripos($header, 'Bearer ') !== 0) {
+            return null;
+        }
+        $token = trim(substr($header, 7));
+
+        return $token === '' ? null : $token;
+    }
+
+    private function unauthorized(string $error, string $description): Response
+    {
+        $pathInfo = ltrim($this->request->getPathInfo(), '/');
+        $resourceMetadata = UrlHelper::siteUrl('.well-known/oauth-protected-resource/'.$pathInfo);
+        $challenge = sprintf(
+            'Bearer realm="craft-ai", error="%s", error_description="%s", resource_metadata="%s"',
+            $error,
+            $description,
+            $resourceMetadata,
+        );
+
+        $response = $this->asJson([
+            'error' => $error,
+            'error_description' => $description,
+        ]);
+        $response->setStatusCode(401);
+        $response->getHeaders()->set('WWW-Authenticate', $challenge);
+
+        return $response;
     }
 
     private function copyPsrToYii(ResponseInterface $psr): Response

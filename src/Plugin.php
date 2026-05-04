@@ -117,11 +117,11 @@ class Plugin extends BasePlugin
     }
 
     /**
-     * @return array{provider: ?string, apiKey: ?string, model: ?string, smallModel: ?string, system: ?string, baseUrl: ?string, mcpUserId: int}
+     * @return array{provider: ?string, apiKey: ?string, model: ?string, smallModel: ?string, system: ?string, baseUrl: ?string, mcpUserId: int, mcpSessionCache: \Closure|string|null}
      */
     public function getSettingsArray(): array
     {
-        /** @var array{provider?: ?string, apiKey?: ?string, model?: ?string, smallModel?: ?string, system?: ?string, baseUrl?: ?string, mcpUserId?: int} $config */
+        /** @var array{provider?: ?string, apiKey?: ?string, model?: ?string, smallModel?: ?string, system?: ?string, baseUrl?: ?string, mcpUserId?: int, mcpSessionCache?: \Closure|string|null} $config */
         $config = Craft::$app->getConfig()->getConfigFromFile('craft-ai');
 
         return [
@@ -132,7 +132,27 @@ class Plugin extends BasePlugin
             'system' => $config['system'] ?? null,
             'baseUrl' => $config['baseUrl'] ?? null,
             'mcpUserId' => (int) ($config['mcpUserId'] ?? 1),
+            'mcpSessionCache' => $config['mcpSessionCache'] ?? null,
         ];
+    }
+
+    public function getMcpSessionCache(): \yii\caching\CacheInterface
+    {
+        $override = $this->getSettingsArray()['mcpSessionCache'];
+
+        if ($override instanceof \Closure) {
+            $cache = $override();
+        } elseif (is_string($override)) {
+            $cache = Craft::$app->get($override);
+        } else {
+            $cache = Craft::$app->getCache();
+        }
+
+        if (! $cache instanceof \yii\caching\CacheInterface) {
+            throw new \RuntimeException('craft-ai: mcpSessionCache must resolve to a yii\\caching\\CacheInterface instance.');
+        }
+
+        return $cache;
     }
 
     public function getSmallModelProvider(): LlmProvider

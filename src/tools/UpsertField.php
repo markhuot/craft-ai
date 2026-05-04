@@ -22,10 +22,18 @@ use markhuot\craftai\validators\ExistingField;
  *
  * To attach the field to an entry type, call UpsertEntryType (or edit the
  * entry type's field layout) after creating it.
+ *
+ * Field-type-specific options (character limits, source UIDs, option lists,
+ * sub-fields, etc.) are passed via `settings` as an associative array. The
+ * accepted keys depend on the field type — inspect an existing field of the
+ * same type to discover what's available. When `saveField` fails validation
+ * (for either core attributes or settings), the per-attribute error messages
+ * are returned so the caller can correct the input and retry.
  */
 class UpsertField extends Tool
 {
     /**
+     * @param  array<string, mixed>|null  $settings  Field-type-specific settings keyed by setting name
      * @return array<array-key, mixed>|ToolOutput
      */
     public function __invoke(
@@ -54,6 +62,8 @@ class UpsertField extends Tool
         ?string $translationMethod = null,
         #[Description('Translation key format used when translationMethod is "custom" (e.g. "{section.handle}").')]
         ?string $translationKeyFormat = null,
+        #[Description('Field-type-specific settings as an associative object (e.g. {"charLimit": 255, "multiline": true} for PlainText). On update, provided keys are merged into the existing settings; omitted keys are preserved. Inspect a field of the same type to discover accepted keys.')]
+        ?array $settings = null,
     ): array|ToolOutput {
         $isUpdate = $id instanceof FieldInterface;
 
@@ -92,13 +102,25 @@ class UpsertField extends Tool
             $config['translationKeyFormat'] = $id->translationKeyFormat;
         }
 
+        $existingSettings = $isUpdate ? $id->getSettings() : [];
+        $mergedSettings = array_merge($existingSettings, $settings ?? []);
+        if ($mergedSettings !== []) {
+            $config['settings'] = $mergedSettings;
+        }
+
         $field = Craft::$app->fields->createField($config);
 
         if (! Craft::$app->fields->saveField($field)) {
-            $errors = $field->getErrorSummary(true);
+            $errors = $field->getErrors();
+            $summary = [];
+            foreach ($errors as $attribute => $messages) {
+                foreach ($messages as $message) {
+                    $summary[] = $attribute.': '.$message;
+                }
+            }
 
             return new ToolOutput(
-                'Could not save field: '.implode('; ', $errors),
+                'Could not save field: '.implode('; ', $summary),
                 isError: true,
             );
         }
@@ -113,6 +135,7 @@ class UpsertField extends Tool
             'searchable' => $field->searchable,
             'translationMethod' => $field->translationMethod,
             'translationKeyFormat' => $field->translationKeyFormat,
+            'settings' => $field->getSettings(),
         ];
     }
 }

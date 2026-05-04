@@ -105,6 +105,54 @@ it('updates an existing field by id', function () {
     expect(Craft::$app->fields->getFieldByHandle('bodyText'))->not->toBeNull();
 });
 
+it('applies field-type settings on create', function () {
+    $output = $this->registry->execute('upsert_field', [
+        'name' => 'Body',
+        'handle' => 'body',
+        'type' => PlainText::class,
+        'settings' => ['charLimit' => 250, 'multiline' => true],
+    ]);
+
+    expect($output->isError)->toBeFalse($output->text);
+
+    $field = Craft::$app->fields->getFieldByHandle('body');
+    expect($field)->toBeInstanceOf(PlainText::class);
+    expect($field->charLimit)->toBe(250);
+    expect($field->multiline)->toBeTrue();
+});
+
+it('merges settings on update, preserving existing keys', function () {
+    $create = $this->registry->execute('upsert_field', [
+        'name' => 'Body',
+        'handle' => 'body',
+        'type' => PlainText::class,
+        'settings' => ['charLimit' => 250, 'multiline' => true],
+    ]);
+    expect($create->isError)->toBeFalse($create->text);
+
+    $update = $this->registry->execute('upsert_field', [
+        'id' => 'body',
+        'settings' => ['charLimit' => 500],
+    ]);
+    expect($update->isError)->toBeFalse($update->text);
+
+    $field = Craft::$app->fields->getFieldByHandle('body');
+    expect($field->charLimit)->toBe(500);
+    expect($field->multiline)->toBeTrue();
+});
+
+it('returns settings validation errors so they can be corrected', function () {
+    $output = $this->registry->execute('upsert_field', [
+        'name' => 'Body',
+        'handle' => 'body',
+        'type' => PlainText::class,
+        'settings' => ['charLimit' => -5, 'initialRows' => 0],
+    ]);
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('Could not save field');
+});
+
 it('rejects an unknown id', function () {
     $output = $this->registry->execute('upsert_field', [
         'id' => 'doesNotExist',

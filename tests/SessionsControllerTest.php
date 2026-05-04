@@ -5,6 +5,7 @@ use craft\elements\User;
 use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\agent\providers\ProviderResponse;
 use markhuot\craftai\records\MessageRecord;
+use markhuot\craftai\records\SessionRecord;
 
 function loginTestUser(): void {
     $user = new User();
@@ -27,6 +28,18 @@ beforeEach(function () {
 });
 
 it('renders the sessions index with grouped session rows', function () {
+    $sa = new SessionRecord();
+    $sa->id = 'aaaa-1';
+    $sa->active = false;
+    $sa->userId = 1;
+    $sa->save();
+
+    $sb = new SessionRecord();
+    $sb->id = 'bbbb-2';
+    $sb->active = false;
+    $sb->userId = 1;
+    $sb->save();
+
     $a = new MessageRecord();
     $a->sessionId = 'aaaa-1';
     $a->role = 'user';
@@ -45,11 +58,64 @@ it('renders the sessions index with grouped session rows', function () {
     $c->content = json_encode([['type' => 'text', 'text' => 'yo']]);
     $c->save();
 
-    $response = $this->get('admin/ai/sessions');
+    $response = test()->http('get', 'admin')
+        ->addHeader('Accept', 'application/json')
+        ->setBody(['action' => 'craft-ai/sessions/data'])
+        ->send();
 
     $response->assertOk();
-    $response->assertSee('aaaa-1');
-    $response->assertSee('bbbb-2');
+    $body = (string) $response->content;
+    expect($body)->toContain('aaaa-1');
+    expect($body)->toContain('bbbb-2');
+});
+
+it('hides sessions created by other users from the index', function () {
+    $suffix = bin2hex(random_bytes(4));
+    $elementsTable = Craft::$app->getDb()->getSchema()->getRawTableName('{{%elements}}');
+    Craft::$app->getDb()->createCommand()->insert($elementsTable, [
+        'type' => User::class,
+        'enabled' => true,
+        'archived' => false,
+        'dateCreated' => \craft\helpers\Db::prepareDateForDb(new \DateTime()),
+        'dateUpdated' => \craft\helpers\Db::prepareDateForDb(new \DateTime()),
+        'uid' => \craft\helpers\StringHelper::UUID(),
+    ])->execute();
+    $otherId = (int) Craft::$app->getDb()->getLastInsertID();
+    $usersTable = Craft::$app->getDb()->getSchema()->getRawTableName('{{%users}}');
+    Craft::$app->getDb()->createCommand()->insert($usersTable, [
+        'id' => $otherId,
+        'username' => 'other-'.$suffix,
+        'email' => 'other-'.$suffix.'@example.com',
+        'active' => true,
+        'pending' => false,
+        'locked' => false,
+        'suspended' => false,
+        'admin' => false,
+        'dateCreated' => \craft\helpers\Db::prepareDateForDb(new \DateTime()),
+        'dateUpdated' => \craft\helpers\Db::prepareDateForDb(new \DateTime()),
+    ])->execute();
+
+    $mine = new SessionRecord();
+    $mine->id = 'mine-1';
+    $mine->active = false;
+    $mine->userId = 1;
+    $mine->save();
+
+    $theirs = new SessionRecord();
+    $theirs->id = 'theirs-1';
+    $theirs->active = false;
+    $theirs->userId = $otherId;
+    $theirs->save();
+
+    $response = test()->http('get', 'admin')
+        ->addHeader('Accept', 'application/json')
+        ->setBody(['action' => 'craft-ai/sessions/data'])
+        ->send();
+
+    $response->assertOk();
+    $body = (string) $response->content;
+    expect($body)->toContain('mine-1');
+    expect($body)->not->toContain('theirs-1');
 });
 
 it('mints a new session id and redirects to its CP page', function () {

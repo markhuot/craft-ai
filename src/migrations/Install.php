@@ -29,11 +29,28 @@ class Install extends Migration
             'id' => $this->string(36)->notNull(),
             'active' => $this->boolean()->notNull()->defaultValue(false),
             'title' => $this->string()->null(),
+            'userId' => $this->integer()->null(),
             'dateCreated' => $this->dateTime()->notNull(),
             'dateUpdated' => $this->dateTime()->notNull(),
             'uid' => $this->uid(),
             'PRIMARY KEY([[id]])',
         ]);
+
+        $this->createIndex(
+            'idx_craftai_sessions_userId',
+            '{{%craftai_sessions}}',
+            ['userId'],
+        );
+
+        $this->addForeignKey(
+            'fk_craftai_sessions_userId',
+            '{{%craftai_sessions}}',
+            ['userId'],
+            '{{%users}}',
+            ['id'],
+            'SET NULL',
+            'CASCADE',
+        );
 
         return true;
     }

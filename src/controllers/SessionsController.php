@@ -16,11 +16,79 @@ class SessionsController extends Controller
 {
     public function actionIndex(): Response
     {
+        if (($setup = $this->renderSetupIfNeeded()) !== null) {
+            return $setup;
+        }
+
         return $this->renderTemplate('craft-ai/sessions/view', [
             'sessionId' => '',
             'sessionTitle' => null,
             'messages' => [],
             'initialSessions' => $this->collectSessionListPayload(),
+        ]);
+    }
+
+    public function actionInstallConfig(): Response
+    {
+        $this->requirePostRequest();
+
+        $destination = $this->configFilePath();
+
+        if (is_file($destination)) {
+            $this->setSuccessFlash(Craft::t('craft-ai', 'Config file already exists.'));
+
+            return $this->redirect(UrlHelper::cpUrl('ai/sessions'));
+        }
+
+        $source = dirname(__DIR__) . '/config.php';
+
+        if (! is_file($source)) {
+            throw new \RuntimeException("craft-ai: example config not found at {$source}.");
+        }
+
+        $configDir = dirname($destination);
+        if (! is_dir($configDir) && ! @mkdir($configDir, 0775, true) && ! is_dir($configDir)) {
+            throw new \RuntimeException("craft-ai: unable to create config directory {$configDir}.");
+        }
+
+        if (! @copy($source, $destination)) {
+            throw new \RuntimeException("craft-ai: unable to copy example config to {$destination}.");
+        }
+
+        $this->setSuccessFlash(Craft::t(
+            'craft-ai',
+            'Copied example config to {path}. Set "provider" (and "apiKey") then reload this page.',
+            ['path' => 'config/craft-ai.php'],
+        ));
+
+        return $this->redirect(UrlHelper::cpUrl('ai/sessions'));
+    }
+
+    private function configFilePath(): string
+    {
+        return Craft::$app->getPath()->getConfigPath() . DIRECTORY_SEPARATOR . 'craft-ai.php';
+    }
+
+    private function renderSetupIfNeeded(): ?Response
+    {
+        $configPath = $this->configFilePath();
+        $configExists = is_file($configPath);
+        $provider = null;
+
+        if ($configExists) {
+            /** @var array{provider?: ?string} $config */
+            $config = Craft::$app->getConfig()->getConfigFromFile('craft-ai');
+            $provider = $config['provider'] ?? null;
+        }
+
+        if ($configExists && is_string($provider) && $provider !== '') {
+            return null;
+        }
+
+        return $this->renderTemplate('craft-ai/sessions/setup', [
+            'configExists' => $configExists,
+            'configPath' => $configPath,
+            'installUrl' => UrlHelper::actionUrl('craft-ai/sessions/install-config'),
         ]);
     }
 
@@ -61,8 +129,22 @@ class SessionsController extends Controller
      */
     private function collectSessionRows(): array
     {
+        $userId = $this->currentUserId();
+
+        /** @var list<SessionRecord> $sessions */
+        $sessions = SessionRecord::find()
+            ->where(['userId' => $userId])
+            ->all();
+
+        $sessionsById = [];
+        foreach ($sessions as $session) {
+            $sessionsById[$session->id] = $session;
+        }
+
+        $ids = array_keys($sessionsById);
+
         /** @var array<string, array{messageCount: int, firstMessage: ?string, lastMessage: ?string}> $stats */
-        $stats = (new Query())
+        $stats = $ids === [] ? [] : (new Query())
             ->select([
                 'sessionId',
                 'messageCount' => 'COUNT(*)',
@@ -70,19 +152,10 @@ class SessionsController extends Controller
                 'lastMessage' => 'MAX([[dateCreated]])',
             ])
             ->from('{{%craftai_messages}}')
+            ->where(['sessionId' => $ids])
             ->groupBy('sessionId')
             ->indexBy('sessionId')
             ->all();
-
-        /** @var list<SessionRecord> $sessions */
-        $sessions = SessionRecord::find()->all();
-
-        $sessionsById = [];
-        foreach ($sessions as $session) {
-            $sessionsById[$session->id] = $session;
-        }
-
-        $ids = array_unique([...array_keys($sessionsById), ...array_keys($stats)]);
 
         $rows = [];
         foreach ($ids as $id) {
@@ -112,6 +185,7 @@ class SessionsController extends Controller
         $session = new SessionRecord();
         $session->id = $uuid;
         $session->active = false;
+        $session->userId = $this->currentUserId();
         $session->save();
 
         return $this->redirect(UrlHelper::cpUrl("ai/session/{$uuid}"));
@@ -119,7 +193,15 @@ class SessionsController extends Controller
 
     public function actionView(string $uuid): Response
     {
+        if (($setup = $this->renderSetupIfNeeded()) !== null) {
+            return $setup;
+        }
+
         $session = SessionRecord::findOne(['id' => $uuid]);
+
+        if ($session !== null && $session->userId !== null && $session->userId !== $this->currentUserId()) {
+            throw new \yii\web\NotFoundHttpException('Session not found.');
+        }
 
         /** @var list<MessageRecord> $records */
         $records = MessageRecord::find()
@@ -157,6 +239,12 @@ class SessionsController extends Controller
             throw new \yii\web\BadRequestHttpException('sessionId must be a non-empty string.');
         }
 
+        $session = SessionRecord::findOne(['id' => $sessionId]);
+
+        if ($session === null || ($session->userId !== null && $session->userId !== $this->currentUserId())) {
+            throw new \yii\web\NotFoundHttpException('Session not found.');
+        }
+
         MessageRecord::deleteAll(['sessionId' => $sessionId]);
         SessionRecord::deleteAll(['id' => $sessionId]);
 
@@ -184,12 +272,26 @@ class SessionsController extends Controller
         }
 
         $identity = Craft::$app->getUser()->getIdentity();
+        $userId = $identity !== null ? (int) $identity->id : null;
+
+        $session = SessionRecord::findOne(['id' => $sessionId]);
+        if ($session !== null && $session->userId !== null && $session->userId !== $userId) {
+            throw new \yii\web\NotFoundHttpException('Session not found.');
+        }
+
         Craft::$app->getQueue()->push(new AgentJob([
             'sessionId' => $sessionId,
             'userMessage' => $message,
-            'userId' => $identity !== null ? (int) $identity->id : null,
+            'userId' => $userId,
         ]));
 
         return $this->asJson(['queued' => true]);
+    }
+
+    private function currentUserId(): ?int
+    {
+        $identity = Craft::$app->getUser()->getIdentity();
+
+        return $identity !== null ? (int) $identity->id : null;
     }
 }

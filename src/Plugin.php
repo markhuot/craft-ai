@@ -112,6 +112,7 @@ class Plugin extends BasePlugin
             static function (RegisterUrlRulesEvent $event): void {
                 $event->rules['ai/sessions'] = 'craft-ai/sessions/index';
                 $event->rules['ai/sessions/data'] = 'craft-ai/sessions/data';
+                $event->rules['POST ai/sessions/install-config'] = 'craft-ai/sessions/install-config';
                 $event->rules['POST ai/sessions/new'] = 'craft-ai/sessions/new';
                 $event->rules['POST ai/sessions/delete'] = 'craft-ai/sessions/delete';
                 $event->rules['ai/session/<uuid:[A-Za-z0-9\-]+>'] = 'craft-ai/sessions/view';

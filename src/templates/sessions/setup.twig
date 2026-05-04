@@ -1,0 +1,32 @@
+{% extends "_layouts/cp.twig" %}
+
+{% set title = "AI Sessions"|t('craft-ai') %}
+{% set fullPageForm = false %}
+
+{% block content %}
+    <div class="readable">
+        {% if not configExists %}
+            <h2>{{ "Finish setting up Craft AI"|t('craft-ai') }}</h2>
+            <p>{{ "No {path} file was found. Copy the example config from the plugin into your project to get started."|t('craft-ai', {path: '<code>config/craft-ai.php</code>'})|raw }}</p>
+
+            <form method="post" accept-charset="UTF-8">
+                {{ csrfInput() }}
+                <input type="hidden" name="action" value="craft-ai/sessions/install-config">
+                <input type="hidden" name="redirect" value="{{ 'ai/sessions'|hash }}">
+                <button type="submit" class="btn submit">
+                    {{ "Copy example config to config/craft-ai.php"|t('craft-ai') }}
+                </button>
+            </form>
+        {% else %}
+            <h2>{{ "Almost there"|t('craft-ai') }}</h2>
+            <p>{{ "{path} exists, but no {key} is set. Open the file and set {key} to {anthropic} or {openai} (and provide an {apiKey})."|t('craft-ai', {
+                path: '<code>config/craft-ai.php</code>',
+                key: '<code>provider</code>',
+                anthropic: '<code>\'anthropic\'</code>',
+                openai: '<code>\'openai\'</code>',
+                apiKey: '<code>apiKey</code>',
+            })|raw }}</p>
+            <p class="light">{{ "Path: {path}"|t('craft-ai', {path: configPath}) }}</p>
+        {% endif %}
+    </div>
+{% endblock %}

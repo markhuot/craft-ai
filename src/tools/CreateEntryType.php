@@ -3,6 +3,7 @@
 namespace markhuot\craftai\tools;
 
 use Craft;
+use craft\fieldlayoutelements\entries\EntryTitleField;
 use craft\models\EntryType;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
@@ -63,6 +64,20 @@ class CreateEntryType extends Tool
 
         if ($titleFormat !== null) {
             $entryType->titleFormat = $titleFormat;
+        }
+
+        $fieldLayout = $entryType->getFieldLayout();
+        if ($hasTitleField) {
+            if (! $fieldLayout->isFieldIncluded('title')) {
+                $fieldLayout->prependElements([new EntryTitleField()]);
+            }
+        } else {
+            foreach ($fieldLayout->getTabs() as $tab) {
+                $tab->setElements(array_filter(
+                    $tab->getElements(),
+                    fn ($element) => ! $element instanceof EntryTitleField,
+                ));
+            }
         }
 
         if (! Craft::$app->entries->saveEntryType($entryType)) {

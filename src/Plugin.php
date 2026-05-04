@@ -13,6 +13,7 @@ use markhuot\craftai\agent\providers\OpenAiProvider;
 use markhuot\craftai\tools\DeleteDrafts;
 use markhuot\craftai\tools\DeleteEntries;
 use markhuot\craftai\tools\DeleteEntryTypes;
+use markhuot\craftai\tools\DeleteFields;
 use markhuot\craftai\tools\DeleteSections;
 use markhuot\craftai\tools\GetDrafts;
 use markhuot\craftai\tools\GetEntries;
@@ -23,9 +24,9 @@ use markhuot\craftai\tools\GetSections;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertDraft;
 use markhuot\craftai\tools\UpsertEntry;
-use markhuot\craftai\tools\CreateField;
 use markhuot\craftai\tools\UpdateFieldLayout;
 use markhuot\craftai\tools\UpsertEntryType;
+use markhuot\craftai\tools\UpsertField;
 use markhuot\craftai\tools\UpsertSection;
 use yii\base\Event;
 
@@ -63,12 +64,13 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(UpsertSection::class);
         $this->toolRegistry->register(GetEntryTypes::class);
         $this->toolRegistry->register(UpsertEntryType::class);
-        $this->toolRegistry->register(CreateField::class);
+        $this->toolRegistry->register(UpsertField::class);
         $this->toolRegistry->register(UpdateFieldLayout::class);
         $this->toolRegistry->register(DeleteEntries::class);
         $this->toolRegistry->register(DeleteDrafts::class);
         $this->toolRegistry->register(DeleteSections::class);
         $this->toolRegistry->register(DeleteEntryTypes::class);
+        $this->toolRegistry->register(DeleteFields::class);
 
         $this->registerContainerBindings();
 

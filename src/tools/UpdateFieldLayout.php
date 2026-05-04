@@ -22,7 +22,7 @@ use markhuot\craftai\validators\ExistingField;
  * at the `start` / `end` of a tab. When `tab` is omitted, the first tab is
  * used; when `tab` names a tab that doesn't exist, a new tab is appended.
  *
- * Use CreateField first to make a field, then call this tool to attach it.
+ * Use UpsertField first to make a field, then call this tool to attach it.
  */
 class UpdateFieldLayout extends Tool
 {

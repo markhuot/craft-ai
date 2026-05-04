@@ -159,11 +159,11 @@ class Plugin extends BasePlugin
     }
 
     /**
-     * @return array{provider: ?string, apiKey: ?string, model: ?string, smallModel: ?string, system: ?string, baseUrl: ?string, mcpUserId: int, mcpSessionCache: \Closure|string|null}
+     * @return array{provider: ?string, apiKey: ?string, model: ?string, smallModel: ?string, system: ?string, baseUrl: ?string, mcpSessionCache: \Closure|string|null}
      */
     public function getSettingsArray(): array
     {
-        /** @var array{provider?: ?string, apiKey?: ?string, model?: ?string, smallModel?: ?string, system?: ?string, baseUrl?: ?string, mcpUserId?: int, mcpSessionCache?: \Closure|string|null} $config */
+        /** @var array{provider?: ?string, apiKey?: ?string, model?: ?string, smallModel?: ?string, system?: ?string, baseUrl?: ?string, mcpSessionCache?: \Closure|string|null} $config */
         $config = Craft::$app->getConfig()->getConfigFromFile('craft-ai');
 
         return [
@@ -173,7 +173,6 @@ class Plugin extends BasePlugin
             'smallModel' => $config['smallModel'] ?? null,
             'system' => $config['system'] ?? null,
             'baseUrl' => $config['baseUrl'] ?? null,
-            'mcpUserId' => (int) ($config['mcpUserId'] ?? 1),
             'mcpSessionCache' => $config['mcpSessionCache'] ?? null,
         ];
     }

@@ -31,8 +31,4 @@ return [
     // OpenAI provider at OpenAI-compatible endpoints (Azure OpenAI, Groq, Together,
     // OpenRouter, Ollama, LM Studio, etc.). Example: 'https://api.groq.com/openai'
     'baseUrl' => null,
-
-    // MCP HTTP endpoint: hardcoded user id used to authenticate inbound MCP
-    // requests. Will be replaced with OAuth in a future iteration.
-    'mcpUserId' => 1,
 ];

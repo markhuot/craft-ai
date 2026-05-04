@@ -1,5 +1,9 @@
 <?php
 
+use Craft;
+use craft\elements\User;
+use markhuot\craftai\permissions\ToolPermissionDeniedException;
+use markhuot\craftai\permissions\ToolPermissions;
 use markhuot\craftai\tools\GetHealth;
 use markhuot\craftai\tools\Tool;
 use markhuot\craftai\tools\ToolOutput;
@@ -78,6 +82,29 @@ it('omits cp-only tools when descriptors are requested without them', function (
     expect($all)->toHaveCount(2);
     expect($public)->toHaveCount(1);
     expect($public[0]->name)->toBe('get_health');
+});
+
+it('returns an error ToolOutput when no user is logged in', function () {
+    $registry = new ToolRegistry();
+    $registry->register(GetHealth::class);
+
+    Craft::$app->getUser()->setIdentity(null);
+
+    $output = $registry->execute('get_health', []);
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('do not have permission');
+    expect($output->text)->toContain(ToolPermissions::name('get_health'));
+});
+
+it('throws a permission exception from assertPermission for a guest', function () {
+    $registry = new ToolRegistry();
+    $registry->register(GetHealth::class);
+
+    Craft::$app->getUser()->setIdentity(null);
+
+    expect(fn () => $registry->assertPermission('get_health'))
+        ->toThrow(ToolPermissionDeniedException::class);
 });
 
 it('catches exceptions thrown by tools and returns an error ToolOutput', function () {

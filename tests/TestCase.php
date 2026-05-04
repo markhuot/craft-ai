@@ -3,6 +3,7 @@
 namespace Tests;
 
 use Craft;
+use craft\elements\User;
 use markhuot\craftai\migrations\Install;
 use markhuot\craftpest\test\RefreshesDatabase;
 use markhuot\craftpest\test\TestCase as PestTestCase;
@@ -31,5 +32,13 @@ class TestCase extends PestTestCase
         }
 
         parent::setUp();
+
+        // Tool execution now goes through Craft permission checks. Default to
+        // an admin identity so existing tests pass; tests that need to verify
+        // permission denial can override the identity within the test body.
+        $admin = new User();
+        $admin->id = 1;
+        $admin->admin = true;
+        Craft::$app->getUser()->setIdentity($admin);
     }
 }

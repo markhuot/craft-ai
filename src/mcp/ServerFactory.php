@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\mcp;
 
+use Mcp\Capability\Registry\ReferenceHandler;
 use Mcp\Server;
 use Mcp\Server\Session\Psr16SessionStore;
 use markhuot\craftai\Plugin;
@@ -24,9 +25,13 @@ class ServerFactory
             ->setServerInfo('craft-ai', '1.0.0', 'Craft CMS AI plugin')
             ->setSession(new Psr16SessionStore(
                 cache: new Psr16YiiCache(Plugin::getInstance()->getMcpSessionCache()),
+            ))
+            ->setReferenceHandler(new PermissionedReferenceHandler(
+                new ReferenceHandler(),
+                $this->registry,
             ));
 
-        foreach ($this->registry->descriptors(includeCpOnly: false) as $descriptor) {
+        foreach ($this->registry->descriptors(includeCpOnly: false, onlyAllowed: true) as $descriptor) {
             $this->registerTool($builder, $descriptor);
         }
 

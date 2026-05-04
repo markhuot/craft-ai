@@ -183,9 +183,11 @@ class SessionsController extends Controller
             return $this->asJson(['queued' => false]);
         }
 
+        $identity = Craft::$app->getUser()->getIdentity();
         Craft::$app->getQueue()->push(new AgentJob([
             'sessionId' => $sessionId,
             'userMessage' => $message,
+            'userId' => $identity !== null ? (int) $identity->id : null,
         ]));
 
         return $this->asJson(['queued' => true]);

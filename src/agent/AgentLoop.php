@@ -18,7 +18,7 @@ class AgentLoop
         $this->saveMessage($sessionId, 'user', [['type' => 'text', 'text' => $userMessage]]);
 
         $messages = $this->loadMessages($sessionId);
-        $tools = $this->registry->descriptors();
+        $tools = $this->registry->descriptors(onlyAllowed: true);
 
         while (true) {
             $response = $this->provider->createMessage($messages, $tools);

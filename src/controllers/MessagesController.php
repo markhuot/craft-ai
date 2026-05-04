@@ -52,9 +52,11 @@ class MessagesController extends Controller
         $async = (bool) $this->request->getBodyParam('async', false);
 
         if ($async) {
+            $identity = Craft::$app->getUser()->getIdentity();
             Craft::$app->getQueue()->push(new AgentJob([
                 'sessionId' => $sessionId,
                 'userMessage' => $userMessage,
+                'userId' => $identity !== null ? (int) $identity->id : null,
             ]));
 
             return $this->asJson(['queued' => true, 'sessionId' => $sessionId]);

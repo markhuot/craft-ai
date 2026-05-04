@@ -5,8 +5,11 @@ namespace markhuot\craftai;
 use Craft;
 use craft\base\Plugin as BasePlugin;
 use craft\events\RegisterUrlRulesEvent;
+use craft\events\RegisterUserPermissionsEvent;
+use craft\services\UserPermissions;
 use craft\web\UrlManager;
 use markhuot\craftai\agent\AgentLoop;
+use markhuot\craftai\permissions\ToolPermissions;
 use markhuot\craftai\agent\providers\AnthropicProvider;
 use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\agent\providers\OpenAiProvider;
@@ -83,6 +86,25 @@ class Plugin extends BasePlugin
         if (Craft::$app->getRequest()->getIsConsoleRequest()) {
             $this->controllerNamespace = 'markhuot\\craftai\\console\\controllers';
         }
+
+        Event::on(
+            UserPermissions::class,
+            UserPermissions::EVENT_REGISTER_PERMISSIONS,
+            function (RegisterUserPermissionsEvent $event): void {
+                $permissions = [];
+                foreach ($this->toolRegistry->descriptors() as $descriptor) {
+                    $permissions[ToolPermissions::nameForDescriptor($descriptor)] = [
+                        'label' => Craft::t('craft-ai', 'Use tool: {name}', ['name' => $descriptor->name]),
+                        'info' => $descriptor->description !== '' ? $descriptor->description : null,
+                    ];
+                }
+
+                $event->permissions[] = [
+                    'heading' => Craft::t('craft-ai', 'Craft AI'),
+                    'permissions' => $permissions,
+                ];
+            },
+        );
 
         Event::on(
             UrlManager::class,

@@ -3,6 +3,7 @@
 namespace markhuot\craftai\queue;
 
 use Craft;
+use craft\elements\User;
 use craft\queue\BaseJob;
 use markhuot\craftai\Plugin;
 use markhuot\craftai\agent\AgentLoop;
@@ -15,6 +16,9 @@ class AgentJob extends BaseJob
 
     public string $userMessage = '';
 
+    /** Originating Craft user; restored on the queue worker so tool permission checks see the right identity. */
+    public ?int $userId = null;
+
     /**
      * @param \yii\queue\Queue $queue
      */
@@ -22,6 +26,13 @@ class AgentJob extends BaseJob
     {
         /** @var AgentLoop $loop */
         $loop = Craft::$container->get(AgentLoop::class);
+
+        if ($this->userId !== null) {
+            $user = User::find()->id($this->userId)->one();
+            if ($user instanceof User) {
+                Craft::$app->getUser()->setIdentity($user);
+            }
+        }
 
         $this->setActive(true);
         $this->ensureTitle();

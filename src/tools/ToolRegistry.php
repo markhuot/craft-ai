@@ -13,23 +13,32 @@ class ToolRegistry
     /** @var array<string, class-string<Tool>> */
     private array $tools = [];
 
+    /** @var array<string, bool> */
+    private array $cpOnly = [];
+
     /**
      * @param class-string<Tool> $toolClass
      */
-    public function register(string $toolClass): void
+    public function register(string $toolClass, bool $cpOnly = false): void
     {
         $descriptor = new ToolDescriptor($toolClass);
         $this->tools[$descriptor->name] = $toolClass;
+        $this->cpOnly[$descriptor->name] = $cpOnly;
     }
 
     /**
      * @return list<ToolDescriptor>
      */
-    public function descriptors(): array
+    public function descriptors(bool $includeCpOnly = true): array
     {
+        $names = array_keys($this->tools);
+        if (! $includeCpOnly) {
+            $names = array_filter($names, fn (string $n): bool => ! ($this->cpOnly[$n] ?? false));
+        }
+
         return array_values(array_map(
-            static fn (string $class): ToolDescriptor => new ToolDescriptor($class),
-            $this->tools,
+            fn (string $name): ToolDescriptor => new ToolDescriptor($this->tools[$name]),
+            $names,
         ));
     }
 

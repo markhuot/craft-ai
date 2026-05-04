@@ -67,6 +67,19 @@ it('returns an error ToolOutput when the tool is unknown', function () {
     expect($output->text)->toContain('Unknown tool');
 });
 
+it('omits cp-only tools when descriptors are requested without them', function () {
+    $registry = new ToolRegistry();
+    $registry->register(GetHealth::class);
+    $registry->register(ToolRegistryEchoFixture::class, cpOnly: true);
+
+    $all = $registry->descriptors();
+    $public = $registry->descriptors(includeCpOnly: false);
+
+    expect($all)->toHaveCount(2);
+    expect($public)->toHaveCount(1);
+    expect($public[0]->name)->toBe('get_health');
+});
+
 it('catches exceptions thrown by tools and returns an error ToolOutput', function () {
     $registry = new ToolRegistry();
     $registry->register(ToolRegistryThrowingFixture::class);

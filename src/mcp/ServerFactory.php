@@ -26,7 +26,7 @@ class ServerFactory
                 cache: new Psr16YiiCache(Plugin::getInstance()->getMcpSessionCache()),
             ));
 
-        foreach ($this->registry->descriptors() as $descriptor) {
+        foreach ($this->registry->descriptors(includeCpOnly: false) as $descriptor) {
             $this->registerTool($builder, $descriptor);
         }
 

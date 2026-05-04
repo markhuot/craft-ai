@@ -15,6 +15,7 @@ use markhuot\craftai\tools\DeleteEntries;
 use markhuot\craftai\tools\DeleteEntryTypes;
 use markhuot\craftai\tools\DeleteFields;
 use markhuot\craftai\tools\DeleteSections;
+use markhuot\craftai\tools\FetchWebpage;
 use markhuot\craftai\tools\GetDrafts;
 use markhuot\craftai\tools\GetEntries;
 use markhuot\craftai\tools\GetEntry;
@@ -71,6 +72,7 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(DeleteSections::class);
         $this->toolRegistry->register(DeleteEntryTypes::class);
         $this->toolRegistry->register(DeleteFields::class);
+        $this->toolRegistry->register(FetchWebpage::class, cpOnly: true);
 
         $this->registerContainerBindings();
 

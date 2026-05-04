@@ -25,6 +25,7 @@ use markhuot\craftai\tools\GetDrafts;
 use markhuot\craftai\tools\GetEntries;
 use markhuot\craftai\tools\GetEntry;
 use markhuot\craftai\tools\GetEntryTypes;
+use markhuot\craftai\tools\GetFields;
 use markhuot\craftai\tools\GetHealth;
 use markhuot\craftai\tools\GetSections;
 use markhuot\craftai\tools\ToolRegistry;
@@ -72,6 +73,7 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(UpsertSection::class);
         $this->toolRegistry->register(GetEntryTypes::class);
         $this->toolRegistry->register(UpsertEntryType::class);
+        $this->toolRegistry->register(GetFields::class);
         $this->toolRegistry->register(UpsertField::class);
         $this->toolRegistry->register(UpdateFieldLayout::class);
         $this->toolRegistry->register(UpsertAsset::class);

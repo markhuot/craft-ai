@@ -62,7 +62,7 @@ class UpsertEntry extends Tool
         #[Validate(ExistingSite::class)]
         #[Bind(SiteBinder::class)]
         Site|string|int|null $site = null,
-        #[Description('Custom field values keyed by field handle (e.g. {"body": "Hello", "summary": "..."})')]
+        #[Description('Custom field values as a flat object keyed by field handle, e.g. {"body": "Hello", "summary": "..."}. Do NOT wrap in an array or use numeric keys like {"0": {"body": "Hello"}} — keys must be the field handles themselves.')]
         ?array $fields = null,
     ): array|ToolOutput {
         $isUpdate = $id instanceof Entry;

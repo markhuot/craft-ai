@@ -10,8 +10,6 @@ use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\agent\providers\AnthropicProvider;
 use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\agent\providers\OpenAiProvider;
-use markhuot\craftai\tools\CreateEntryType;
-use markhuot\craftai\tools\CreateSection;
 use markhuot\craftai\tools\GetDrafts;
 use markhuot\craftai\tools\GetEntries;
 use markhuot\craftai\tools\GetEntry;
@@ -21,11 +19,13 @@ use markhuot\craftai\tools\GetSections;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertDraft;
 use markhuot\craftai\tools\UpsertEntry;
+use markhuot\craftai\tools\UpsertEntryType;
+use markhuot\craftai\tools\UpsertSection;
 use yii\base\Event;
 
 class Plugin extends BasePlugin
 {
-    public string $schemaVersion = '1.3.0';
+    public string $schemaVersion = '1.4.0';
 
     public bool $hasCpSection = true;
 
@@ -54,9 +54,9 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(GetDrafts::class);
         $this->toolRegistry->register(UpsertDraft::class);
         $this->toolRegistry->register(GetSections::class);
-        $this->toolRegistry->register(CreateSection::class);
+        $this->toolRegistry->register(UpsertSection::class);
         $this->toolRegistry->register(GetEntryTypes::class);
-        $this->toolRegistry->register(CreateEntryType::class);
+        $this->toolRegistry->register(UpsertEntryType::class);
 
         $this->registerContainerBindings();
 
@@ -80,10 +80,19 @@ class Plugin extends BasePlugin
             UrlManager::class,
             UrlManager::EVENT_REGISTER_SITE_URL_RULES,
             static function (RegisterUrlRulesEvent $event): void {
-                $event->rules['POST craft-ai/mcp'] = 'craft-ai/mcp/handle';
-                $event->rules['GET craft-ai/mcp'] = 'craft-ai/mcp/handle';
-                $event->rules['DELETE craft-ai/mcp'] = 'craft-ai/mcp/handle';
-                $event->rules['OPTIONS craft-ai/mcp'] = 'craft-ai/mcp/handle';
+                $event->rules['POST mcp'] = 'craft-ai/mcp/handle';
+                $event->rules['GET mcp'] = 'craft-ai/mcp/handle';
+                $event->rules['DELETE mcp'] = 'craft-ai/mcp/handle';
+                $event->rules['OPTIONS mcp'] = 'craft-ai/mcp/handle';
+
+                $event->rules['GET .well-known/oauth-authorization-server'] = 'craft-ai/oauth/authorization-server-metadata';
+                $event->rules['GET .well-known/oauth-authorization-server/<resourcePath:.*>'] = 'craft-ai/oauth/authorization-server-metadata';
+                $event->rules['GET .well-known/oauth-protected-resource'] = 'craft-ai/oauth/protected-resource-metadata';
+                $event->rules['GET .well-known/oauth-protected-resource/<resourcePath:.*>'] = 'craft-ai/oauth/protected-resource-metadata';
+                $event->rules['POST craft-ai/oauth/register'] = 'craft-ai/oauth/register';
+                $event->rules['GET craft-ai/oauth/authorize'] = 'craft-ai/oauth/authorize';
+                $event->rules['POST craft-ai/oauth/authorize'] = 'craft-ai/oauth/approve';
+                $event->rules['POST craft-ai/oauth/token'] = 'craft-ai/oauth/token';
             },
         );
     }

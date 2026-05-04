@@ -10,10 +10,14 @@ namespace markhuot\craftai\binders;
 class EntryTypes implements Binder
 {
     /**
-     * @return list<\craft\models\EntryType>
+     * @return list<\craft\models\EntryType>|null
      */
-    public function bind(mixed $value, array $arguments): array
+    public function bind(mixed $value, array $arguments): ?array
     {
+        if ($value === null) {
+            return null;
+        }
+
         if (! is_array($value)) {
             return [];
         }

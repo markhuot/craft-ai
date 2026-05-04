@@ -9,6 +9,7 @@ use yii\validators\Validator;
  * Validates that every value in a list identifies an existing Craft entry
  * type, by handle (string) or ID (integer / numeric string). Empty lists are
  * rejected so callers cannot save a section without at least one entry type.
+ * Null is allowed so callers can omit the parameter on update.
  */
 class ExistingEntryTypes extends Validator implements ValidatesUnboundParameters
 {
@@ -17,6 +18,10 @@ class ExistingEntryTypes extends Validator implements ValidatesUnboundParameters
     public function validateAttribute($model, $attribute): void
     {
         $value = $model->{$attribute};
+
+        if ($value === null) {
+            return;
+        }
 
         if (! is_array($value) || $value === []) {
             $this->addError($model, $attribute, '{attribute} must be a non-empty list of entry type handles or IDs.');

@@ -34,7 +34,14 @@ class GetEntryTypes extends Tool
         }
 
         return array_values(array_map(
-            static fn (EntryType $entryType): array => $entryType->toArray(),
+            static function (EntryType $entryType): array {
+                $row = $entryType->toArray();
+                $layout = UpdateFieldLayout::summarizeLayout($entryType);
+                $row['fieldLayoutId'] = $layout['fieldLayoutId'];
+                $row['tabs'] = $layout['tabs'];
+
+                return $row;
+            },
             $entryTypes,
         ));
     }

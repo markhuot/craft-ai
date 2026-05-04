@@ -24,6 +24,7 @@ use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertDraft;
 use markhuot\craftai\tools\UpsertEntry;
 use markhuot\craftai\tools\CreateField;
+use markhuot\craftai\tools\UpdateFieldLayout;
 use markhuot\craftai\tools\UpsertEntryType;
 use markhuot\craftai\tools\UpsertSection;
 use yii\base\Event;
@@ -63,6 +64,7 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(GetEntryTypes::class);
         $this->toolRegistry->register(UpsertEntryType::class);
         $this->toolRegistry->register(CreateField::class);
+        $this->toolRegistry->register(UpdateFieldLayout::class);
         $this->toolRegistry->register(DeleteEntries::class);
         $this->toolRegistry->register(DeleteDrafts::class);
         $this->toolRegistry->register(DeleteSections::class);

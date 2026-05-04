@@ -75,8 +75,34 @@ it('updates an existing draft by draftId', function () {
     expect($draft->title)->toBe('Updated Draft');
 });
 
-it('requires entry when no draftId is given', function () {
+it('requires entry or section when no draftId is given', function () {
     $result = $this->registry->execute('upsert_draft', ['title' => 'Orphan']);
+
+    expect($result->isError)->toBeTrue();
+});
+
+it('creates a fresh draft with no canonical entry from a section', function () {
+    $output = $this->registry->execute('upsert_draft', [
+        'section' => 'posts',
+        'title' => 'Fresh Draft',
+        'name' => 'Initial pass',
+    ]);
+
+    expect($output->isError)->toBeFalse();
+    $draft = decodeDraft($output);
+    expect($draft['title'])->toBe('Fresh Draft');
+    expect($draft['draftId'])->not->toBeNull();
+
+    $reloaded = Entry::find()->draftId($draft['draftId'])->status(null)->one();
+    expect($reloaded)->not->toBeNull();
+    expect($reloaded->draftName)->toBe('Initial pass');
+});
+
+it('errors when section is unknown', function () {
+    $result = $this->registry->execute('upsert_draft', [
+        'section' => 'does-not-exist',
+        'title' => 'Nope',
+    ]);
 
     expect($result->isError)->toBeTrue();
 });

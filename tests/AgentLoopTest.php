@@ -47,7 +47,9 @@ it('persists the user message and a single assistant response when no tools are 
         new ProviderResponse('msg_1', [['type' => 'text', 'text' => 'Hello!']], 'end_turn'),
     ]);
 
-    (new AgentLoop($provider, $this->registry))->run('session-A', 'Hi there');
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->appendUserMessage('session-A', 'Hi there');
+    $loop->run('session-A');
 
     $records = MessageRecord::find()
         ->where(['sessionId' => 'session-A'])
@@ -70,7 +72,9 @@ it('executes tool_use blocks and persists tool_result before the next turn', fun
         new ProviderResponse('msg_2', [['type' => 'text', 'text' => 'All systems good.']], 'end_turn'),
     ]);
 
-    (new AgentLoop($provider, $this->registry))->run('session-B', 'How are things?');
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->appendUserMessage('session-B', 'How are things?');
+    $loop->run('session-B');
 
     $records = MessageRecord::find()
         ->where(['sessionId' => 'session-B'])
@@ -106,7 +110,9 @@ it('persists the full provider payload on assistant messages but not user messag
         ),
     ]);
 
-    (new AgentLoop($provider, $this->registry))->run('session-raw', 'hello');
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->appendUserMessage('session-raw', 'hello');
+    $loop->run('session-raw');
 
     $records = MessageRecord::find()
         ->where(['sessionId' => 'session-raw'])
@@ -127,7 +133,9 @@ it('passes the tool descriptor catalog from the registry into every provider cal
         new ProviderResponse('msg_1', [['type' => 'text', 'text' => 'Done.']], 'end_turn'),
     ]);
 
-    (new AgentLoop($provider, $this->registry))->run('session-C', 'hi');
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->appendUserMessage('session-C', 'hi');
+    $loop->run('session-C');
 
     expect($provider->calls[0]['tools'])->toHaveCount(1);
     expect($provider->calls[0]['tools'][0])->toBeInstanceOf(ToolDescriptor::class);

@@ -13,9 +13,14 @@ it('runs the agent loop with the configured LlmProvider when executed', function
         }
     });
 
+    $userMessage = new MessageRecord();
+    $userMessage->sessionId = 'job-1';
+    $userMessage->role = 'user';
+    $userMessage->content = json_encode([['type' => 'text', 'text' => 'ping']]);
+    $userMessage->save();
+
     $job = new AgentJob([
         'sessionId' => 'job-1',
-        'userMessage' => 'ping',
     ]);
 
     $job->execute(Craft::$app->getQueue());

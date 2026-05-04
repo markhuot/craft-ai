@@ -14,8 +14,6 @@ class AgentJob extends BaseJob
 {
     public string $sessionId = '';
 
-    public string $userMessage = '';
-
     /** Originating Craft user; restored on the queue worker so tool permission checks see the right identity. */
     public ?int $userId = null;
 
@@ -38,7 +36,7 @@ class AgentJob extends BaseJob
         $this->ensureTitle();
 
         try {
-            $loop->run($this->sessionId, $this->userMessage);
+            $loop->run($this->sessionId);
         } catch (\Throwable $e) {
             $record = new MessageRecord();
             $record->sessionId = $this->sessionId;
@@ -63,12 +61,18 @@ class AgentJob extends BaseJob
             return;
         }
 
+        $firstUserMessage = $this->firstUserMessageText();
+
+        if ($firstUserMessage === null) {
+            return;
+        }
+
         try {
             $provider = Plugin::getInstance()->getSmallModelProvider();
             $response = $provider->createMessage(
                 messages: [[
                     'role' => 'user',
-                    'content' => "Summarize the following user request as a short conversation title of 5 to 10 words. Respond with only the title text — no quotes, no punctuation at the end, no preamble.\n\nUser request:\n".$this->userMessage,
+                    'content' => "Summarize the following user request as a short conversation title of 5 to 10 words. Respond with only the title text — no quotes, no punctuation at the end, no preamble.\n\nUser request:\n".$firstUserMessage,
                 ]],
             );
 
@@ -97,6 +101,36 @@ class AgentJob extends BaseJob
         }
     }
 
+    private function firstUserMessageText(): ?string
+    {
+        $record = MessageRecord::find()
+            ->where(['sessionId' => $this->sessionId, 'role' => 'user'])
+            ->orderBy(['id' => SORT_ASC])
+            ->one();
+
+        if (! $record instanceof MessageRecord) {
+            return null;
+        }
+
+        try {
+            /** @var list<array<string, mixed>> $blocks */
+            $blocks = json_decode($record->content, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $text = '';
+        foreach ($blocks as $block) {
+            if (($block['type'] ?? '') === 'text' && is_string($block['text'] ?? null)) {
+                $text .= $block['text'];
+            }
+        }
+
+        $text = trim($text);
+
+        return $text === '' ? null : $text;
+    }
+
     private function setActive(bool $active): void
     {
         $session = SessionRecord::findOne(['id' => $this->sessionId]);
@@ -104,6 +138,7 @@ class AgentJob extends BaseJob
         if ($session === null) {
             $session = new SessionRecord();
             $session->id = $this->sessionId;
+            $session->userId = $this->userId;
         }
 
         $session->active = $active;

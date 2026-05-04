@@ -51,20 +51,21 @@ class MessagesController extends Controller
         }
         $async = (bool) $this->request->getBodyParam('async', false);
 
+        /** @var AgentLoop $loop */
+        $loop = Craft::$container->get(AgentLoop::class);
+        $loop->appendUserMessage($sessionId, $userMessage);
+
         if ($async) {
             $identity = Craft::$app->getUser()->getIdentity();
             Craft::$app->getQueue()->push(new AgentJob([
                 'sessionId' => $sessionId,
-                'userMessage' => $userMessage,
                 'userId' => $identity !== null ? (int) $identity->id : null,
             ]));
 
             return $this->asJson(['queued' => true, 'sessionId' => $sessionId]);
         }
 
-        /** @var AgentLoop $loop */
-        $loop = Craft::$container->get(AgentLoop::class);
-        $loop->run($sessionId, $userMessage);
+        $loop->run($sessionId);
 
         return $this->asJson(['ok' => true, 'sessionId' => $sessionId]);
     }

@@ -279,9 +279,12 @@ class SessionsController extends Controller
             throw new \yii\web\NotFoundHttpException('Session not found.');
         }
 
+        /** @var \markhuot\craftai\agent\AgentLoop $loop */
+        $loop = Craft::$container->get(\markhuot\craftai\agent\AgentLoop::class);
+        $loop->appendUserMessage($sessionId, $message);
+
         Craft::$app->getQueue()->push(new AgentJob([
             'sessionId' => $sessionId,
-            'userMessage' => $message,
             'userId' => $userId,
         ]));
 

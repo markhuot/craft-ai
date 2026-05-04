@@ -13,10 +13,17 @@ class AgentLoop
         private readonly ToolRegistry $registry,
     ) {}
 
-    public function run(string $sessionId, string $userMessage): void
+    /**
+     * Persist a user message so the CP transcript reflects it immediately,
+     * before the (possibly queued) agent loop picks it up.
+     */
+    public function appendUserMessage(string $sessionId, string $userMessage): void
     {
         $this->saveMessage($sessionId, 'user', [['type' => 'text', 'text' => $userMessage]]);
+    }
 
+    public function run(string $sessionId): void
+    {
         $messages = $this->loadMessages($sessionId);
         $tools = $this->registry->descriptors(onlyAllowed: true);
 

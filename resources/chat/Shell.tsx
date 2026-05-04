@@ -36,6 +36,16 @@ export function Shell({ bootstrap, pollIntervalMs = 10000 }: ShellProps) {
     return () => clearInterval(id);
   }, [fetchSessions, pollIntervalMs]);
 
+  if (sessions.length === 0 && !bootstrap.sessionId) {
+    return (
+      <EmptyState
+        newSessionUrl={bootstrap.newSessionUrl}
+        csrfTokenName={bootstrap.csrfTokenName}
+        csrfTokenValue={bootstrap.csrfTokenValue}
+      />
+    );
+  }
+
   return (
     <div className="ai:flex ai:gap-4 ai:items-stretch">
       <SessionsSidebar
@@ -57,6 +67,33 @@ export function Shell({ bootstrap, pollIntervalMs = 10000 }: ShellProps) {
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+interface EmptyStateProps {
+  newSessionUrl: string;
+  csrfTokenName: string;
+  csrfTokenValue: string;
+}
+
+function EmptyState({ newSessionUrl, csrfTokenName, csrfTokenValue }: EmptyStateProps) {
+  return (
+    <div
+      data-testid="shell-zero-state"
+      className="ai:flex ai:flex-col ai:items-center ai:justify-center ai:text-center ai:py-16 ai:px-6 ai:gap-4"
+    >
+      <form method="post" action={newSessionUrl} acceptCharset="UTF-8">
+        <input type="hidden" name={csrfTokenName} value={csrfTokenValue} />
+        <button type="submit" className="btn submit add icon">
+          New Session
+        </button>
+      </form>
+      <p className="ai:max-w-md ai:text-sm ai:text-craftai-muted">
+        Sessions are conversations with the AI assistant. Each session keeps its own history and
+        runs independently, so you can start multiple sessions concurrently and let them work in
+        parallel.
+      </p>
     </div>
   );
 }

@@ -23,6 +23,9 @@ class ToolDescriptor
     /** @var array{type: string, properties: array<string, array<string, mixed>>, required: list<string>} */
     public readonly array $inputSchema;
 
+    /** @var array<string, mixed> */
+    public readonly array $annotations;
+
     /**
      * @param class-string<Tool> $toolClass
      */
@@ -39,6 +42,7 @@ class ToolDescriptor
             ? self::extractDescription($reflection)
             : ($attribute->description ?? self::extractDescription($reflection));
         $this->inputSchema = self::buildInputSchema($reflection);
+        $this->annotations = $attribute === null ? [] : $attribute->annotations;
     }
 
     /**
@@ -222,14 +226,20 @@ class ToolDescriptor
     }
 
     /**
-     * @return array{name: string, description: string, inputSchema: array{type: string, properties: array<string, array<string, mixed>>, required: list<string>}}
+     * @return array{name: string, description: string, inputSchema: array{type: string, properties: array<string, array<string, mixed>>, required: list<string>}, annotations?: array<string, mixed>}
      */
     public function toMcpTool(): array
     {
-        return [
+        $tool = [
             'name' => $this->name,
             'description' => $this->description,
             'inputSchema' => $this->inputSchema,
         ];
+
+        if ($this->annotations !== []) {
+            $tool['annotations'] = $this->annotations;
+        }
+
+        return $tool;
     }
 }

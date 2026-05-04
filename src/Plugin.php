@@ -10,6 +10,10 @@ use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\agent\providers\AnthropicProvider;
 use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\agent\providers\OpenAiProvider;
+use markhuot\craftai\tools\DeleteDrafts;
+use markhuot\craftai\tools\DeleteEntries;
+use markhuot\craftai\tools\DeleteEntryTypes;
+use markhuot\craftai\tools\DeleteSections;
 use markhuot\craftai\tools\GetDrafts;
 use markhuot\craftai\tools\GetEntries;
 use markhuot\craftai\tools\GetEntry;
@@ -57,6 +61,10 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(UpsertSection::class);
         $this->toolRegistry->register(GetEntryTypes::class);
         $this->toolRegistry->register(UpsertEntryType::class);
+        $this->toolRegistry->register(DeleteEntries::class);
+        $this->toolRegistry->register(DeleteDrafts::class);
+        $this->toolRegistry->register(DeleteSections::class);
+        $this->toolRegistry->register(DeleteEntryTypes::class);
 
         $this->registerContainerBindings();
 

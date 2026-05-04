@@ -10,8 +10,11 @@ use markhuot\craftai\binders\Entry as EntryBinder;
 use markhuot\craftai\validators\ExistingEntry;
 
 /**
- * Retrieve a single content entry by its ID. Returns full entry details
- * including all custom field values, or an error if the entry is not found.
+ * Retrieve a single canonical content entry by its `id`. Returns full entry
+ * details including all custom field values, or an error if no canonical
+ * entry has that id. Drafts are NOT returned here — use `get_draft` with a
+ * `draftId` to fetch a draft (including freshly created drafts that have no
+ * canonical entry yet).
  */
 class GetEntry extends Tool
 {
@@ -19,7 +22,7 @@ class GetEntry extends Tool
      * @return array<array-key, mixed>
      */
     public function __invoke(
-        #[Description('The entry ID to look up')]
+        #[Description('The canonical entry ID to look up. To fetch a draft, use `get_draft` with the `draftId` instead.')]
         #[Validate(ExistingEntry::class)]
         #[Bind(EntryBinder::class)]
         Entry|int $id,

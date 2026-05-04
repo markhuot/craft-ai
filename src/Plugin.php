@@ -20,6 +20,7 @@ use markhuot\craftai\tools\DeleteEntryTypes;
 use markhuot\craftai\tools\DeleteFields;
 use markhuot\craftai\tools\DeleteSections;
 use markhuot\craftai\tools\FetchWebpage;
+use markhuot\craftai\tools\GetDraft;
 use markhuot\craftai\tools\GetDrafts;
 use markhuot\craftai\tools\GetEntries;
 use markhuot\craftai\tools\GetEntry;
@@ -64,6 +65,7 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(GetEntries::class);
         $this->toolRegistry->register(GetEntry::class);
         $this->toolRegistry->register(UpsertEntry::class);
+        $this->toolRegistry->register(GetDraft::class);
         $this->toolRegistry->register(GetDrafts::class);
         $this->toolRegistry->register(UpsertDraft::class);
         $this->toolRegistry->register(GetSections::class);

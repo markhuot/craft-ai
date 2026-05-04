@@ -11,8 +11,10 @@ use markhuot\craftai\validators\ExistingEntry;
 use markhuot\craftai\validators\ExistingSite;
 
 /**
- * List all drafts for a given canonical entry. Returns each draft's ID,
- * draftId, title, creator, draft name/notes, and field values.
+ * List all drafts for a given canonical entry. Pass the canonical entry's
+ * `id` (not a `draftId`). To fetch a single draft directly — including a
+ * fresh draft that has no canonical entry yet — use `get_draft` with the
+ * `draftId` returned by `upsert_draft`.
  */
 class GetDrafts extends Tool
 {
@@ -20,7 +22,7 @@ class GetDrafts extends Tool
      * @return list<array<array-key, mixed>>
      */
     public function __invoke(
-        #[Description('Canonical entry ID whose drafts should be listed.')]
+        #[Description('Canonical entry ID whose drafts should be listed. This must be the `id` of a published canonical entry — not a `draftId`, and not the `id` of a fresh draft (which has no canonical). For fetching a single draft, use `get_draft` instead.')]
         #[Validate('required')]
         #[Validate(ExistingEntry::class)]
         #[Bind(EntryBinder::class)]

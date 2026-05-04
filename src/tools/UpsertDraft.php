@@ -26,6 +26,12 @@ use markhuot\craftai\validators\ExistingSite;
  * existing draft. To create a draft of an existing entry, pass `entry`. To
  * create a fresh draft with no canonical entry yet, pass `section` (and
  * optionally `type`) instead. Returns the saved draft on success.
+ *
+ * The returned payload includes both `id` (the draft element's id) and
+ * `draftId` (Craft's draft pointer). To re-fetch the draft later, call
+ * `get_draft` with `draftId` — `get_entry` will not find drafts, and
+ * `get_drafts` requires the canonical entry id (which a fresh draft does
+ * not have).
  */
 class UpsertDraft extends Tool
 {

@@ -28,6 +28,8 @@ use markhuot\craftai\tools\GetEntryTypes;
 use markhuot\craftai\tools\GetFields;
 use markhuot\craftai\tools\GetHealth;
 use markhuot\craftai\tools\GetSections;
+use markhuot\craftai\tools\GetTemplate;
+use markhuot\craftai\tools\GetTemplates;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertAsset;
 use markhuot\craftai\tools\UpsertDraft;
@@ -36,6 +38,7 @@ use markhuot\craftai\tools\UpdateFieldLayout;
 use markhuot\craftai\tools\UpsertEntryType;
 use markhuot\craftai\tools\UpsertField;
 use markhuot\craftai\tools\UpsertSection;
+use markhuot\craftai\tools\UpsertTemplate;
 use yii\base\Event;
 
 class Plugin extends BasePlugin
@@ -76,6 +79,9 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(GetFields::class);
         $this->toolRegistry->register(UpsertField::class);
         $this->toolRegistry->register(UpdateFieldLayout::class);
+        $this->toolRegistry->register(GetTemplates::class);
+        $this->toolRegistry->register(GetTemplate::class);
+        $this->toolRegistry->register(UpsertTemplate::class);
         $this->toolRegistry->register(UpsertAsset::class);
         $this->toolRegistry->register(DeleteAssets::class);
         $this->toolRegistry->register(DeleteEntries::class);

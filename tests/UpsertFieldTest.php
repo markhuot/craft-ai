@@ -4,6 +4,7 @@ use craft\fields\Assets;
 use craft\fields\PlainText;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertField;
+use markhuot\craftpest\factories\Volume;
 
 beforeEach(function () {
     $this->registry = new ToolRegistry();
@@ -26,16 +27,103 @@ it('creates a plain text field by FQCN', function () {
 });
 
 it('creates an assets field by FQCN', function () {
+    $volume = Volume::factory()->name('Uploads')->handle('uploads')->create();
+
     $output = $this->registry->execute('upsert_field', [
         'name' => 'Hero Image',
         'handle' => 'heroImage',
         'type' => Assets::class,
+        'settings' => [
+            'defaultUploadLocationSource' => "volume:{$volume->uid}",
+        ],
     ]);
 
     expect($output->isError)->toBeFalse($output->text);
 
     $field = Craft::$app->fields->getFieldByHandle('heroImage');
     expect($field)->toBeInstanceOf(Assets::class);
+});
+
+it('rejects an assets field that has no default upload location', function () {
+    $output = $this->registry->execute('upsert_field', [
+        'name' => 'Gallery Images',
+        'handle' => 'galleryImages',
+        'type' => Assets::class,
+        'settings' => [
+            'sources' => ['*'],
+            'restrictLocation' => false,
+        ],
+    ]);
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('defaultUploadLocationSource');
+    expect($output->text)->toContain('get_volumes');
+    expect(Craft::$app->fields->getFieldByHandle('galleryImages'))->toBeNull();
+});
+
+it('rejects an assets field with restrictLocation=true but no restrictedLocationSource', function () {
+    $output = $this->registry->execute('upsert_field', [
+        'name' => 'Brand Assets',
+        'handle' => 'brandAssets',
+        'type' => Assets::class,
+        'settings' => [
+            'restrictLocation' => true,
+        ],
+    ]);
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('restrictedLocationSource');
+    expect(Craft::$app->fields->getFieldByHandle('brandAssets'))->toBeNull();
+});
+
+it('rejects an assets field whose source key references a missing volume', function () {
+    $output = $this->registry->execute('upsert_field', [
+        'name' => 'Hero Image',
+        'handle' => 'heroImage',
+        'type' => Assets::class,
+        'settings' => [
+            'defaultUploadLocationSource' => 'volume:00000000-0000-0000-0000-000000000000',
+        ],
+    ]);
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('does not exist');
+});
+
+it('rejects an assets field whose source key is not in volume:<uid> form', function () {
+    $output = $this->registry->execute('upsert_field', [
+        'name' => 'Hero Image',
+        'handle' => 'heroImage',
+        'type' => Assets::class,
+        'settings' => [
+            'defaultUploadLocationSource' => 'uploads',
+        ],
+    ]);
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('volume:<uid>');
+});
+
+it('allows updating an existing assets field without re-specifying the upload location', function () {
+    $volume = Volume::factory()->name('Uploads')->handle('uploads')->create();
+
+    $create = $this->registry->execute('upsert_field', [
+        'name' => 'Hero Image',
+        'handle' => 'heroImage',
+        'type' => Assets::class,
+        'settings' => [
+            'defaultUploadLocationSource' => "volume:{$volume->uid}",
+        ],
+    ]);
+    expect($create->isError)->toBeFalse($create->text);
+
+    $update = $this->registry->execute('upsert_field', [
+        'id' => 'heroImage',
+        'instructions' => 'Pick a hero image',
+    ]);
+
+    expect($update->isError)->toBeFalse($update->text);
+    expect(Craft::$app->fields->getFieldByHandle('heroImage')->instructions)->toBe('Pick a hero image');
 });
 
 it('rejects an unknown field type class', function () {

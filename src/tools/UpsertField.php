@@ -4,6 +4,7 @@ namespace markhuot\craftai\tools;
 
 use Craft;
 use craft\base\FieldInterface;
+use craft\fields\Assets as AssetsField;
 use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
@@ -29,6 +30,12 @@ use markhuot\craftai\validators\ExistingField;
  * same type to discover what's available. When `saveField` fails validation
  * (for either core attributes or settings), the per-attribute error messages
  * are returned so the caller can correct the input and retry.
+ *
+ * Assets fields require an upload location to be set in `settings`, otherwise
+ * the field renders with an "invalid volume" error in the control panel. Pass
+ * `defaultUploadLocationSource` (when `restrictLocation` is false/absent) or
+ * `restrictedLocationSource` (when `restrictLocation` is true) as a volume
+ * source key in the form `volume:<uid>` — call `get_volumes` to discover UIDs.
  */
 class UpsertField extends Tool
 {
@@ -108,6 +115,12 @@ class UpsertField extends Tool
             $config['settings'] = $mergedSettings;
         }
 
+        if (is_string($config['type']) && is_a($config['type'], AssetsField::class, true)) {
+            if (($error = $this->validateAssetsLocationSettings($mergedSettings)) !== null) {
+                return new ToolOutput($error, isError: true);
+            }
+        }
+
         $field = Craft::$app->fields->createField($config);
 
         if (! Craft::$app->fields->saveField($field)) {
@@ -137,5 +150,39 @@ class UpsertField extends Tool
             'translationKeyFormat' => $field->translationKeyFormat,
             'settings' => $field->getSettings(),
         ];
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $settings
+     */
+    private function validateAssetsLocationSettings(array $settings): ?string
+    {
+        $restrictLocation = (bool) ($settings['restrictLocation'] ?? false);
+
+        if ($restrictLocation) {
+            $key = $settings['restrictedLocationSource'] ?? null;
+            $setting = 'restrictedLocationSource';
+            $label = 'Asset Location';
+        } else {
+            $key = $settings['defaultUploadLocationSource'] ?? null;
+            $setting = 'defaultUploadLocationSource';
+            $label = 'Default Upload Location';
+        }
+
+        if (! is_string($key) || $key === '') {
+            return "settings.{$setting} is required for Assets fields (the “{$label}” setting in the control panel). "
+                ."Provide a volume source key in the form \"volume:<uid>\". Call get_volumes to discover available volume UIDs.";
+        }
+
+        $parts = explode(':', $key, 2);
+        if (count($parts) !== 2 || $parts[1] === '') {
+            return "settings.{$setting} must be a volume source key in the form \"volume:<uid>\"; got \"{$key}\".";
+        }
+
+        if (Craft::$app->volumes->getVolumeByUid($parts[1]) === null) {
+            return "settings.{$setting} references a volume UID that does not exist (\"{$parts[1]}\"). Call get_volumes to discover available volume UIDs.";
+        }
+
+        return null;
     }
 }

@@ -36,7 +36,7 @@ class GetEntryTypes extends Tool
         return array_values(array_map(
             static function (EntryType $entryType): array {
                 $row = $entryType->toArray();
-                $layout = UpdateFieldLayout::summarizeLayout($entryType);
+                $layout = UpsertFieldLayoutElement::summarizeLayout($entryType);
                 $row['fieldLayoutId'] = $layout['fieldLayoutId'];
                 $row['tabs'] = $layout['tabs'];
 

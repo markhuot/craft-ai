@@ -29,6 +29,24 @@ class AgentLoop
         $this->saveMessage($sessionId, 'user', [['type' => 'text', 'text' => $userMessage]], assetIds: $assetIds);
     }
 
+    /**
+     * Persist a synthesized note as a `system` message in the conversation.
+     * The widget sends a fresh page-context payload only when the user has
+     * navigated to a new page since their last message; this method renders
+     * that payload to prose so the user can see "what the agent knows" and
+     * the agent has stable context for the user turns that follow.
+     *
+     * The raw payload is intentionally discarded — the prose is the record.
+     */
+    public function appendSystemContext(string $sessionId, string $note): void
+    {
+        $note = trim($note);
+        if ($note === '') {
+            return;
+        }
+        $this->saveMessage($sessionId, 'system', [['type' => 'text', 'text' => $note]]);
+    }
+
     public function run(string $sessionId): void
     {
         $messages = $this->loadMessages($sessionId);
@@ -148,24 +166,58 @@ class AgentLoop
             ->orderBy(['id' => SORT_ASC])
             ->all();
 
-        return array_map(function (MessageRecord $record): array {
+        $messages = [];
+        // Buffer of pending system-context text blocks. Anthropic's messages
+        // API only allows user/assistant in `messages[]`, and we can't move
+        // them into the top-level `system` parameter mid-conversation without
+        // losing their ordering relative to the user turns they describe. So
+        // we fold the buffered system text into the next user turn — the
+        // model reads it as part of the user's message, with a clear delimiter.
+        $pendingSystem = [];
+
+        foreach ($records as $record) {
             /** @var list<array<string, mixed>> $content */
             $content = json_decode($record->content, true, 512, JSON_THROW_ON_ERROR);
 
-            if ($record->role === 'user' && $record->assetIds !== null && $record->assetIds !== '') {
-                /** @var list<int> $assetIds */
-                $assetIds = json_decode($record->assetIds, true, 512, JSON_THROW_ON_ERROR);
-                $annotation = $this->assetAnnotation($assetIds);
-                if ($annotation !== null) {
-                    $content[] = ['type' => 'text', 'text' => $annotation];
+            if ($record->role === 'system') {
+                foreach ($content as $block) {
+                    if (($block['type'] ?? '') === 'text' && is_string($block['text'] ?? null)) {
+                        $pendingSystem[] = ['type' => 'text', 'text' => $block['text']];
+                    }
+                }
+                continue;
+            }
+
+            if ($record->role === 'user') {
+                if ($pendingSystem !== []) {
+                    $content = array_merge($pendingSystem, $content);
+                    $pendingSystem = [];
+                }
+
+                if ($record->assetIds !== null && $record->assetIds !== '') {
+                    /** @var list<int> $assetIds */
+                    $assetIds = json_decode($record->assetIds, true, 512, JSON_THROW_ON_ERROR);
+                    $annotation = $this->assetAnnotation($assetIds);
+                    if ($annotation !== null) {
+                        $content[] = ['type' => 'text', 'text' => $annotation];
+                    }
                 }
             }
 
-            return [
+            $messages[] = [
                 'role' => $record->role,
                 'content' => $content,
             ];
-        }, $records);
+        }
+
+        // Any pending system rows that didn't get a follow-up user message —
+        // e.g. an interrupted send — get attached as a trailing synthetic
+        // user turn so the LLM still sees the context rather than dropping it.
+        if ($pendingSystem !== []) {
+            $messages[] = ['role' => 'user', 'content' => $pendingSystem];
+        }
+
+        return $messages;
     }
 
     /**

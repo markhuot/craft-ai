@@ -24,7 +24,7 @@ function bootstrap(initialMessages: ChatMessage[] = []): ChatBootstrap {
 
 function makeApi(overrides: Partial<{
   fetchMessagesAfter: (lastId: number) => Promise<ChatMessage[]>;
-  sendMessage: (msg: string, assetIds?: number[]) => Promise<void>;
+  sendMessage: (msg: string, assetIds?: number[], context?: unknown) => Promise<void>;
   fetchAssetInfo: (ids: number[]) => Promise<Attachment[]>;
 }> = {}) {
   const api = new ChatApi({
@@ -245,6 +245,164 @@ describe("<Chat />", () => {
       expect(sent?.msg).toBe("");
       expect(sent?.ids).toEqual([99]);
     });
+  });
+
+  test("attaches context on the first send and skips it on the second when the fingerprint matches", async () => {
+    const sends: Array<{ msg: string; assetIds?: number[]; context?: unknown }> = [];
+    let pollCalls = 0;
+    const api = makeApi({
+      sendMessage: async (msg, assetIds, context) => {
+        sends.push({ msg, assetIds, context });
+      },
+      fetchMessagesAfter: async () => {
+        // Chat fires an immediate poll on mount (call #1) and another after
+        // each send (call #2 = post-first-send). Returning an assistant turn
+        // on call #2 flips status back to "idle" so the second send isn't
+        // rejected by the busy guard in onSubmit.
+        pollCalls += 1;
+        if (pollCalls === 2) {
+          return [{ id: 1, role: "assistant", content: [{ type: "text", text: "ack" }] }];
+        }
+        return [];
+      },
+    });
+
+    const data = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        data.set(k, v);
+      },
+      removeItem: (k: string) => {
+        data.delete(k);
+      },
+    };
+
+    const boot: ChatBootstrap = {
+      ...bootstrap(),
+      context: { url: "https://x.test/about", element: null },
+      contextFingerprint: "fp-abc",
+    };
+
+    render(
+      <Chat bootstrap={boot} api={api} pollIntervalMs={1_000_000} storage={storage} />,
+    );
+
+    const textarea = screen.getByPlaceholderText("Send a message…") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "first" } });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    await waitFor(() => expect(sends.length).toBe(1));
+    // Wait for the simulated assistant turn so Chat returns to idle.
+    await waitFor(() => expect(screen.queryByText("ack")).toBeTruthy());
+
+    fireEvent.change(textarea, { target: { value: "second" } });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    await waitFor(() => expect(sends.length).toBe(2));
+
+    expect(sends[0]?.context).toEqual({ url: "https://x.test/about", element: null });
+    // After a successful first send, the fingerprint is cached and the
+    // second send should skip the context payload.
+    expect(sends[1]?.context).toBeUndefined();
+    expect(data.get("craftai-widget:context-fp:session-1")).toBe("fp-abc");
+  });
+
+  test("re-attaches context when the bootstrap's fingerprint changes", async () => {
+    const sends: Array<{ context?: unknown }> = [];
+    const api = makeApi({
+      sendMessage: async (_msg, _ids, context) => {
+        sends.push({ context });
+      },
+      fetchMessagesAfter: async () => [],
+    });
+
+    const data = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        data.set(k, v);
+      },
+      removeItem: (k: string) => {
+        data.delete(k);
+      },
+    };
+
+    // Pretend the user previously sent on this session with fp-old; the
+    // current page's fingerprint is fp-new.
+    data.set("craftai-widget:context-fp:session-1", "fp-old");
+
+    const boot: ChatBootstrap = {
+      ...bootstrap(),
+      context: { url: "https://x.test/contact" },
+      contextFingerprint: "fp-new",
+    };
+
+    render(
+      <Chat bootstrap={boot} api={api} pollIntervalMs={1_000_000} storage={storage} />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Send a message…"), {
+      target: { value: "hi" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    await waitFor(() => expect(sends.length).toBe(1));
+
+    expect(sends[0]?.context).toEqual({ url: "https://x.test/contact" });
+    expect(data.get("craftai-widget:context-fp:session-1")).toBe("fp-new");
+  });
+
+  test("does not update the cached fingerprint when the send fails", async () => {
+    const api = makeApi({
+      sendMessage: async () => {
+        throw new Error("network down");
+      },
+    });
+
+    const data = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        data.set(k, v);
+      },
+      removeItem: (k: string) => {
+        data.delete(k);
+      },
+    };
+
+    const boot: ChatBootstrap = {
+      ...bootstrap(),
+      context: { url: "https://x.test/about" },
+      contextFingerprint: "fp-abc",
+    };
+
+    render(
+      <Chat bootstrap={boot} api={api} pollIntervalMs={1_000_000} storage={storage} />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Send a message…"), {
+      target: { value: "x" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toContain("network down"),
+    );
+
+    expect(data.get("craftai-widget:context-fp:session-1")).toBeUndefined();
+  });
+
+  test("renders system messages with a distinct 'Page context' panel", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: 1,
+        role: "system",
+        content: [{ type: "text", text: "URL: https://x.test/about" }],
+      },
+    ];
+    render(<Chat bootstrap={bootstrap(messages)} api={makeApi()} pollIntervalMs={1_000_000} />);
+
+    const panel = screen.getByTestId("message-system");
+    expect(panel.textContent).toContain("Page context");
+    expect(panel.textContent).toContain("URL: https://x.test/about");
   });
 
   test("renders attachments on past messages", () => {

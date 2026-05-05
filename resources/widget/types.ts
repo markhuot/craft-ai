@@ -14,4 +14,31 @@ export interface WidgetBootstrap {
   sendUrl: string;
   csrfTokenName: string;
   csrfTokenValue: string;
+  /**
+   * Snapshot of the page the widget is rendered on. The chat surface attaches
+   * this to the next outgoing message *only* when its fingerprint differs
+   * from the last one we sent on this session — see `Chat.tsx`.
+   */
+  context: PageContext;
+  /**
+   * Stable hash of `context`, computed server-side so client/server agree on
+   * what "the same context" means. Cached per-session in localStorage.
+   */
+  contextFingerprint: string;
+}
+
+export interface PageContext {
+  url: string | null;
+  path: string | null;
+  query: Record<string, string | number | boolean | null>;
+  siteHandle: string | null;
+  template: string | null;
+  element: PageContextElement | null;
+}
+
+export interface PageContextElement {
+  type: string;
+  id: number;
+  title: string | null;
+  sectionHandle: string | null;
 }

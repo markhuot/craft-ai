@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { Widget } from "./Widget";
-import type { WidgetBootstrap } from "./types";
+import type { PageContext, WidgetBootstrap } from "./types";
 
 const ELEMENT_NAME = "craft-ai-widget";
 
@@ -24,10 +24,54 @@ function readBootstrap(): WidgetBootstrap | null {
       sendUrl: String(obj.sendUrl ?? ""),
       csrfTokenName: String(obj.csrfTokenName ?? "CRAFT_CSRF_TOKEN"),
       csrfTokenValue: String(obj.csrfTokenValue ?? ""),
+      context: normalizeContext(obj.context),
+      contextFingerprint: String(obj.contextFingerprint ?? ""),
     };
   } catch {
     return null;
   }
+}
+
+function normalizeContext(value: unknown): PageContext {
+  const empty: PageContext = {
+    url: null,
+    path: null,
+    query: {},
+    siteHandle: null,
+    template: null,
+    element: null,
+  };
+  if (typeof value !== "object" || value === null) return empty;
+  const obj = value as Record<string, unknown>;
+  const queryRaw = obj.query;
+  const query: PageContext["query"] = {};
+  if (typeof queryRaw === "object" && queryRaw !== null) {
+    for (const [k, v] of Object.entries(queryRaw)) {
+      if (v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+        query[k] = v;
+      }
+    }
+  }
+  let element: PageContext["element"] = null;
+  if (typeof obj.element === "object" && obj.element !== null) {
+    const e = obj.element as Record<string, unknown>;
+    if (typeof e.id === "number" && typeof e.type === "string") {
+      element = {
+        type: e.type,
+        id: e.id,
+        title: typeof e.title === "string" ? e.title : null,
+        sectionHandle: typeof e.sectionHandle === "string" ? e.sectionHandle : null,
+      };
+    }
+  }
+  return {
+    url: typeof obj.url === "string" ? obj.url : null,
+    path: typeof obj.path === "string" ? obj.path : null,
+    query,
+    siteHandle: typeof obj.siteHandle === "string" ? obj.siteHandle : null,
+    template: typeof obj.template === "string" ? obj.template : null,
+    element,
+  };
 }
 
 /**

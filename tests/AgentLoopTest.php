@@ -239,6 +239,59 @@ it('annotates the user message with attached asset details when sending to the p
     expect($textBlocks[1]['text'])->toContain('get_asset');
 });
 
+it('folds a system page-context row into the next user message when sending to the provider', function () {
+    $provider = new FakeProvider([
+        new ProviderResponse('msg_1', [['type' => 'text', 'text' => 'ok']], 'end_turn'),
+    ]);
+
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->appendSystemContext('session-ctx', "<page-context>\nURL: /about\n</page-context>");
+    $loop->appendUserMessage('session-ctx', 'tell me more');
+    $loop->run('session-ctx');
+
+    expect($provider->calls)->toHaveCount(1);
+
+    $messages = $provider->calls[0]['messages'];
+    // The system row must NOT be sent as a separate turn — it's folded into
+    // the user message that follows it.
+    $roles = array_map(static fn ($m): string => $m['role'], $messages);
+    expect($roles)->not->toContain('system');
+
+    $userMessage = $messages[0];
+    expect($userMessage['role'])->toBe('user');
+    $texts = array_values(array_filter(
+        $userMessage['content'],
+        static fn ($b) => ($b['type'] ?? '') === 'text',
+    ));
+    expect($texts)->toHaveCount(2);
+    expect($texts[0]['text'])->toContain('<page-context>');
+    expect($texts[1]['text'])->toBe('tell me more');
+});
+
+it('preserves the system row in the persisted transcript even after folding for the LLM', function () {
+    $provider = new FakeProvider([
+        new ProviderResponse('msg_1', [['type' => 'text', 'text' => 'ok']], 'end_turn'),
+    ]);
+
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->appendSystemContext('session-ctx-keep', 'page note');
+    $loop->appendUserMessage('session-ctx-keep', 'hi');
+    $loop->run('session-ctx-keep');
+
+    /** @var list<MessageRecord> $records */
+    $records = MessageRecord::find()
+        ->where(['sessionId' => 'session-ctx-keep'])
+        ->orderBy(['id' => SORT_ASC])
+        ->all();
+
+    // system, user, assistant — all retained in the DB. Folding only affects
+    // the live message array we pass to the provider, not what's stored.
+    expect($records)->toHaveCount(3);
+    expect($records[0]->role)->toBe('system');
+    expect($records[1]->role)->toBe('user');
+    expect($records[2]->role)->toBe('assistant');
+});
+
 it('fabricates stopped tool_results and exits when stop is requested mid tool_use turn', function () {
     $session = new SessionRecord();
     $session->id = 'session-stop-mid';

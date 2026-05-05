@@ -309,5 +309,7 @@ function chatBootstrapFor(bootstrap: WidgetBootstrap, sessionId: string): ChatBo
     csrfTokenValue: bootstrap.csrfTokenValue,
     initialMessages: [],
     initialSessions: [],
+    context: bootstrap.context,
+    contextFingerprint: bootstrap.contextFingerprint,
   };
 }

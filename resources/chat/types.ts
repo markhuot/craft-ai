@@ -47,4 +47,11 @@ export interface ChatBootstrap {
   csrfTokenValue: string;
   initialMessages: ChatMessage[];
   initialSessions: SessionListItem[];
+  /**
+   * Page-context payload to attach to outgoing messages whose
+   * `contextFingerprint` differs from the last one we sent on this session.
+   * The CP-side chat omits both — the widget on the front-end provides them.
+   */
+  context?: unknown;
+  contextFingerprint?: string;
 }

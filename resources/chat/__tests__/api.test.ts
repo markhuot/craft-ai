@@ -78,6 +78,35 @@ describe("ChatApi.sendMessage", () => {
     expect(body.get("assetIds")).toBe("[12,34]");
   });
 
+  test("attaches a JSON-encoded context payload when one is provided", async () => {
+    let captured: { url: string; init: RequestInit | undefined } = { url: "", init: undefined };
+    const api = makeApi(async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response("{}", { status: 200 });
+    });
+
+    const ctx = { url: "https://x.test/foo", element: { type: "entry", id: 1 } };
+    await api.sendMessage("hello", [], ctx);
+
+    const body = captured.init?.body as FormData;
+    const sent = body.get("context");
+    expect(typeof sent).toBe("string");
+    expect(JSON.parse(sent as string)).toEqual(ctx);
+  });
+
+  test("omits the context field when no payload is supplied", async () => {
+    let captured: { url: string; init: RequestInit | undefined } = { url: "", init: undefined };
+    const api = makeApi(async (input, init) => {
+      captured = { url: String(input), init };
+      return new Response("{}", { status: 200 });
+    });
+
+    await api.sendMessage("hello");
+
+    const body = captured.init?.body as FormData;
+    expect(body.get("context")).toBeNull();
+  });
+
   test("throws on non-ok response", async () => {
     const api = makeApi(async () => new Response("bad", { status: 422 }));
     await expect(api.sendMessage("x")).rejects.toThrow(/422/);

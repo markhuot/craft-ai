@@ -38,7 +38,11 @@ export class ChatApi {
     return data as ChatMessage[];
   }
 
-  async sendMessage(message: string, assetIds: number[] = []): Promise<void> {
+  async sendMessage(
+    message: string,
+    assetIds: number[] = [],
+    context?: unknown,
+  ): Promise<void> {
     const body = new FormData();
     body.append("sessionId", this.opts.sessionId);
     body.append("message", message);
@@ -47,6 +51,9 @@ export class ChatApi {
       // unambiguous value. PHP's $_POST would otherwise see an array of
       // string ids, and many clients (incl. tests) build FormData by hand.
       body.append("assetIds", JSON.stringify(assetIds));
+    }
+    if (context !== undefined && context !== null) {
+      body.append("context", JSON.stringify(context));
     }
     body.append(this.opts.csrfTokenName, this.opts.csrfTokenValue);
 

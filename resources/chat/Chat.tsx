@@ -28,7 +28,14 @@ export interface ChatProps {
    * modal; the same component is reused there with this flag off.
    */
   enableAttachments?: boolean;
+  /**
+   * Used by the front-end widget to remember which page-context fingerprint
+   * we last attached to a send for this session. Tests can supply a fake.
+   */
+  storage?: Pick<Storage, "getItem" | "setItem" | "removeItem">;
 }
+
+const CONTEXT_FP_STORAGE_PREFIX = "craftai-widget:context-fp:";
 
 export function Chat({
   bootstrap,
@@ -36,6 +43,7 @@ export function Chat({
   pollIntervalMs = 1500,
   openAssetSelector: openAssetSelectorOverride,
   enableAttachments = true,
+  storage,
 }: ChatProps) {
   const api = useMemo(
     () =>
@@ -104,8 +112,45 @@ export function Chat({
       if (text === "" && pendingAttachments.length === 0) return;
       setStatus("submitting");
       setError(null);
+
+      // Decide whether the page context is "new" relative to what we last
+      // attached on this session. If the fingerprint matches, omit the
+      // payload — the LLM already has it.
+      const store =
+        storage ??
+        (typeof window !== "undefined" && window.localStorage ? window.localStorage : null);
+      const fp = bootstrap.contextFingerprint ?? "";
+      const ctx = bootstrap.context;
+      const fpKey = `${CONTEXT_FP_STORAGE_PREFIX}${bootstrap.sessionId}`;
+      let attachContext: unknown = undefined;
+      if (ctx !== undefined && ctx !== null && fp !== "") {
+        let prior: string | null = null;
+        try {
+          prior = store?.getItem(fpKey) ?? null;
+        } catch {
+          prior = null;
+        }
+        if (prior !== fp) {
+          attachContext = ctx;
+        }
+      }
+
       try {
-        await api.sendMessage(text, pendingAttachments.map((a) => a.id));
+        await api.sendMessage(
+          text,
+          pendingAttachments.map((a) => a.id),
+          attachContext,
+        );
+        if (attachContext !== undefined && fp !== "") {
+          // Only mark the fingerprint as sent on success — a failed send
+          // should retry context attachment on the next attempt.
+          try {
+            store?.setItem(fpKey, fp);
+          } catch {
+            // localStorage can throw in private mode / quota-exceeded — keep
+            // sending context until it sticks.
+          }
+        }
         setDraft("");
         setPendingAttachments([]);
         setStatus("streaming");
@@ -115,7 +160,7 @@ export function Chat({
         setError(err instanceof Error ? err.message : "Failed to send message");
       }
     },
-    [api, draft, pendingAttachments, poll, status],
+    [api, bootstrap.context, bootstrap.contextFingerprint, bootstrap.sessionId, draft, pendingAttachments, poll, status, storage],
   );
 
   const onAddAttachments = useCallback(async () => {
@@ -211,6 +256,31 @@ export function Chat({
 const STANDALONE_BLOCK_TYPES = new Set(["thinking", "tool_use", "tool_result"]);
 
 function RenderedMessage({ message }: { message: ChatMessage }) {
+  // System messages are page-context notes synthesized server-side when the
+  // user navigates between pages on the front-end. We render them as a
+  // distinct inline note so the user can see what context the agent is
+  // working from, without making them look like a normal chat turn.
+  if (message.role === "system") {
+    const text = message.content
+      .map((b) => (b.type === "text" && typeof (b as { text?: unknown }).text === "string"
+        ? (b as { text: string }).text
+        : ""))
+      .filter((t) => t !== "")
+      .join("\n\n");
+    if (text === "") return null;
+    return (
+      <div
+        data-testid="message-system"
+        className="ai:rounded ai:border ai:border-dashed ai:border-craftai-border ai:bg-slate-50 ai:p-2 ai:text-xs ai:text-slate-600"
+      >
+        <div className="ai:mb-1 ai:text-[10px] ai:font-medium ai:uppercase ai:tracking-wide ai:text-slate-500">
+          Page context
+        </div>
+        <div className="ai:whitespace-pre-wrap">{text}</div>
+      </div>
+    );
+  }
+
   // Walk content blocks and group consecutive inline blocks together so we
   // emit one bubble per run, with standalone blocks rendered as siblings in
   // their original order.

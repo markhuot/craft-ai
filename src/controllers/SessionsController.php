@@ -7,6 +7,7 @@ use craft\helpers\StringHelper;
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use craft\db\Query;
+use markhuot\craftai\agent\PageContextSerializer;
 use markhuot\craftai\queue\AgentJob;
 use markhuot\craftai\records\MessageRecord;
 use markhuot\craftai\records\SessionRecord;
@@ -307,8 +308,19 @@ class SessionsController extends Controller
             throw new \yii\web\NotFoundHttpException('Session not found.');
         }
 
+        $context = $this->normalizeContext($this->request->getBodyParam('context'));
+
         /** @var \markhuot\craftai\agent\AgentLoop $loop */
         $loop = Craft::$container->get(\markhuot\craftai\agent\AgentLoop::class);
+
+        // Persist the page-context note before the user's message so the
+        // transcript reads as "the user navigated here, then said …" — and
+        // the prompt-build path can fold the system row into the user turn
+        // that follows it.
+        if ($context !== null) {
+            $loop->appendSystemContext($sessionId, PageContextSerializer::toSystemNote($context));
+        }
+
         $loop->appendUserMessage($sessionId, $message, $assetIds);
 
         Craft::$app->getQueue()->push(new AgentJob([
@@ -387,5 +399,39 @@ class SessionsController extends Controller
         $identity = Craft::$app->getUser()->getIdentity();
 
         return $identity !== null ? (int) $identity->id : null;
+    }
+
+    /**
+     * The widget POSTs the page-context payload as a JSON-encoded string in a
+     * FormData field (so it survives the same body-parsing path as everything
+     * else). It's only attached when the widget detects the page context has
+     * changed since the last send, so most requests omit it entirely.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function normalizeContext(mixed $value): ?array
+    {
+        if ($value === null || $value === '' || $value === []) {
+            return null;
+        }
+
+        if (is_string($value)) {
+            try {
+                /** @var mixed $decoded */
+                $decoded = json_decode($value, true, 32, JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                return null;
+            }
+            if (! is_array($decoded)) {
+                return null;
+            }
+            return $decoded;
+        }
+
+        if (is_array($value)) {
+            return $value;
+        }
+
+        return null;
     }
 }

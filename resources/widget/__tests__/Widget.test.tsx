@@ -18,6 +18,15 @@ function bootstrap(): WidgetBootstrap {
     sendUrl: "http://localhost/sessions/send",
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
+    context: {
+      url: null,
+      path: null,
+      query: {},
+      siteHandle: null,
+      template: null,
+      element: null,
+    },
+    contextFingerprint: "",
   };
 }
 

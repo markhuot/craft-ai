@@ -13,6 +13,7 @@ use craft\services\UserPermissions;
 use craft\web\UrlManager;
 use craft\web\View;
 use markhuot\craftai\agent\AgentLoop;
+use markhuot\craftai\agent\PageContextSerializer;
 use markhuot\craftai\permissions\ToolPermissions;
 use markhuot\craftai\agent\providers\AnthropicProvider;
 use markhuot\craftai\agent\providers\LlmProvider;
@@ -55,6 +56,14 @@ class Plugin extends BasePlugin
     public bool $hasCpSection = true;
 
     private ToolRegistry $toolRegistry;
+
+    /**
+     * Captured by EVENT_BEFORE_RENDER_PAGE_TEMPLATE so the after-render hook
+     * (which is what injects the widget) knows which template produced the
+     * page. Craft doesn't pass the template name through to the after-render
+     * event, so we have to stash it ourselves.
+     */
+    private ?string $lastRenderedTemplate = null;
 
     public static function getInstance(): static
     {
@@ -162,6 +171,16 @@ class Plugin extends BasePlugin
 
         Event::on(
             View::class,
+            View::EVENT_BEFORE_RENDER_PAGE_TEMPLATE,
+            function (TemplateEvent $event): void {
+                if ($event->templateMode === View::TEMPLATE_MODE_SITE) {
+                    $this->lastRenderedTemplate = is_string($event->template) ? $event->template : null;
+                }
+            },
+        );
+
+        Event::on(
+            View::class,
             View::EVENT_AFTER_RENDER_PAGE_TEMPLATE,
             function (TemplateEvent $event): void {
                 $this->maybeInjectWidget($event);
@@ -217,6 +236,8 @@ class Plugin extends BasePlugin
             return;
         }
 
+        $context = $this->gatherPageContext($request);
+
         $jsUrl = $baseUrl.'/widget.js';
         $bootstrap = [
             'jsUrl' => $jsUrl,
@@ -228,6 +249,8 @@ class Plugin extends BasePlugin
             'sendUrl' => UrlHelper::actionUrl('craft-ai/sessions/send'),
             'csrfTokenName' => Craft::$app->getConfig()->getGeneral()->csrfTokenName,
             'csrfTokenValue' => $request->getCsrfToken(),
+            'context' => $context,
+            'contextFingerprint' => PageContextSerializer::fingerprint($context),
         ];
 
         $bootstrapJson = Json::htmlEncode($bootstrap);
@@ -250,6 +273,121 @@ HTML;
         }
 
         $event->output .= $snippet;
+    }
+
+    /**
+     * Collect a small, JSON-safe snapshot of the page being rendered so the
+     * widget can attach it to the next user message when relevant. Stays
+     * minimal on purpose — the agent can call tools to look up anything
+     * deeper (custom fields, related elements, etc.) once it knows the IDs.
+     *
+     * @return array{url: ?string, path: ?string, query: array<string, mixed>, siteHandle: ?string, template: ?string, element: ?array{type: string, id: int, title: ?string, sectionHandle: ?string}}
+     */
+    private function gatherPageContext(\craft\web\Request $request): array
+    {
+        $url = $this->safeAbsoluteUrl($request);
+        $path = $request->getPathInfo();
+
+        /** @var array<string, mixed> $rawQuery */
+        $rawQuery = $request->getQueryParams();
+        $query = $this->scalarizeQuery($rawQuery);
+
+        $siteHandle = null;
+        try {
+            $site = Craft::$app->getSites()->getCurrentSite();
+            $siteHandle = $site->handle;
+        } catch (\Throwable) {
+            // currentSite isn't always available outside of a request — fall through.
+        }
+
+        $element = null;
+        try {
+            $matched = Craft::$app->getUrlManager()->getMatchedElement();
+            if ($matched !== null) {
+                $element = $this->summarizeElement($matched);
+            }
+        } catch (\Throwable) {
+            // Some plugins or routes resolve outside the URL manager — ignore.
+        }
+
+        return [
+            'url' => $url,
+            'path' => $path !== '' ? $path : null,
+            'query' => $query,
+            'siteHandle' => $siteHandle,
+            'template' => $this->lastRenderedTemplate,
+            'element' => $element,
+        ];
+    }
+
+    private function safeAbsoluteUrl(\craft\web\Request $request): ?string
+    {
+        try {
+            $url = $request->getAbsoluteUrl();
+            return is_string($url) && $url !== '' ? $url : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Drop anything that can't round-trip cleanly through JSON (resources,
+     * objects, etc.) so the bootstrap stays a flat scalar map.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, string|int|float|bool|null>
+     */
+    private function scalarizeQuery(array $params): array
+    {
+        $out = [];
+        foreach ($params as $key => $value) {
+            if (! is_string($key)) {
+                continue;
+            }
+            if (is_scalar($value) || $value === null) {
+                $out[$key] = $value;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * @return array{type: string, id: int, title: ?string, sectionHandle: ?string}
+     */
+    private function summarizeElement(\craft\base\ElementInterface $element): array
+    {
+        $type = $element::refHandle();
+        if (! is_string($type) || $type === '') {
+            $type = strtolower((new \ReflectionClass($element))->getShortName());
+        }
+
+        $sectionHandle = null;
+        if ($element instanceof \craft\elements\Entry) {
+            try {
+                $section = $element->getSection();
+                $sectionHandle = $section?->handle;
+            } catch (\Throwable) {
+                // No section (e.g. nested entries inside Matrix) — leave null.
+            }
+        } elseif ($element instanceof \craft\elements\Category) {
+            try {
+                $sectionHandle = $element->getGroup()->handle;
+            } catch (\Throwable) {
+                // Group lookup can fail when categories are queried out of context.
+            }
+        }
+
+        $title = method_exists($element, 'getUiLabel') ? (string) $element->getUiLabel() : null;
+        if ($title === '' || $title === null) {
+            $title = $element->title ?? null;
+        }
+
+        return [
+            'type' => $type,
+            'id' => (int) $element->id,
+            'title' => is_string($title) && $title !== '' ? $title : null,
+            'sectionHandle' => $sectionHandle,
+        ];
     }
 
     /**

@@ -287,6 +287,78 @@ it('ignores garbage assetId values without rejecting the message', function () {
     expect($userRecord->assetIds)->toBeNull();
 });
 
+it('persists a system page-context row before the user message when context is supplied', function () {
+    $context = [
+        'url' => 'https://example.com/about',
+        'path' => 'about',
+        'siteHandle' => 'default',
+        'template' => '_layouts/page.twig',
+        'query' => [],
+        'element' => [
+            'type' => 'entry',
+            'id' => 11,
+            'title' => 'About Us',
+            'sectionHandle' => 'pages',
+        ],
+    ];
+
+    $response = postSend([
+        'sessionId' => 'session-send-context',
+        'message' => 'tell me more',
+        'context' => json_encode($context),
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('queued', true);
+
+    /** @var list<MessageRecord> $records */
+    $records = MessageRecord::find()
+        ->where(['sessionId' => 'session-send-context'])
+        ->orderBy(['id' => SORT_ASC])
+        ->all();
+
+    expect($records)->toHaveCount(2);
+    expect($records[0]->role)->toBe('system');
+    expect($records[1]->role)->toBe('user');
+
+    $systemContent = json_decode($records[0]->content, true);
+    expect($systemContent[0]['type'])->toBe('text');
+    expect($systemContent[0]['text'])->toContain('URL: https://example.com/about');
+    expect($systemContent[0]['text'])->toContain('Element: entry #11 "About Us" (section: pages)');
+});
+
+it('skips persisting a system row when no context is supplied', function () {
+    $response = postSend([
+        'sessionId' => 'session-send-no-context',
+        'message' => 'plain message',
+    ]);
+
+    $response->assertOk();
+
+    $systemRow = MessageRecord::find()
+        ->where(['sessionId' => 'session-send-no-context', 'role' => 'system'])
+        ->one();
+
+    expect($systemRow)->toBeNull();
+});
+
+it('tolerates malformed context JSON without rejecting the message', function () {
+    $response = postSend([
+        'sessionId' => 'session-send-bad-context',
+        'message' => 'still works',
+        'context' => 'this-is-not-json',
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('queued', true);
+
+    $systemRow = MessageRecord::find()
+        ->where(['sessionId' => 'session-send-bad-context', 'role' => 'system'])
+        ->one();
+
+    expect($systemRow)->toBeNull();
+});
+
 function postStop(array $body) {
     return test()->http('post', 'admin')
         ->withCsrfToken()

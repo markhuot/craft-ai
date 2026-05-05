@@ -63,13 +63,41 @@ abstract class Tool
                     continue;
                 }
                 $options = $validate->options;
+                $conditions = [];
                 if ($validate->whenMissing !== null) {
                     $sibling = $validate->whenMissing;
-                    $options['when'] = static fn ($model) => self::isEmpty($model->{$sibling} ?? null);
+                    $conditions[] = static fn ($model): bool => self::isEmpty($model->{$sibling} ?? null);
                 }
                 if ($validate->whenPresent !== null) {
                     $sibling = $validate->whenPresent;
-                    $options['when'] = static fn ($model) => ! self::isEmpty($model->{$sibling} ?? null);
+                    $conditions[] = static fn ($model): bool => ! self::isEmpty($model->{$sibling} ?? null);
+                }
+                if ($validate->whenIsA !== []) {
+                    $checks = $validate->whenIsA;
+                    $conditions[] = static function ($model) use ($checks): bool {
+                        foreach ($checks as $sibling => $class) {
+                            $value = $model->{$sibling} ?? null;
+                            if (! is_object($value) && ! is_string($value)) {
+                                continue;
+                            }
+                            if (is_a($value, $class, true)) {
+                                return true;
+                            }
+                        }
+
+                        return false;
+                    };
+                }
+                if ($conditions !== []) {
+                    $options['when'] = static function ($model) use ($conditions): bool {
+                        foreach ($conditions as $cond) {
+                            if (! $cond($model)) {
+                                return false;
+                            }
+                        }
+
+                        return true;
+                    };
                 }
                 $rules[] = array_merge([[$name], $validate->rule], $options);
             }

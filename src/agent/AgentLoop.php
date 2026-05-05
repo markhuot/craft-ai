@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\agent;
 
+use craft\elements\Asset;
 use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\records\MessageRecord;
 use markhuot\craftai\records\SessionRecord;
@@ -17,10 +18,15 @@ class AgentLoop
     /**
      * Persist a user message so the CP transcript reflects it immediately,
      * before the (possibly queued) agent loop picks it up.
+     *
+     * @param list<int> $assetIds  Optional asset IDs the user attached to the message.
+     *                              Stored alongside the message and surfaced to the LLM
+     *                              as a text annotation so the agent can request the
+     *                              asset's contents through tools if needed.
      */
-    public function appendUserMessage(string $sessionId, string $userMessage): void
+    public function appendUserMessage(string $sessionId, string $userMessage, array $assetIds = []): void
     {
-        $this->saveMessage($sessionId, 'user', [['type' => 'text', 'text' => $userMessage]]);
+        $this->saveMessage($sessionId, 'user', [['type' => 'text', 'text' => $userMessage]], assetIds: $assetIds);
     }
 
     public function run(string $sessionId): void
@@ -114,8 +120,9 @@ class AgentLoop
      * @param array<string, mixed>|null $rawResponse Full provider payload, persisted
      *        on assistant turns to retain provider-specific fields (e.g.
      *        DeepSeek `reasoning_content`) that the canonical block format drops.
+     * @param list<int> $assetIds
      */
-    private function saveMessage(string $sessionId, string $role, array $content, ?array $rawResponse = null): void
+    private function saveMessage(string $sessionId, string $role, array $content, ?array $rawResponse = null, array $assetIds = []): void
     {
         $record = new MessageRecord();
         $record->sessionId = $sessionId;
@@ -124,6 +131,9 @@ class AgentLoop
         $record->rawResponse = $rawResponse === null
             ? null
             : json_encode($rawResponse, JSON_THROW_ON_ERROR);
+        $record->assetIds = $assetIds === []
+            ? null
+            : json_encode(array_map('intval', $assetIds), JSON_THROW_ON_ERROR);
         $record->save();
     }
 
@@ -138,14 +148,59 @@ class AgentLoop
             ->orderBy(['id' => SORT_ASC])
             ->all();
 
-        return array_map(static function (MessageRecord $record): array {
+        return array_map(function (MessageRecord $record): array {
             /** @var list<array<string, mixed>> $content */
             $content = json_decode($record->content, true, 512, JSON_THROW_ON_ERROR);
+
+            if ($record->role === 'user' && $record->assetIds !== null && $record->assetIds !== '') {
+                /** @var list<int> $assetIds */
+                $assetIds = json_decode($record->assetIds, true, 512, JSON_THROW_ON_ERROR);
+                $annotation = $this->assetAnnotation($assetIds);
+                if ($annotation !== null) {
+                    $content[] = ['type' => 'text', 'text' => $annotation];
+                }
+            }
 
             return [
                 'role' => $record->role,
                 'content' => $content,
             ];
         }, $records);
+    }
+
+    /**
+     * Render attached asset IDs as a short reference block the LLM can read.
+     * We deliberately do not embed the raw file contents — the agent can call
+     * `get_asset` (or any other asset tool) to fetch them on demand.
+     *
+     * @param list<int> $assetIds
+     */
+    private function assetAnnotation(array $assetIds): ?string
+    {
+        if ($assetIds === []) {
+            return null;
+        }
+
+        $assets = Asset::find()->id($assetIds)->status(null)->all();
+        $byId = [];
+        foreach ($assets as $asset) {
+            $byId[$asset->id] = $asset;
+        }
+
+        $lines = [];
+        foreach ($assetIds as $id) {
+            $asset = $byId[$id] ?? null;
+            if ($asset === null) {
+                $lines[] = "- asset id {$id} (not found)";
+                continue;
+            }
+
+            $kind = $asset->kind ?: 'file';
+            $filename = $asset->filename ?: 'unknown';
+            $mime = $asset->getMimeType() ?: 'application/octet-stream';
+            $lines[] = "- asset id {$asset->id}: {$filename} ({$kind}, {$mime})";
+        }
+
+        return "[The user attached the following assets to this message. Use the `get_asset` tool to inspect any of them if needed.]\n".implode("\n", $lines);
     }
 }

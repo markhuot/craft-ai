@@ -209,17 +209,10 @@ class SessionsController extends Controller
             ->orderBy(['id' => SORT_ASC])
             ->all();
 
-        $messages = array_map(static function (MessageRecord $record): array {
-            /** @var list<array<string, mixed>> $content */
-            $content = json_decode($record->content, true, 512, JSON_THROW_ON_ERROR);
-
-            return [
-                'id' => $record->id,
-                'role' => $record->role,
-                'content' => $content,
-                'dateCreated' => $record->dateCreated,
-            ];
-        }, $records);
+        $messages = array_map(
+            static fn (MessageRecord $record): array => MessagesController::serializeMessage($record),
+            $records,
+        );
 
         return $this->renderTemplate('craft-ai/sessions/view', [
             'sessionId' => $uuid,
@@ -292,9 +285,10 @@ class SessionsController extends Controller
             throw new \yii\web\BadRequestHttpException('sessionId and message must be strings.');
         }
 
+        $assetIds = $this->normalizeAssetIds($this->request->getBodyParam('assetIds'));
         $message = trim($message);
 
-        if ($message === '') {
+        if ($message === '' && $assetIds === []) {
             return $this->asJson(['queued' => false]);
         }
 
@@ -308,7 +302,7 @@ class SessionsController extends Controller
 
         /** @var \markhuot\craftai\agent\AgentLoop $loop */
         $loop = Craft::$container->get(\markhuot\craftai\agent\AgentLoop::class);
-        $loop->appendUserMessage($sessionId, $message);
+        $loop->appendUserMessage($sessionId, $message, $assetIds);
 
         Craft::$app->getQueue()->push(new AgentJob([
             'sessionId' => $sessionId,
@@ -316,6 +310,69 @@ class SessionsController extends Controller
         ]));
 
         return $this->asJson(['queued' => true]);
+    }
+
+    /**
+     * Tolerate JSON-encoded strings, comma-separated strings, single ints, or
+     * arrays — POST bodies can deliver any of these depending on whether the
+     * client used `FormData.append` per id, a JSON.stringify, or just a single
+     * value. Drops anything that isn't a positive integer.
+     *
+     * @return list<int>
+     */
+    private function normalizeAssetIds(mixed $value): array
+    {
+        if ($value === null || $value === '' || $value === []) {
+            return [];
+        }
+
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed === '') {
+                return [];
+            }
+            if (str_starts_with($trimmed, '[')) {
+                try {
+                    /** @var mixed $decoded */
+                    $decoded = json_decode($trimmed, true, 512, JSON_THROW_ON_ERROR);
+                } catch (\JsonException) {
+                    return [];
+                }
+                if (! is_array($decoded)) {
+                    return [];
+                }
+                $value = $decoded;
+            } else {
+                $value = explode(',', $trimmed);
+            }
+        }
+
+        if (is_int($value)) {
+            $value = [$value];
+        }
+
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($value as $entry) {
+            if (is_int($entry) && $entry > 0) {
+                $ids[] = $entry;
+                continue;
+            }
+            if (is_string($entry)) {
+                $trimmed = trim($entry);
+                if ($trimmed !== '' && ctype_digit($trimmed)) {
+                    $intVal = (int) $trimmed;
+                    if ($intVal > 0) {
+                        $ids[] = $intVal;
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique($ids));
     }
 
     private function currentUserId(): ?int

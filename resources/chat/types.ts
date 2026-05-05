@@ -8,10 +8,20 @@ export type ContentBlock =
 
 export type Role = "user" | "assistant" | "system";
 
+export interface Attachment {
+  id: number;
+  label: string;
+  filename: string | null;
+  kind: string | null;
+  mimeType: string | null;
+  thumbUrl: string | null;
+}
+
 export interface ChatMessage {
   id: number;
   role: Role;
   content: ContentBlock[];
+  attachments?: Attachment[];
   dateCreated?: string;
 }
 
@@ -32,6 +42,7 @@ export interface ChatBootstrap {
   sessionsUrl: string;
   newSessionUrl: string;
   sessionsIndexUrl: string;
+  assetsInfoUrl: string;
   csrfTokenName: string;
   csrfTokenValue: string;
   initialMessages: ChatMessage[];

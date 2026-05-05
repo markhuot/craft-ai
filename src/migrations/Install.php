@@ -14,6 +14,7 @@ class Install extends Migration
             'role' => $this->string(20)->notNull(),
             'content' => $this->text()->notNull(),
             'rawResponse' => $this->mediumText()->null(),
+            'assetIds' => $this->text()->null(),
             'dateCreated' => $this->dateTime()->notNull(),
             'dateUpdated' => $this->dateTime()->notNull(),
             'uid' => $this->uid(),

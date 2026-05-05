@@ -173,6 +173,72 @@ it('breaks immediately and writes a stop marker when stopRequested is set before
     expect($marker[0]['text'])->toBe('Stopped by user.');
 });
 
+it('persists assetIds on the user message when supplied', function () {
+    $provider = new FakeProvider([
+        new ProviderResponse('msg_1', [['type' => 'text', 'text' => 'Sure']], 'end_turn'),
+    ]);
+
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->appendUserMessage('session-assets', 'Look at this', [123, 456]);
+    $loop->run('session-assets');
+
+    /** @var MessageRecord $userRecord */
+    $userRecord = MessageRecord::find()
+        ->where(['sessionId' => 'session-assets', 'role' => 'user'])
+        ->orderBy(['id' => SORT_ASC])
+        ->one();
+
+    expect($userRecord->assetIds)->not->toBeNull();
+    expect(json_decode($userRecord->assetIds, true))->toBe([123, 456]);
+});
+
+it('annotates the user message with attached asset details when sending to the provider', function () {
+    \markhuot\craftpest\factories\Volume::factory()->name('Uploads')->handle('uploads')->create();
+    $sourceFile = tempnam(sys_get_temp_dir(), 'craftai-asset-test').'.jpg';
+    copy(__DIR__.'/../vendor/markhuot/craft-pest-core/stubs/images/gray.jpg', $sourceFile);
+
+    $registry = new ToolRegistry();
+    $registry->register(GetHealth::class);
+    $registry->register(\markhuot\craftai\tools\UpsertAsset::class);
+
+    /** @var \markhuot\craftai\tools\ToolOutput $assetCreated */
+    $assetCreated = $registry->execute('upsert_asset', [
+        'volume' => 'uploads',
+        'filename' => 'attachment.jpg',
+        'sourcePath' => $sourceFile,
+    ]);
+    expect($assetCreated->isError)->toBeFalse($assetCreated->text);
+    $assetId = json_decode($assetCreated->text, true)['id'];
+
+    $provider = new FakeProvider([
+        new ProviderResponse('msg_1', [['type' => 'text', 'text' => 'thanks']], 'end_turn'),
+    ]);
+
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->appendUserMessage('session-annot', 'whats this', [$assetId]);
+    $loop->run('session-annot');
+
+    @unlink($sourceFile);
+
+    expect($provider->calls)->toHaveCount(1);
+    $messages = $provider->calls[0]['messages'];
+    $userMessage = $messages[0];
+    expect($userMessage['role'])->toBe('user');
+
+    $textBlocks = array_values(array_filter(
+        $userMessage['content'],
+        static fn ($b) => ($b['type'] ?? '') === 'text',
+    ));
+
+    // The agent should see both the original prompt and a follow-up annotation
+    // listing the attached asset.
+    expect($textBlocks)->toHaveCount(2);
+    expect($textBlocks[0]['text'])->toBe('whats this');
+    expect($textBlocks[1]['text'])->toContain("asset id {$assetId}");
+    expect($textBlocks[1]['text'])->toContain('attachment.jpg');
+    expect($textBlocks[1]['text'])->toContain('get_asset');
+});
+
 it('fabricates stopped tool_results and exits when stop is requested mid tool_use turn', function () {
     $session = new SessionRecord();
     $session->id = 'session-stop-mid';

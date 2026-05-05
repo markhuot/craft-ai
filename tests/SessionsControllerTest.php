@@ -235,6 +235,58 @@ it('does not queue a job for an empty message', function () {
     $response->assertJsonPath('queued', false);
 });
 
+it('queues a job when only attachments are sent (empty message + assetIds)', function () {
+    $response = postSend([
+        'sessionId' => 'session-send-attachments',
+        'message' => '',
+        'assetIds' => json_encode([42, 99]),
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('queued', true);
+
+    $userRecord = MessageRecord::find()
+        ->where(['sessionId' => 'session-send-attachments', 'role' => 'user'])
+        ->one();
+
+    expect($userRecord)->not->toBeNull();
+    expect(json_decode($userRecord->assetIds, true))->toBe([42, 99]);
+});
+
+it('persists assetIds passed alongside a message body', function () {
+    $response = postSend([
+        'sessionId' => 'session-send-mixed',
+        'message' => 'check these',
+        'assetIds' => json_encode([7]),
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('queued', true);
+
+    $userRecord = MessageRecord::find()
+        ->where(['sessionId' => 'session-send-mixed', 'role' => 'user'])
+        ->one();
+
+    expect(json_decode($userRecord->assetIds, true))->toBe([7]);
+});
+
+it('ignores garbage assetId values without rejecting the message', function () {
+    $response = postSend([
+        'sessionId' => 'session-send-garbage',
+        'message' => 'still send this',
+        'assetIds' => 'not-a-number,still-not-a-number',
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('queued', true);
+
+    $userRecord = MessageRecord::find()
+        ->where(['sessionId' => 'session-send-garbage', 'role' => 'user'])
+        ->one();
+
+    expect($userRecord->assetIds)->toBeNull();
+});
+
 function postStop(array $body) {
     return test()->http('post', 'admin')
         ->withCsrfToken()

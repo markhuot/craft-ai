@@ -86,3 +86,49 @@ it('runs the agent loop inline when async is not set', function () {
     $count = MessageRecord::find()->where(['sessionId' => 'mc-4'])->count();
     expect((int) $count)->toBe(2);
 });
+
+it('includes resolved attachments on user messages in the messages JSON', function () {
+    \markhuot\craftpest\factories\Volume::factory()->name('Uploads')->handle('uploads')->create();
+    $sourceFile = tempnam(sys_get_temp_dir(), 'craftai-asset-msg').'.jpg';
+    copy(__DIR__.'/../vendor/markhuot/craft-pest-core/stubs/images/gray.jpg', $sourceFile);
+
+    $registry = new \markhuot\craftai\tools\ToolRegistry();
+    $registry->register(\markhuot\craftai\tools\UpsertAsset::class);
+
+    $assetCreated = $registry->execute('upsert_asset', [
+        'volume' => 'uploads',
+        'filename' => 'message-attachment.jpg',
+        'sourcePath' => $sourceFile,
+    ]);
+    @unlink($sourceFile);
+
+    expect($assetCreated->isError)->toBeFalse($assetCreated->text);
+    $assetId = json_decode($assetCreated->text, true)['id'];
+
+    $record = new MessageRecord();
+    $record->sessionId = 'mc-attachments';
+    $record->role = 'user';
+    $record->content = json_encode([['type' => 'text', 'text' => 'see this']]);
+    $record->assetIds = json_encode([$assetId]);
+    $record->save();
+
+    $response = test()->get('admin?action=craft-ai/messages&sessionId=mc-attachments');
+
+    $response->assertOk();
+    $response->assertJsonCount(1);
+    $response->assertJsonPath('0.attachments.0.id', $assetId);
+    $response->assertJsonPath('0.attachments.0.filename', 'message-attachment.jpg');
+});
+
+it('returns an empty attachments array when the user message has no assetIds', function () {
+    $record = new MessageRecord();
+    $record->sessionId = 'mc-no-attachments';
+    $record->role = 'user';
+    $record->content = json_encode([['type' => 'text', 'text' => 'hi']]);
+    $record->save();
+
+    $response = test()->get('admin?action=craft-ai/messages&sessionId=mc-no-attachments');
+
+    $response->assertOk();
+    $response->assertJsonPath('0.attachments', []);
+});

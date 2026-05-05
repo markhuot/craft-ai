@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Chat } from "../Chat";
 import { ChatApi } from "../api";
-import type { ChatBootstrap, ChatMessage } from "../types";
+import type { Attachment, ChatBootstrap, ChatMessage } from "../types";
 
 afterEach(() => cleanup());
 
@@ -14,6 +14,7 @@ function bootstrap(initialMessages: ChatMessage[] = []): ChatBootstrap {
     sessionsUrl: "http://localhost/sessions/data",
     newSessionUrl: "http://localhost/sessions/new",
     sessionsIndexUrl: "http://localhost/sessions",
+    assetsInfoUrl: "http://localhost/assets/info",
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
     initialMessages,
@@ -23,11 +24,13 @@ function bootstrap(initialMessages: ChatMessage[] = []): ChatBootstrap {
 
 function makeApi(overrides: Partial<{
   fetchMessagesAfter: (lastId: number) => Promise<ChatMessage[]>;
-  sendMessage: (msg: string) => Promise<void>;
+  sendMessage: (msg: string, assetIds?: number[]) => Promise<void>;
+  fetchAssetInfo: (ids: number[]) => Promise<Attachment[]>;
 }> = {}) {
   const api = new ChatApi({
     messagesUrl: "http://localhost/messages",
     sendUrl: "http://localhost/send",
+    assetsInfoUrl: "http://localhost/assets/info",
     sessionId: "session-1",
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
@@ -38,6 +41,9 @@ function makeApi(overrides: Partial<{
   }
   if (overrides.sendMessage) {
     api.sendMessage = overrides.sendMessage;
+  }
+  if (overrides.fetchAssetInfo) {
+    api.fetchAssetInfo = overrides.fetchAssetInfo;
   }
   return api;
 }
@@ -97,16 +103,16 @@ describe("<Chat />", () => {
 
     const textarea = screen.getByPlaceholderText("Send a message…") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "ping" } });
-    const submit = screen.getByRole("button");
+    const submit = screen.getByRole("button", { name: /send/i });
     fireEvent.click(submit);
 
     await waitFor(() => expect(sent).toBe("ping"));
     await waitFor(() => expect(textarea.value).toBe(""));
   });
 
-  test("submit is disabled when the draft is empty", () => {
+  test("submit is disabled when the draft is empty and there are no attachments", () => {
     render(<Chat bootstrap={bootstrap()} api={makeApi()} pollIntervalMs={1_000_000} />);
-    const submit = screen.getByRole("button") as HTMLButtonElement;
+    const submit = screen.getByRole("button", { name: /send/i }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
   });
 
@@ -118,7 +124,7 @@ describe("<Chat />", () => {
     });
     render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
     fireEvent.change(screen.getByPlaceholderText("Send a message…"), { target: { value: "x" } });
-    fireEvent.click(screen.getByRole("button"));
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("network down"));
   });
 
@@ -137,5 +143,133 @@ describe("<Chat />", () => {
     });
     render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={20} />);
     await waitFor(() => expect(screen.getByText("later")).toBeTruthy());
+  });
+
+  test("clicking Upload opens the asset selector and renders a thumbnail chip", async () => {
+    const fetched: Attachment[] = [
+      {
+        id: 42,
+        label: "photo",
+        filename: "photo.jpg",
+        kind: "image",
+        mimeType: "image/jpeg",
+        thumbUrl: "/cpresources/photo-thumb.jpg",
+      },
+    ];
+    const api = makeApi({
+      fetchAssetInfo: async () => fetched,
+    });
+    render(
+      <Chat
+        bootstrap={bootstrap()}
+        api={api}
+        pollIntervalMs={1_000_000}
+        openAssetSelector={async () => [42]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /upload/i }));
+
+    await waitFor(() => {
+      const img = screen.getByAltText("photo") as HTMLImageElement;
+      expect(img.src).toContain("photo-thumb.jpg");
+    });
+  });
+
+  test("the X on a chip removes the attachment from the pending list", async () => {
+    const api = makeApi({
+      fetchAssetInfo: async () => [
+        {
+          id: 7,
+          label: "doc",
+          filename: "doc.pdf",
+          kind: "pdf",
+          mimeType: "application/pdf",
+          thumbUrl: null,
+        },
+      ],
+    });
+    render(
+      <Chat
+        bootstrap={bootstrap()}
+        api={api}
+        pollIntervalMs={1_000_000}
+        openAssetSelector={async () => [7]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /upload/i }));
+    await waitFor(() => screen.getByRole("button", { name: /remove doc/i }));
+    fireEvent.click(screen.getByRole("button", { name: /remove doc/i }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /remove doc/i })).toBeNull(),
+    );
+  });
+
+  test("submit is enabled when only attachments are present and forwards their ids", async () => {
+    let sent: { msg: string; ids?: number[] } | null = null;
+    const api = makeApi({
+      sendMessage: async (msg, ids) => {
+        sent = { msg, ids };
+      },
+      fetchAssetInfo: async () => [
+        {
+          id: 99,
+          label: "graph",
+          filename: "graph.png",
+          kind: "image",
+          mimeType: "image/png",
+          thumbUrl: "/g.png",
+        },
+      ],
+    });
+    render(
+      <Chat
+        bootstrap={bootstrap()}
+        api={api}
+        pollIntervalMs={1_000_000}
+        openAssetSelector={async () => [99]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /upload/i }));
+    await waitFor(() => screen.getByAltText("graph"));
+
+    const submit = screen.getByRole("button", { name: /send/i }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+
+    fireEvent.click(submit);
+    await waitFor(() => {
+      expect(sent).not.toBeNull();
+      expect(sent?.msg).toBe("");
+      expect(sent?.ids).toEqual([99]);
+    });
+  });
+
+  test("renders attachments on past messages", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: 1,
+        role: "user",
+        content: [{ type: "text", text: "look at this" }],
+        attachments: [
+          {
+            id: 5,
+            label: "photo",
+            filename: "photo.jpg",
+            kind: "image",
+            mimeType: "image/jpeg",
+            thumbUrl: "/p.jpg",
+          },
+        ],
+      },
+    ];
+    render(<Chat bootstrap={bootstrap(messages)} api={makeApi()} pollIntervalMs={1_000_000} />);
+
+    const region = screen.getByTestId("message-attachments");
+    expect(region).toBeTruthy();
+    const img = region.querySelector("img") as HTMLImageElement;
+    expect(img.src).toContain("p.jpg");
   });
 });

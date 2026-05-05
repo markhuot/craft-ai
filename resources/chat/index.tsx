@@ -1,16 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Shell } from "./Shell";
+// Side-effect import: registers the Window.Craft ambient declaration once,
+// which is the same global both this entry and the asset selector reach for.
+import "./lib/assetSelector";
 import type { ChatBootstrap, ChatMessage, SessionListItem } from "./types";
-
-declare global {
-  interface Window {
-    Craft?: {
-      csrfTokenName?: string;
-      csrfTokenValue?: string;
-    };
-  }
-}
 
 function readBootstrap(root: HTMLElement): ChatBootstrap {
   const dataEl = root.querySelector<HTMLScriptElement>("script[data-craftai-bootstrap]");
@@ -35,6 +29,7 @@ function readBootstrap(root: HTMLElement): ChatBootstrap {
     sessionsUrl: String(obj.sessionsUrl ?? ""),
     newSessionUrl: String(obj.newSessionUrl ?? ""),
     sessionsIndexUrl: String(obj.sessionsIndexUrl ?? ""),
+    assetsInfoUrl: String(obj.assetsInfoUrl ?? ""),
     csrfTokenName: String(obj.csrfTokenName ?? window.Craft?.csrfTokenName ?? "CRAFT_CSRF_TOKEN"),
     csrfTokenValue: String(obj.csrfTokenValue ?? window.Craft?.csrfTokenValue ?? ""),
     initialMessages: initial,

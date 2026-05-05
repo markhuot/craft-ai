@@ -3,6 +3,7 @@
 namespace markhuot\craftai\controllers;
 
 use Craft;
+use craft\elements\Asset;
 use craft\web\Controller;
 use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\queue\AgentJob;
@@ -28,14 +29,110 @@ class MessagesController extends Controller
             ->orderBy(['id' => SORT_ASC])
             ->all();
 
-        $messages = array_map(static fn (MessageRecord $record): array => [
-            'id' => $record->id,
-            'role' => $record->role,
-            'content' => json_decode($record->content, true, 512, JSON_THROW_ON_ERROR),
-            'dateCreated' => $record->dateCreated,
-        ], $records);
+        $messages = array_map(
+            fn (MessageRecord $record): array => self::serializeMessage($record),
+            $records,
+        );
 
         return $this->asJson($messages);
+    }
+
+    /**
+     * Convert a MessageRecord to the wire format the React UI consumes. The
+     * `attachments` array is the resolved asset metadata for any assetIds
+     * column entries, ordered to match the original selection so the chat
+     * thumbnails render in the expected sequence.
+     *
+     * @return array{id: int, role: string, content: list<array<string, mixed>>, attachments: list<array<string, mixed>>, dateCreated: ?string}
+     */
+    public static function serializeMessage(MessageRecord $record): array
+    {
+        /** @var list<array<string, mixed>> $content */
+        $content = json_decode($record->content, true, 512, JSON_THROW_ON_ERROR);
+
+        return [
+            'id' => $record->id,
+            'role' => $record->role,
+            'content' => $content,
+            'attachments' => self::resolveAttachments($record->assetIds),
+            'dateCreated' => $record->dateCreated,
+        ];
+    }
+
+    /**
+     * @return list<array{id: int, label: string, filename: ?string, kind: ?string, mimeType: ?string, thumbUrl: ?string}>
+     */
+    private static function resolveAttachments(?string $assetIdsJson): array
+    {
+        if ($assetIdsJson === null || $assetIdsJson === '') {
+            return [];
+        }
+
+        try {
+            /** @var mixed $decoded */
+            $decoded = json_decode($assetIdsJson, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+
+        if (! is_array($decoded) || $decoded === []) {
+            return [];
+        }
+
+        $ids = [];
+        foreach ($decoded as $entry) {
+            if (is_int($entry) && $entry > 0) {
+                $ids[] = $entry;
+            } elseif (is_string($entry) && ctype_digit($entry)) {
+                $intVal = (int) $entry;
+                if ($intVal > 0) {
+                    $ids[] = $intVal;
+                }
+            }
+        }
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $assets = Asset::find()->id($ids)->status(null)->all();
+        $service = Craft::$app->getAssets();
+
+        $byId = [];
+        foreach ($assets as $asset) {
+            if ($asset->id === null) {
+                continue;
+            }
+            $byId[$asset->id] = [
+                'id' => $asset->id,
+                'label' => $asset->title ?: $asset->filename ?: "Asset #{$asset->id}",
+                'filename' => $asset->filename,
+                'kind' => $asset->kind,
+                'mimeType' => $asset->getMimeType(),
+                'thumbUrl' => $service->getThumbUrl($asset, 60, 60, true),
+            ];
+        }
+
+        $payload = [];
+        foreach ($ids as $id) {
+            if (isset($byId[$id])) {
+                $payload[] = $byId[$id];
+                continue;
+            }
+            // Asset disappeared (deleted, no permission, etc.). Surface a
+            // placeholder so the UI can still show "missing attachment"
+            // rather than silently dropping it from the user's history.
+            $payload[] = [
+                'id' => $id,
+                'label' => "Asset #{$id}",
+                'filename' => null,
+                'kind' => null,
+                'mimeType' => null,
+                'thumbUrl' => null,
+            ];
+        }
+
+        return $payload;
     }
 
     public function actionCreate(): Response

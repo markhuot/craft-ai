@@ -3,28 +3,40 @@ import { ChatApi } from "./api";
 import { Conversation, ConversationContent } from "./components/conversation";
 import { Message, MessageContent } from "./components/message";
 import {
+  AttachmentChip,
   PromptInput,
+  PromptInputAttachments,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputToolbar,
+  PromptInputUpload,
 } from "./components/prompt-input";
 import { Response } from "./components/response";
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from "./components/tool";
-import type { ChatBootstrap, ChatMessage, ContentBlock } from "./types";
+import { openAssetSelector, type AssetSelectorOpener } from "./lib/assetSelector";
+import type { Attachment, ChatBootstrap, ChatMessage, ContentBlock } from "./types";
 
 export interface ChatProps {
   bootstrap: ChatBootstrap;
   api?: ChatApi;
   pollIntervalMs?: number;
+  /** Override Craft's modal opener — primarily for tests. */
+  openAssetSelector?: AssetSelectorOpener;
 }
 
-export function Chat({ bootstrap, api: apiOverride, pollIntervalMs = 1500 }: ChatProps) {
+export function Chat({
+  bootstrap,
+  api: apiOverride,
+  pollIntervalMs = 1500,
+  openAssetSelector: openAssetSelectorOverride,
+}: ChatProps) {
   const api = useMemo(
     () =>
       apiOverride ??
       new ChatApi({
         messagesUrl: bootstrap.messagesUrl,
         sendUrl: bootstrap.sendUrl,
+        assetsInfoUrl: bootstrap.assetsInfoUrl,
         sessionId: bootstrap.sessionId,
         csrfTokenName: bootstrap.csrfTokenName,
         csrfTokenValue: bootstrap.csrfTokenValue,
@@ -32,8 +44,11 @@ export function Chat({ bootstrap, api: apiOverride, pollIntervalMs = 1500 }: Cha
     [apiOverride, bootstrap],
   );
 
+  const opener = openAssetSelectorOverride ?? openAssetSelector;
+
   const [messages, setMessages] = useState<ChatMessage[]>(bootstrap.initialMessages);
   const [draft, setDraft] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [status, setStatus] = useState<"idle" | "submitting" | "streaming">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -74,12 +89,14 @@ export function Chat({ bootstrap, api: apiOverride, pollIntervalMs = 1500 }: Cha
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       const text = draft.trim();
-      if (!text || status !== "idle") return;
+      if (status !== "idle") return;
+      if (text === "" && pendingAttachments.length === 0) return;
       setStatus("submitting");
       setError(null);
       try {
-        await api.sendMessage(text);
+        await api.sendMessage(text, pendingAttachments.map((a) => a.id));
         setDraft("");
+        setPendingAttachments([]);
         setStatus("streaming");
         await poll();
       } catch (err) {
@@ -87,8 +104,31 @@ export function Chat({ bootstrap, api: apiOverride, pollIntervalMs = 1500 }: Cha
         setError(err instanceof Error ? err.message : "Failed to send message");
       }
     },
-    [api, draft, poll, status],
+    [api, draft, pendingAttachments, poll, status],
   );
+
+  const onAddAttachments = useCallback(async () => {
+    if (status !== "idle") return;
+    try {
+      const ids = await opener();
+      if (ids.length === 0) return;
+      const existing = new Set(pendingAttachments.map((a) => a.id));
+      const newIds = ids.filter((id) => !existing.has(id));
+      if (newIds.length === 0) return;
+      const fetched = await api.fetchAssetInfo(newIds);
+      if (fetched.length === 0) return;
+      setPendingAttachments((prev) => {
+        const seen = new Set(prev.map((a) => a.id));
+        return [...prev, ...fetched.filter((a) => !seen.has(a.id))];
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to attach assets");
+    }
+  }, [api, opener, pendingAttachments, status]);
+
+  const onRemoveAttachment = useCallback((id: number) => {
+    setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
+  }, []);
 
   return (
     <div className="craftai-chat ai:flex ai:flex-col ai:gap-3">
@@ -124,7 +164,6 @@ export function Chat({ bootstrap, api: apiOverride, pollIntervalMs = 1500 }: Cha
           placeholder="Send a message…"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          required
           autoFocus
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.altKey) {
@@ -133,8 +172,16 @@ export function Chat({ bootstrap, api: apiOverride, pollIntervalMs = 1500 }: Cha
             }
           }}
         />
+        <PromptInputAttachments
+          attachments={pendingAttachments}
+          onRemove={onRemoveAttachment}
+        />
         <PromptInputToolbar>
-          <PromptInputSubmit status={status} disabled={!draft.trim()} />
+          <PromptInputUpload onClick={onAddAttachments} disabled={status !== "idle"} />
+          <PromptInputSubmit
+            status={status}
+            disabled={!draft.trim() && pendingAttachments.length === 0}
+          />
         </PromptInputToolbar>
       </PromptInput>
     </div>
@@ -166,6 +213,19 @@ function RenderedMessage({ message }: { message: ChatMessage }) {
     }
   }
 
+  // If the message has attachments but no inline content blocks (e.g., the
+  // user clicked Send with only assets attached), surface a placeholder
+  // bubble so the attachments still anchor to the user's turn.
+  const attachments = message.attachments ?? [];
+  if (segments.length === 0 && attachments.length > 0) {
+    segments.push({ kind: "bubble", blocks: [] });
+  }
+
+  // Tag the first bubble — that's where we'll render the attachment row, so
+  // each user turn shows its attached assets exactly once even if the
+  // content was split across multiple bubbles.
+  const firstBubbleIndex = segments.findIndex((s) => s.kind === "bubble");
+
   return (
     <>
       {segments.map((segment, i) =>
@@ -179,6 +239,16 @@ function RenderedMessage({ message }: { message: ChatMessage }) {
                 {segment.blocks.map((block, j) => (
                   <RenderedBlock key={j} block={block} />
                 ))}
+                {i === firstBubbleIndex && attachments.length > 0 && (
+                  <div
+                    data-testid="message-attachments"
+                    className="ai:flex ai:flex-wrap ai:gap-2 ai:pt-1"
+                  >
+                    {attachments.map((a) => (
+                      <AttachmentChip key={a.id} attachment={a} />
+                    ))}
+                  </div>
+                )}
               </div>
             </MessageContent>
           </Message>

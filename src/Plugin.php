@@ -20,6 +20,7 @@ use markhuot\craftai\tools\DeleteEntryTypes;
 use markhuot\craftai\tools\DeleteFields;
 use markhuot\craftai\tools\DeleteSections;
 use markhuot\craftai\tools\FetchWebpage;
+use markhuot\craftai\tools\GetAsset;
 use markhuot\craftai\tools\GetDraft;
 use markhuot\craftai\tools\GetDrafts;
 use markhuot\craftai\tools\GetEntries;
@@ -44,7 +45,7 @@ use yii\base\Event;
 
 class Plugin extends BasePlugin
 {
-    public string $schemaVersion = '1.4.0';
+    public string $schemaVersion = '1.5.0';
 
     public bool $hasCpSection = true;
 
@@ -84,6 +85,7 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(GetTemplates::class);
         $this->toolRegistry->register(GetTemplate::class);
         $this->toolRegistry->register(UpsertTemplate::class);
+        $this->toolRegistry->register(GetAsset::class);
         $this->toolRegistry->register(UpsertAsset::class);
         $this->toolRegistry->register(DeleteAssets::class);
         $this->toolRegistry->register(DeleteEntries::class);

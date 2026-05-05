@@ -10,6 +10,7 @@ use craft\db\ActiveRecord;
  * @property string $role
  * @property string $content JSON-encoded message content blocks
  * @property string|null $rawResponse JSON-encoded full provider payload (assistant turns only)
+ * @property string|null $assetIds JSON-encoded list of Craft asset IDs the user attached to this message
  * @property string $dateCreated
  * @property string $dateUpdated
  * @property string $uid

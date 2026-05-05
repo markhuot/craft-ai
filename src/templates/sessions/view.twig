@@ -8,6 +8,14 @@
 {% if sessionId %}
     {% set actionMenu = disclosureMenu([
         {
+            icon: 'circle-stop',
+            label: 'Stop session'|t('craft-ai'),
+            action: 'craft-ai/sessions/stop',
+            params: {sessionId: sessionId},
+            confirm: 'Stop this session? The agent will halt after its current step.'|t('craft-ai'),
+            redirect: 'ai/session/'~sessionId,
+        },
+        {
             icon: 'trash',
             label: 'Delete session'|t('craft-ai'),
             destructive: true,

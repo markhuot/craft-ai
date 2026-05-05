@@ -4,6 +4,7 @@ namespace markhuot\craftai\agent;
 
 use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\records\MessageRecord;
+use markhuot\craftai\records\SessionRecord;
 use markhuot\craftai\tools\ToolRegistry;
 
 class AgentLoop
@@ -28,6 +29,11 @@ class AgentLoop
         $tools = $this->registry->descriptors(onlyAllowed: true);
 
         while (true) {
+            if ($this->isStopRequested($sessionId)) {
+                $this->recordStopMarker($sessionId);
+                return;
+            }
+
             $response = $this->provider->createMessage($messages, $tools);
 
             $this->saveMessage($sessionId, 'assistant', $response->content, $response->raw);
@@ -37,6 +43,13 @@ class AgentLoop
                 break;
             }
 
+            // Re-check between LLM response and tool execution. If the user
+            // hit Stop while we were waiting on the model, short-circuit the
+            // tools but still emit tool_result blocks so the saved transcript
+            // matches every tool_use id — otherwise the next provider call
+            // would reject the malformed conversation.
+            $stopMidTurn = $this->isStopRequested($sessionId);
+
             $toolResults = [];
             foreach ($response->content as $block) {
                 if (($block['type'] ?? '') !== 'tool_use') {
@@ -45,6 +58,16 @@ class AgentLoop
 
                 $name = $block['name'] ?? null;
                 if (! is_string($name)) {
+                    continue;
+                }
+
+                if ($stopMidTurn) {
+                    $toolResults[] = [
+                        'type' => 'tool_result',
+                        'tool_use_id' => $block['id'],
+                        'content' => 'Stopped by user.',
+                        'is_error' => true,
+                    ];
                     continue;
                 }
 
@@ -63,7 +86,27 @@ class AgentLoop
 
             $this->saveMessage($sessionId, 'user', $toolResults);
             $messages[] = ['role' => 'user', 'content' => $toolResults];
+
+            if ($stopMidTurn) {
+                $this->recordStopMarker($sessionId);
+                return;
+            }
         }
+    }
+
+    private function isStopRequested(string $sessionId): bool
+    {
+        $session = SessionRecord::findOne(['id' => $sessionId]);
+
+        return $session !== null && (bool) $session->stopRequested;
+    }
+
+    private function recordStopMarker(string $sessionId): void
+    {
+        $this->saveMessage($sessionId, 'assistant', [[
+            'type' => 'text',
+            'text' => 'Stopped by user.',
+        ]]);
     }
 
     /**

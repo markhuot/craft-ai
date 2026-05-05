@@ -28,6 +28,7 @@ class Install extends Migration
         $this->createTable('{{%craftai_sessions}}', [
             'id' => $this->string(36)->notNull(),
             'active' => $this->boolean()->notNull()->defaultValue(false),
+            'stopRequested' => $this->boolean()->notNull()->defaultValue(false),
             'title' => $this->string()->null(),
             'userId' => $this->integer()->null(),
             'dateCreated' => $this->dateTime()->notNull(),

@@ -234,3 +234,91 @@ it('does not queue a job for an empty message', function () {
     $response->assertOk();
     $response->assertJsonPath('queued', false);
 });
+
+function postStop(array $body) {
+    return test()->http('post', 'admin')
+        ->withCsrfToken()
+        ->setBody(['action' => 'craft-ai/sessions/stop', ...$body])
+        ->send();
+}
+
+it('flips stopRequested on the session and redirects back to the session page', function () {
+    $session = new SessionRecord();
+    $session->id = 'session-stop-1';
+    $session->active = true;
+    $session->stopRequested = false;
+    $session->userId = 1;
+    $session->save();
+
+    $response = postStop(['sessionId' => 'session-stop-1']);
+
+    $response->assertRedirect();
+    $location = $response->headers->get('Location');
+    expect($location)->toContain('/ai/session/session-stop-1');
+
+    $reloaded = SessionRecord::findOne(['id' => 'session-stop-1']);
+    expect((bool) $reloaded->stopRequested)->toBeTrue();
+    // We deliberately do NOT flip active here — the running agent will set it
+    // to false in its finally block once the loop notices the request.
+    expect((bool) $reloaded->active)->toBeTrue();
+});
+
+it('is idempotent when the session is not currently active', function () {
+    $session = new SessionRecord();
+    $session->id = 'session-stop-idle';
+    $session->active = false;
+    $session->stopRequested = false;
+    $session->userId = 1;
+    $session->save();
+
+    $response = postStop(['sessionId' => 'session-stop-idle']);
+
+    $response->assertRedirect();
+    $reloaded = SessionRecord::findOne(['id' => 'session-stop-idle']);
+    expect((bool) $reloaded->stopRequested)->toBeTrue();
+});
+
+it('refuses to stop another user\'s session', function () {
+    $suffix = bin2hex(random_bytes(4));
+    $elementsTable = Craft::$app->getDb()->getSchema()->getRawTableName('{{%elements}}');
+    Craft::$app->getDb()->createCommand()->insert($elementsTable, [
+        'type' => User::class,
+        'enabled' => true,
+        'archived' => false,
+        'dateCreated' => \craft\helpers\Db::prepareDateForDb(new \DateTime()),
+        'dateUpdated' => \craft\helpers\Db::prepareDateForDb(new \DateTime()),
+        'uid' => \craft\helpers\StringHelper::UUID(),
+    ])->execute();
+    $otherId = (int) Craft::$app->getDb()->getLastInsertID();
+    $usersTable = Craft::$app->getDb()->getSchema()->getRawTableName('{{%users}}');
+    Craft::$app->getDb()->createCommand()->insert($usersTable, [
+        'id' => $otherId,
+        'username' => 'other-stop-'.$suffix,
+        'email' => 'other-stop-'.$suffix.'@example.com',
+        'active' => true,
+        'pending' => false,
+        'locked' => false,
+        'suspended' => false,
+        'admin' => false,
+        'dateCreated' => \craft\helpers\Db::prepareDateForDb(new \DateTime()),
+        'dateUpdated' => \craft\helpers\Db::prepareDateForDb(new \DateTime()),
+    ])->execute();
+
+    $theirs = new SessionRecord();
+    $theirs->id = 'session-stop-theirs';
+    $theirs->active = true;
+    $theirs->stopRequested = false;
+    $theirs->userId = $otherId;
+    $theirs->save();
+
+    $threw = false;
+    try {
+        postStop(['sessionId' => 'session-stop-theirs']);
+    } catch (\yii\web\NotFoundHttpException) {
+        $threw = true;
+    }
+
+    expect($threw)->toBeTrue();
+    $reloaded = SessionRecord::findOne(['id' => 'session-stop-theirs']);
+    expect((bool) $reloaded->stopRequested)->toBeFalse();
+});

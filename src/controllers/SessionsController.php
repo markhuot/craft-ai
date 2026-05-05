@@ -253,6 +253,33 @@ class SessionsController extends Controller
         return $this->redirect(UrlHelper::cpUrl('ai/sessions'));
     }
 
+    public function actionStop(): Response
+    {
+        $this->requirePostRequest();
+
+        $sessionId = $this->request->getRequiredBodyParam('sessionId');
+
+        if (! is_string($sessionId) || $sessionId === '') {
+            throw new \yii\web\BadRequestHttpException('sessionId must be a non-empty string.');
+        }
+
+        $session = SessionRecord::findOne(['id' => $sessionId]);
+
+        if ($session === null || ($session->userId !== null && $session->userId !== $this->currentUserId())) {
+            throw new \yii\web\NotFoundHttpException('Session not found.');
+        }
+
+        // Idempotent: setting the flag is safe whether or not a job is running.
+        // The agent loop polls it between turns and breaks at the next safe
+        // point; AgentJob clears it again when starting a fresh run.
+        $session->stopRequested = true;
+        $session->save();
+
+        $this->setSuccessFlash(Craft::t('craft-ai', 'Stop requested. The agent will halt after its current step.'));
+
+        return $this->redirect(UrlHelper::cpUrl("ai/session/{$sessionId}"));
+    }
+
     public function actionSend(): Response
     {
         $this->requirePostRequest();

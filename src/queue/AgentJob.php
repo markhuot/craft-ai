@@ -142,6 +142,13 @@ class AgentJob extends BaseJob
         }
 
         $session->active = $active;
+
+        // Clear any leftover stop request when a new run starts so a stale
+        // flag from a previous job doesn't immediately abort this one.
+        if ($active) {
+            $session->stopRequested = false;
+        }
+
         $session->save();
     }
 

@@ -4,6 +4,7 @@ use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\agent\providers\ProviderResponse;
 use markhuot\craftai\records\MessageRecord;
+use markhuot\craftai\records\SessionRecord;
 use markhuot\craftai\tools\GetHealth;
 use markhuot\craftai\tools\ToolDescriptor;
 use markhuot\craftai\tools\ToolRegistry;
@@ -140,4 +141,89 @@ it('passes the tool descriptor catalog from the registry into every provider cal
     expect($provider->calls[0]['tools'])->toHaveCount(1);
     expect($provider->calls[0]['tools'][0])->toBeInstanceOf(ToolDescriptor::class);
     expect($provider->calls[0]['tools'][0]->name)->toBe('get_health');
+});
+
+it('breaks immediately and writes a stop marker when stopRequested is set before the next turn', function () {
+    $session = new SessionRecord();
+    $session->id = 'session-stop-pre';
+    $session->active = true;
+    $session->stopRequested = true;
+    $session->save();
+
+    // Provider has zero scripted responses; if the loop calls it, the
+    // FakeProvider would throw, proving the early-exit happened.
+    $provider = new FakeProvider([]);
+
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->appendUserMessage('session-stop-pre', 'go');
+    $loop->run('session-stop-pre');
+
+    expect($provider->calls)->toHaveCount(0);
+
+    $records = MessageRecord::find()
+        ->where(['sessionId' => 'session-stop-pre'])
+        ->orderBy(['id' => SORT_ASC])
+        ->all();
+
+    // user message + the synthetic "Stopped by user." assistant marker
+    expect($records)->toHaveCount(2);
+    expect($records[1]->role)->toBe('assistant');
+    $marker = json_decode($records[1]->content, true);
+    expect($marker[0]['type'])->toBe('text');
+    expect($marker[0]['text'])->toBe('Stopped by user.');
+});
+
+it('fabricates stopped tool_results and exits when stop is requested mid tool_use turn', function () {
+    $session = new SessionRecord();
+    $session->id = 'session-stop-mid';
+    $session->active = true;
+    $session->stopRequested = false;
+    $session->save();
+
+    // The provider returns a tool_use response, then on its way out the loop
+    // sees stopRequested=true and must NOT execute the tool, but must still
+    // emit a tool_result block to keep the conversation log valid.
+    $provider = new class([
+        new ProviderResponse(
+            'msg_tu',
+            [['type' => 'tool_use', 'id' => 'tu_42', 'name' => 'get_health', 'input' => []]],
+            'tool_use',
+        ),
+    ]) extends FakeProvider {
+        public function createMessage(array $messages, array $tools = [], ?string $system = null): ProviderResponse
+        {
+            // Simulate the user clicking Stop while the LLM call is in flight.
+            $session = SessionRecord::findOne(['id' => 'session-stop-mid']);
+            $session->stopRequested = true;
+            $session->save();
+
+            return parent::createMessage($messages, $tools, $system);
+        }
+    };
+
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->appendUserMessage('session-stop-mid', 'check health');
+    $loop->run('session-stop-mid');
+
+    $records = MessageRecord::find()
+        ->where(['sessionId' => 'session-stop-mid'])
+        ->orderBy(['id' => SORT_ASC])
+        ->all();
+
+    // user prompt, assistant tool_use, fabricated user tool_result, stop marker
+    expect($records)->toHaveCount(4);
+    expect($records[1]->role)->toBe('assistant');
+    expect($records[2]->role)->toBe('user');
+
+    $toolResultContent = json_decode($records[2]->content, true);
+    expect($toolResultContent[0]['type'])->toBe('tool_result');
+    expect($toolResultContent[0]['tool_use_id'])->toBe('tu_42');
+    expect($toolResultContent[0]['content'])->toBe('Stopped by user.');
+    expect($toolResultContent[0]['is_error'])->toBeTrue();
+
+    $marker = json_decode($records[3]->content, true);
+    expect($marker[0]['text'])->toBe('Stopped by user.');
+
+    // Provider should have been called exactly once — we must not loop again.
+    expect($provider->calls)->toHaveCount(1);
 });

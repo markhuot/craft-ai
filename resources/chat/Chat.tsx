@@ -22,6 +22,12 @@ export interface ChatProps {
   pollIntervalMs?: number;
   /** Override Craft's modal opener — primarily for tests. */
   openAssetSelector?: AssetSelectorOpener;
+  /**
+   * When false, hide the asset upload control and pending-attachment row.
+   * The front-end widget runs outside the CP so it can't open Craft's asset
+   * modal; the same component is reused there with this flag off.
+   */
+  enableAttachments?: boolean;
 }
 
 export function Chat({
@@ -29,6 +35,7 @@ export function Chat({
   api: apiOverride,
   pollIntervalMs = 1500,
   openAssetSelector: openAssetSelectorOverride,
+  enableAttachments = true,
 }: ChatProps) {
   const api = useMemo(
     () =>
@@ -81,6 +88,10 @@ export function Chat({
   }, [api]);
 
   useEffect(() => {
+    // Fire once immediately so a freshly-mounted Chat (e.g. the widget
+    // switching sessions) shows existing history without waiting a full
+    // poll interval. Subsequent ticks pick up new messages from the agent.
+    void poll();
     const id = setInterval(poll, pollIntervalMs);
     return () => clearInterval(id);
   }, [poll, pollIntervalMs]);
@@ -172,12 +183,18 @@ export function Chat({
             }
           }}
         />
-        <PromptInputAttachments
-          attachments={pendingAttachments}
-          onRemove={onRemoveAttachment}
-        />
+        {enableAttachments && (
+          <PromptInputAttachments
+            attachments={pendingAttachments}
+            onRemove={onRemoveAttachment}
+          />
+        )}
         <PromptInputToolbar>
-          <PromptInputUpload onClick={onAddAttachments} disabled={status !== "idle"} />
+          {enableAttachments ? (
+            <PromptInputUpload onClick={onAddAttachments} disabled={status !== "idle"} />
+          ) : (
+            <span />
+          )}
           <PromptInputSubmit
             status={status}
             disabled={!draft.trim() && pendingAttachments.length === 0}

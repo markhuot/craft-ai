@@ -188,6 +188,13 @@ class SessionsController extends Controller
         $session->userId = $this->currentUserId();
         $session->save();
 
+        if ($this->request->getAcceptsJson()) {
+            return $this->asJson([
+                'sessionId' => $uuid,
+                'url' => UrlHelper::cpUrl("ai/session/{$uuid}"),
+            ]);
+        }
+
         return $this->redirect(UrlHelper::cpUrl("ai/session/{$uuid}"));
     }
 

@@ -4,17 +4,38 @@ import { watch } from "node:fs";
 import { resolve } from "node:path";
 
 const root = import.meta.dir;
-const entry = resolve(root, "resources/chat/index.tsx");
-const cssEntry = resolve(root, "resources/chat/styles.css");
-const outdir = resolve(root, "src/web/assets/chat/dist");
-const cssOut = resolve(outdir, "chat.css");
 
-async function buildJs() {
+interface Bundle {
+  name: string;
+  jsEntry: string;
+  jsOut: string;
+  cssEntry: string;
+  cssOut: string;
+}
+
+const bundles: Bundle[] = [
+  {
+    name: "chat",
+    jsEntry: resolve(root, "resources/chat/index.tsx"),
+    jsOut: "chat.js",
+    cssEntry: resolve(root, "resources/chat/styles.css"),
+    cssOut: resolve(root, "src/web/assets/chat/dist/chat.css"),
+  },
+  {
+    name: "widget",
+    jsEntry: resolve(root, "resources/widget/index.tsx"),
+    jsOut: "widget.js",
+    cssEntry: resolve(root, "resources/widget/styles.css"),
+    cssOut: resolve(root, "src/web/assets/widget/dist/widget.css"),
+  },
+];
+
+async function buildJs(bundle: Bundle): Promise<void> {
   const start = performance.now();
   const result = await Bun.build({
-    entrypoints: [entry],
-    outdir,
-    naming: "chat.js",
+    entrypoints: [bundle.jsEntry],
+    outdir: resolve(root, `src/web/assets/${bundle.name}/dist`),
+    naming: bundle.jsOut,
     target: "browser",
     format: "esm",
     minify: true,
@@ -25,31 +46,33 @@ async function buildJs() {
   });
   const ms = (performance.now() - start).toFixed(0);
   if (!result.success) {
-    console.error("JS build failed:");
+    console.error(`${bundle.name} JS build failed:`);
     for (const m of result.logs) console.error(m);
     process.exitCode = 1;
     return;
   }
-  console.log(`✅ chat.js built in ${ms}ms`);
+  console.log(`✅ ${bundle.jsOut} built in ${ms}ms`);
 }
 
-async function buildCss() {
+async function buildCss(bundle: Bundle): Promise<void> {
   const start = performance.now();
-  await $`bunx @tailwindcss/cli -i ${cssEntry} -o ${cssOut} --minify`.quiet();
+  await $`bunx @tailwindcss/cli -i ${bundle.cssEntry} -o ${bundle.cssOut} --minify`.quiet();
   const ms = (performance.now() - start).toFixed(0);
-  console.log(`✅ chat.css built in ${ms}ms`);
+  console.log(`✅ ${bundle.name}.css built in ${ms}ms`);
 }
 
-async function buildAll() {
-  await Promise.all([buildJs(), buildCss()]);
+async function buildAll(): Promise<void> {
+  await Promise.all(
+    bundles.flatMap((b) => [buildJs(b), buildCss(b)]),
+  );
 }
 
 await buildAll();
 
 if (process.argv.includes("--watch")) {
-  console.log("👀 watching resources/chat for changes…");
+  console.log("👀 watching resources/ for changes…");
   let pending = false;
-  watch(resolve(root, "resources/chat"), { recursive: true }, () => {
+  watch(resolve(root, "resources"), { recursive: true }, () => {
     if (pending) return;
     pending = true;
     setTimeout(async () => {

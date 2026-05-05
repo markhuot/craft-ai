@@ -6,8 +6,12 @@ use Craft;
 use craft\base\Plugin as BasePlugin;
 use craft\events\RegisterUrlRulesEvent;
 use craft\events\RegisterUserPermissionsEvent;
+use craft\events\TemplateEvent;
+use craft\helpers\Json;
+use craft\helpers\UrlHelper;
 use craft\services\UserPermissions;
 use craft\web\UrlManager;
+use craft\web\View;
 use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\permissions\ToolPermissions;
 use markhuot\craftai\agent\providers\AnthropicProvider;
@@ -155,6 +159,97 @@ class Plugin extends BasePlugin
                 $event->rules['POST craft-ai/oauth/token'] = 'craft-ai/oauth/token';
             },
         );
+
+        Event::on(
+            View::class,
+            View::EVENT_AFTER_RENDER_PAGE_TEMPLATE,
+            function (TemplateEvent $event): void {
+                $this->maybeInjectWidget($event);
+            },
+        );
+    }
+
+    /**
+     * Append the front-end chat widget to a rendered site template when the
+     * current visitor is a CP-capable user. We hook the post-render event
+     * (rather than {% hook %} or EVENT_END_BODY) so the widget appears on
+     * every site response without requiring template authors to opt in.
+     */
+    private function maybeInjectWidget(TemplateEvent $event): void
+    {
+        if ($event->templateMode !== View::TEMPLATE_MODE_SITE) {
+            return;
+        }
+
+        $request = Craft::$app->getRequest();
+        if (! $request instanceof \craft\web\Request) {
+            return;
+        }
+        if ($request->getIsCpRequest() || $request->getIsAjax()) {
+            return;
+        }
+
+        $user = Craft::$app->getUser();
+        if ($user->getIsGuest()) {
+            return;
+        }
+        if (! $user->checkPermission('accessCp')) {
+            return;
+        }
+
+        if ($event->output === '') {
+            return;
+        }
+
+        $assetManager = Craft::$app->getAssetManager();
+        $sourcePath = __DIR__.'/web/assets/widget/dist';
+
+        try {
+            $published = $assetManager->publish($sourcePath);
+        } catch (\Throwable) {
+            // Source dir is missing in dev before the bundle has been built.
+            // Fail closed so the front-end isn't broken by a missing asset.
+            return;
+        }
+
+        $baseUrl = $published[1] ?? null;
+        if (! is_string($baseUrl) || $baseUrl === '') {
+            return;
+        }
+
+        $jsUrl = $baseUrl.'/widget.js';
+        $bootstrap = [
+            'jsUrl' => $jsUrl,
+            'cssUrl' => $baseUrl.'/widget.css',
+            'sessionsUrl' => UrlHelper::actionUrl('craft-ai/sessions/data'),
+            'newSessionUrl' => UrlHelper::actionUrl('craft-ai/sessions/new'),
+            'sessionsIndexUrl' => UrlHelper::cpUrl('ai/sessions'),
+            'messagesUrl' => UrlHelper::actionUrl('craft-ai/messages'),
+            'sendUrl' => UrlHelper::actionUrl('craft-ai/sessions/send'),
+            'csrfTokenName' => Craft::$app->getConfig()->getGeneral()->csrfTokenName,
+            'csrfTokenValue' => $request->getCsrfToken(),
+        ];
+
+        $bootstrapJson = Json::htmlEncode($bootstrap);
+
+        $snippet = <<<HTML
+<div data-craftai-widget-host></div>
+<script type="application/json" data-craftai-widget-bootstrap>{$bootstrapJson}</script>
+<script type="module" src="{$jsUrl}"></script>
+HTML;
+
+        if (str_contains($event->output, '</body>')) {
+            $event->output = (string) preg_replace(
+                '/<\/body>/i',
+                $snippet."\n</body>",
+                $event->output,
+                1,
+            );
+
+            return;
+        }
+
+        $event->output .= $snippet;
     }
 
     /**

@@ -1,0 +1,160 @@
+/*
+ * Tailwind v4 styles for the front-end widget. The compiled CSS is loaded
+ * inside the widget's Shadow DOM via a <link rel="stylesheet"> tag, so the
+ * `ai:` prefix is mostly insurance: even if a build glitch ever leaked these
+ * rules into the host page, they wouldn't collide with the site's own CSS.
+ *
+ * We import the same theme/utilities entry points as the CP chat bundle so
+ * the two surfaces share design tokens and look like the same product.
+ *
+ * Important: Tailwind v4's `prefix(ai)` rewrites every emitted theme custom
+ * property to `--ai-<name>`. Custom rules below must therefore reference
+ * `var(--ai-color-…)`, not `var(--color-…)` — the unprefixed name doesn't
+ * exist at runtime and silently resolves to nothing (no background,
+ * native-looking buttons, etc.).
+ */
+@import "tailwindcss/theme.css" layer(theme) prefix(ai);
+@import "tailwindcss/utilities.css" prefix(ai);
+
+@theme {
+  --color-craftai-bg: #ffffff;
+  --color-craftai-fg: #1f2937;
+  --color-craftai-user: #f3f7fc;
+  --color-craftai-border: #e3e5e8;
+  --color-craftai-muted: #606d7b;
+  --color-craftai-error-bg: #fdecea;
+  --color-craftai-accent: #1d4ed8;
+  --color-craftai-accent-hover: #1e40af;
+  --color-craftai-shadow: rgba(15, 23, 42, 0.18);
+}
+
+:host {
+  /*
+   * The host element is positioned by the page; everything inside the shadow
+   * tree inherits no body styles, so we declare baseline typography here.
+   */
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    "Helvetica Neue",
+    sans-serif;
+  color: var(--ai-color-craftai-fg);
+  background: transparent;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/*
+ * Lock the panel/bubble to the bottom-right corner without a wrapping
+ * fixed-position div. The chat root inside the shadow tree just renders its
+ * own content; this rule makes sure the visible UI is always anchored.
+ */
+.craftai-widget-root {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 2147483600;
+}
+
+.craftai-widget-panel {
+  width: min(28rem, calc(100vw - 2rem));
+  height: min(36rem, calc(100vh - 2rem));
+  display: flex;
+  flex-direction: column;
+  background: var(--ai-color-craftai-bg);
+  color: var(--ai-color-craftai-fg);
+  border: 1px solid var(--ai-color-craftai-border);
+  border-radius: 0.75rem;
+  box-shadow:
+    0 24px 48px -12px var(--ai-color-craftai-shadow),
+    0 8px 16px -8px var(--ai-color-craftai-shadow);
+  overflow: hidden;
+}
+
+.craftai-widget-bubble {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 9999px;
+  background: var(--ai-color-craftai-accent);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 12px 28px -6px var(--ai-color-craftai-shadow),
+    0 4px 10px -4px var(--ai-color-craftai-shadow);
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease;
+}
+
+.craftai-widget-bubble:hover {
+  transform: translateY(-1px);
+  background: var(--ai-color-craftai-accent-hover);
+}
+
+.craftai-widget-bubble:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+/*
+ * Buttons inside Shadow DOM still pick up the host UA stylesheet for
+ * `<button>`, which means they render with native chrome (gray background,
+ * 1px border, system font) unless we explicitly reset them. Apply a single
+ * baseline reset to every <button> in the tree so each component only has
+ * to add the styling it actually wants on top.
+ */
+button {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/*
+ * Chat surface markdown styles. Mirrors `.craftai-chat` from the CP bundle so
+ * messages render the same way inside the widget panel.
+ */
+.craftai-chat {
+  font-family: inherit;
+}
+
+.craftai-chat pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/*
+ * The shared <Chat> component is shaped for the CP page: its root is just a
+ * flex column without any height claim, and the inner <Conversation> caps
+ * itself at 70vh so the scroll region stays usable inside an unbounded page.
+ * Inside the widget the panel itself is the constraint, so we need <Chat>
+ * to fill its parent and the conversation to drop the viewport-relative
+ * cap — otherwise the inner scroll area can grow well past the panel and
+ * users see ~500px of empty space below the last message.
+ */
+.craftai-widget-panel .craftai-chat {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.craftai-widget-panel [data-slot="conversation"] {
+  max-height: none;
+}

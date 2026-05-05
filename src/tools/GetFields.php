@@ -13,6 +13,11 @@ use markhuot\craftai\validators\AvailableFieldType;
  * ID, UID, name, handle, type (FQCN), translation settings, and type-specific
  * settings — the same shape returned by UpsertField. Optionally filter by
  * field type (FQCN, e.g. `craft\fields\PlainText`).
+ *
+ * For Matrix fields, the response enriches `settings.entryTypes` with each
+ * block type's `handle`, `name`, and field layout (`tabs` containing the
+ * sub-fields available inside each block). Use these block-type handles as
+ * the `type` value when submitting blocks via `upsert_entry` / `upsert_draft`.
  */
 class GetFields extends Tool
 {
@@ -29,18 +34,7 @@ class GetFields extends Tool
             : Craft::$app->fields->getAllFields();
 
         return array_values(array_map(
-            static fn (FieldInterface $field): array => [
-                'id' => $field->id,
-                'uid' => $field->uid,
-                'name' => $field->name,
-                'handle' => $field->handle,
-                'type' => $field::class,
-                'instructions' => $field->instructions,
-                'searchable' => $field->searchable,
-                'translationMethod' => $field->translationMethod,
-                'translationKeyFormat' => $field->translationKeyFormat,
-                'settings' => $field->getSettings(),
-            ],
+            static fn (FieldInterface $field): array => UpsertField::summarize($field),
             $fields,
         ));
     }

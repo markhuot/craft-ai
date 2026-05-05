@@ -23,6 +23,27 @@ use markhuot\craftai\validators\ExistingSite;
  * Create or update a content entry. Pass `id` to update an existing entry;
  * omit it to create a new one (in which case `section` and `title` are
  * required). Returns the saved entry's full details on success.
+ *
+ * Matrix fields accept an object keyed by block ID. Each block is itself an
+ * object with `type` (the block type's entry-type handle — see
+ * `settings.entryTypes[].handle` from `get_fields`) and `fields` (the sub-field
+ * values keyed by handle). Existing blocks are referenced by their numeric ID;
+ * new blocks use placeholder keys like `"new1"`, `"new2"`, etc. — any string
+ * key that is not an existing block ID is treated as a new block. The order
+ * of keys determines the order of blocks; blocks omitted from the object are
+ * deleted on save. Example:
+ *
+ *     {
+ *       "contentBuilder": {
+ *         "42":   {"type": "text",    "fields": {"body": "Existing block, updated"}},
+ *         "new1": {"type": "heading", "fields": {"heading": "New block at the end"}},
+ *         "new2": {"type": "text",    "fields": {"body": "Another new block"}}
+ *       }
+ *     }
+ *
+ * To preserve an existing block unchanged, include its numeric ID with empty
+ * `fields` (or omit `fields` entirely). To delete a block, leave its ID out
+ * of the object.
  */
 class UpsertEntry extends Tool
 {
@@ -62,7 +83,7 @@ class UpsertEntry extends Tool
         #[Validate(ExistingSite::class)]
         #[Bind(SiteBinder::class)]
         Site|string|int|null $site = null,
-        #[Description('Custom field values as a flat object keyed by field handle, e.g. {"body": "Hello", "summary": "..."}. Do NOT wrap in an array or use numeric keys like {"0": {"body": "Hello"}} — keys must be the field handles themselves.')]
+        #[Description('Custom field values as a flat object keyed by field handle, e.g. {"body": "Hello", "summary": "..."}. Do NOT wrap in an array or use numeric keys like {"0": {"body": "Hello"}} — keys must be the field handles themselves. Matrix fields take an object keyed by block ID where each block is {"type": "<entryTypeHandle>", "fields": {...}}; use "new1", "new2" (or any unused string) for new blocks and existing numeric IDs for blocks you want to keep or update. See the tool description for a full example.')]
         ?array $fields = null,
     ): array|ToolOutput {
         $isUpdate = $id instanceof Entry;

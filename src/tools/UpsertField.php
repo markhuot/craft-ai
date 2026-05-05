@@ -5,6 +5,8 @@ namespace markhuot\craftai\tools;
 use Craft;
 use craft\base\FieldInterface;
 use craft\fields\Assets as AssetsField;
+use craft\fields\Matrix as MatrixField;
+use craft\models\EntryType;
 use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
@@ -37,6 +39,16 @@ use markhuot\craftai\validators\ExistingField;
  * `defaultUploadLocationSource` (when `restrictLocation` is false/absent) or
  * `restrictedLocationSource` (when `restrictLocation` is true) as a volume
  * source key in the form `volume:<uid>` — call `get_volumes` to discover UIDs.
+ *
+ * Matrix fields use entry types as their block types. The response enriches
+ * `settings.entryTypes` with each block type's `handle`, `name`, and field
+ * layout (tabs and sub-fields) so callers can see what blocks are available
+ * and which sub-fields each block accepts. To change which entry types are
+ * usable as blocks, pass `settings.entryTypes` as a list of `{uid: ...}`
+ * objects (call `get_entry_types` to discover available UIDs and handles).
+ * To change an existing block type's sub-fields, edit the entry type's field
+ * layout via `upsert_field_layout_element` — Matrix blocks share entry types
+ * with regular sections.
  */
 class UpsertField extends Tool
 {
@@ -134,6 +146,27 @@ class UpsertField extends Tool
             );
         }
 
+        return self::summarize($field);
+    }
+
+    /**
+     * Build the public payload for a field — the same shape returned by both
+     * `UpsertField` and `GetFields`. For Matrix fields, `settings.entryTypes`
+     * is enriched with each block type's handle, name, and field layout.
+     *
+     * @return array<array-key, mixed>
+     */
+    public static function summarize(FieldInterface $field): array
+    {
+        $settings = $field->getSettings();
+
+        if ($field instanceof MatrixField) {
+            $settings['entryTypes'] = array_map(
+                static fn (EntryType $entryType): array => self::summarizeBlockType($entryType),
+                $field->getEntryTypes(),
+            );
+        }
+
         return [
             'id' => $field->id,
             'uid' => $field->uid,
@@ -144,7 +177,24 @@ class UpsertField extends Tool
             'searchable' => $field->searchable,
             'translationMethod' => $field->translationMethod,
             'translationKeyFormat' => $field->translationKeyFormat,
-            'settings' => $field->getSettings(),
+            'settings' => $settings,
+        ];
+    }
+
+    /**
+     * @return array<array-key, mixed>
+     */
+    private static function summarizeBlockType(EntryType $entryType): array
+    {
+        $layout = UpsertFieldLayoutElement::summarizeLayout($entryType);
+
+        return [
+            'uid' => $entryType->uid,
+            'id' => $entryType->id,
+            'handle' => $entryType->handle,
+            'name' => $entryType->name,
+            'fieldLayoutId' => $layout['fieldLayoutId'],
+            'tabs' => $layout['tabs'],
         ];
     }
 }

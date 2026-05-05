@@ -31,6 +31,7 @@ use markhuot\craftai\tools\GetHealth;
 use markhuot\craftai\tools\GetSections;
 use markhuot\craftai\tools\GetTemplate;
 use markhuot\craftai\tools\GetTemplates;
+use markhuot\craftai\tools\GetVolumes;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertAsset;
 use markhuot\craftai\tools\UpsertDraft;
@@ -86,6 +87,7 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(GetTemplate::class);
         $this->toolRegistry->register(UpsertTemplate::class);
         $this->toolRegistry->register(GetAsset::class);
+        $this->toolRegistry->register(GetVolumes::class);
         $this->toolRegistry->register(UpsertAsset::class);
         $this->toolRegistry->register(DeleteAssets::class);
         $this->toolRegistry->register(DeleteEntries::class);

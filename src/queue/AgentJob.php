@@ -9,13 +9,30 @@ use markhuot\craftai\Plugin;
 use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\records\MessageRecord;
 use markhuot\craftai\records\SessionRecord;
+use yii\queue\RetryableJobInterface;
 
-class AgentJob extends BaseJob
+class AgentJob extends BaseJob implements RetryableJobInterface
 {
     public string $sessionId = '';
 
     /** Originating Craft user; restored on the queue worker so tool permission checks see the right identity. */
     public ?int $userId = null;
+
+    /**
+     * 24h reservation. The agent loop can run minutes per turn (LLM latency
+     * + tool execution) and a single conversation can have many turns. The
+     * queue's 300s default was reaping live jobs mid-conversation, leaving
+     * sessions stuck in `active=true` with no recovery path.
+     */
+    public function getTtr(): int
+    {
+        return 86400;
+    }
+
+    public function canRetry($attempt, $error): bool
+    {
+        return false;
+    }
 
     /**
      * @param \yii\queue\Queue $queue

@@ -20,7 +20,7 @@ function makeEntry(ToolRegistry $registry, string $title = 'Canonical'): array
 {
     return decode($registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => $title,
-    ]));
+    ]))['entry'];
 }
 
 it('returns an empty list when an entry has no drafts', function () {

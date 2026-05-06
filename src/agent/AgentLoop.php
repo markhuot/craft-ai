@@ -101,7 +101,7 @@ class AgentLoop
 
                 $toolUseId = is_string($block['id'] ?? null) ? $block['id'] : null;
 
-                $this->toolContext->begin($sessionId, $toolUseId);
+                $this->toolContext->begin($sessionId, $toolUseId, ClientType::CP);
                 try {
                     $output = $this->registry->execute($name, $input);
                 } finally {

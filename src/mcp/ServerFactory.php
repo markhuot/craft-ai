@@ -5,6 +5,7 @@ namespace markhuot\craftai\mcp;
 use Mcp\Capability\Registry\ReferenceHandler;
 use Mcp\Server;
 use Mcp\Server\Session\Psr16SessionStore;
+use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\Plugin;
 use markhuot\craftai\tools\ToolDescriptor;
 use markhuot\craftai\tools\ToolRegistry;
@@ -17,6 +18,7 @@ class ServerFactory
 {
     public function __construct(
         private readonly ToolRegistry $registry,
+        private readonly ToolContext $toolContext = new ToolContext(),
     ) {}
 
     public function build(): Server
@@ -29,6 +31,7 @@ class ServerFactory
             ->setReferenceHandler(new PermissionedReferenceHandler(
                 new ReferenceHandler(),
                 $this->registry,
+                $this->toolContext,
             ));
 
         foreach ($this->registry->descriptors(includeCpOnly: false, onlyAllowed: true) as $descriptor) {

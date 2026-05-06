@@ -19,10 +19,10 @@ beforeEach(function () {
 it('deletes drafts by draftId', function () {
     $entry = json_decode($this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'Canonical',
-    ])->text, true);
+    ])->text, true)['entry'];
     $draft = json_decode($this->registry->execute('upsert_draft', [
         'entry' => $entry['id'], 'title' => 'Draft',
-    ])->text, true);
+    ])->text, true)['draft'];
 
     $output = $this->registry->execute('delete_drafts', ['ids' => [$draft['draftId']]]);
 

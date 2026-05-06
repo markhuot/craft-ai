@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\tools;
 
+use markhuot\craftai\agent\ClientType;
 use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\preview\PreviewService;
@@ -48,13 +49,13 @@ class GetPreview extends Tool
         #[Description('Maximum seconds to wait for the front-end to read the iframe. Clamped to [5, 60]. Defaults to 10.')]
         int $timeoutSeconds = 10,
     ): ToolOutput {
-        $sessionId = $this->context->getSessionId();
-        if ($sessionId === null) {
+        if ($this->context->getClient() !== ClientType::CP) {
             return new ToolOutput(
-                'get_preview can only be invoked from inside an active chat session.',
+                'get_preview is only available in the CP chat surface — the calling client has no preview pane.',
                 isError: true,
             );
         }
+        $sessionId = $this->context->requireSessionId();
 
         $requestId = $this->preview->create(
             $sessionId,

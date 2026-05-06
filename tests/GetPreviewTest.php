@@ -1,5 +1,6 @@
 <?php
 
+use markhuot\craftai\agent\ClientType;
 use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\preview\PreviewService;
 use markhuot\craftai\records\PreviewRequestRecord;
@@ -52,7 +53,7 @@ it('returns the iframe content the front-end produced', function () {
     ]);
 
     $context = new ToolContext();
-    $context->begin('session-get-1', 'tu-g-1');
+    $context->begin('session-get-1', 'tu-g-1', ClientType::CP);
     $tool = new GetPreview($service, $context);
 
     $output = $tool();
@@ -71,7 +72,7 @@ it('forwards the fullHtml flag when requested', function () {
     ]);
 
     $context = new ToolContext();
-    $context->begin('session-get-2', 'tu-g-2');
+    $context->begin('session-get-2', 'tu-g-2', ClientType::CP);
     $tool = new GetPreview($service, $context);
 
     $output = $tool(fullHtml: true);
@@ -87,7 +88,7 @@ it('returns the front-end error verbatim when the read fails', function () {
     ]);
 
     $context = new ToolContext();
-    $context->begin('session-get-3', 'tu-g-3');
+    $context->begin('session-get-3', 'tu-g-3', ClientType::CP);
     $tool = new GetPreview($service, $context);
 
     $output = $tool();
@@ -96,14 +97,38 @@ it('returns the front-end error verbatim when the read fails', function () {
     expect($output->text)->toContain('Cross-origin');
 });
 
-it('errors when invoked without a session context', function () {
+it('errors when invoked from a non-CP surface', function () {
     $service = new FakeGetPreviewService();
     $tool = new GetPreview($service, new ToolContext());
 
     $output = $tool();
 
     expect($output->isError)->toBeTrue();
-    expect($output->text)->toContain('active chat session');
+    expect($output->text)->toContain('CP chat surface');
+});
+
+it('errors when invoked from MCP', function () {
+    $service = new FakeGetPreviewService();
+    $context = new ToolContext();
+    $context->begin(null, null, ClientType::MCP);
+    $tool = new GetPreview($service, $context);
+
+    $output = $tool();
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('CP chat surface');
+});
+
+it('errors when invoked from the front-end widget', function () {
+    $service = new FakeGetPreviewService();
+    $context = new ToolContext();
+    $context->begin('session-widget-get', 'tu-w-g', ClientType::WIDGET);
+    $tool = new GetPreview($service, $context);
+
+    $output = $tool();
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('CP chat surface');
 });
 
 it('truncates oversized content with a clear marker so the LLM context stays bounded', function () {
@@ -119,7 +144,7 @@ it('truncates oversized content with a clear marker so the LLM context stays bou
     ]);
 
     $context = new ToolContext();
-    $context->begin('session-get-truncate', 'tu-g-truncate');
+    $context->begin('session-get-truncate', 'tu-g-truncate', ClientType::CP);
     $tool = new GetPreview($service, $context);
 
     $output = $tool(fullHtml: true);

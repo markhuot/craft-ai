@@ -23,7 +23,7 @@ it('round-trips a fresh draft via get_draft', function () {
     $created = decode($this->registry->execute('upsert_draft', [
         'section' => 'posts',
         'title' => 'Fresh Draft',
-    ]));
+    ]))['draft'];
 
     expect($created['draftId'])->not->toBeNull();
 
@@ -38,10 +38,10 @@ it('round-trips a fresh draft via get_draft', function () {
 it('round-trips a draft of a canonical entry via get_draft', function () {
     $entry = decode($this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'Canonical',
-    ]));
+    ]))['entry'];
     $draft = decode($this->registry->execute('upsert_draft', [
         'entry' => $entry['id'], 'title' => 'Editorial',
-    ]));
+    ]))['draft'];
 
     $fetched = decode($this->registry->execute('get_draft', ['draftId' => $draft['draftId']]));
 
@@ -61,7 +61,7 @@ it('does not return a draft from get_entry', function () {
     $created = decode($this->registry->execute('upsert_draft', [
         'section' => 'posts',
         'title' => 'Fresh Draft',
-    ]));
+    ]))['draft'];
 
     $output = $this->registry->execute('get_entry', ['id' => $created['id']]);
 
@@ -72,7 +72,7 @@ it('returns a tokenized preview URL routed to the draft', function () {
     $created = decode($this->registry->execute('upsert_draft', [
         'section' => 'posts',
         'title' => 'Drafted',
-    ]));
+    ]))['draft'];
 
     $fetched = decode($this->registry->execute('get_draft', ['draftId' => $created['draftId']]));
 

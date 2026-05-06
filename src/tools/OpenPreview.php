@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\tools;
 
+use markhuot\craftai\agent\ClientType;
 use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\preview\PreviewService;
@@ -46,13 +47,13 @@ class OpenPreview extends Tool
             );
         }
 
-        $sessionId = $this->context->getSessionId();
-        if ($sessionId === null) {
+        if ($this->context->getClient() !== ClientType::CP) {
             return new ToolOutput(
-                'open_preview can only be invoked from inside an active chat session.',
+                'open_preview is only available in the CP chat surface — the calling client has no preview pane.',
                 isError: true,
             );
         }
+        $sessionId = $this->context->requireSessionId();
 
         $requestId = $this->preview->create(
             $sessionId,

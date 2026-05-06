@@ -7,6 +7,7 @@ use craft\elements\User;
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use Mcp\Server\Transport\StreamableHttpTransport;
+use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\mcp\ServerFactory;
 use markhuot\craftai\records\OauthTokenRecord;
 use markhuot\craftai\tools\ToolRegistry;
@@ -59,7 +60,9 @@ class McpController extends Controller
 
         /** @var ToolRegistry $registry */
         $registry = Craft::$container->get(ToolRegistry::class);
-        $server = (new ServerFactory($registry))->build();
+        /** @var ToolContext $toolContext */
+        $toolContext = Craft::$container->get(ToolContext::class);
+        $server = (new ServerFactory($registry, $toolContext))->build();
 
         $transport = new StreamableHttpTransport($psrRequest, $psr17, $psr17);
         $psrResponse = $server->run($transport);

@@ -7,6 +7,7 @@ use craft\elements\Entry;
 use craft\models\EntryType;
 use craft\models\Section;
 use craft\models\Site;
+use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
@@ -14,6 +15,7 @@ use markhuot\craftai\binders\Entry as EntryBinder;
 use markhuot\craftai\binders\EntryType as EntryTypeBinder;
 use markhuot\craftai\binders\Section as SectionBinder;
 use markhuot\craftai\binders\Site as SiteBinder;
+use markhuot\craftai\helpers\PreviewSuggestion;
 use markhuot\craftai\validators\ExistingEntry;
 use markhuot\craftai\validators\ExistingEntryType;
 use markhuot\craftai\validators\ExistingSection;
@@ -47,6 +49,10 @@ use markhuot\craftai\validators\ExistingSite;
  */
 class UpsertEntry extends Tool
 {
+    public function __construct(
+        private readonly ToolContext $context = new ToolContext(),
+    ) {}
+
     /**
      * @param  array<string, mixed>|null  $fields  Custom field values keyed by field handle
      * @return array<array-key, mixed>|ToolOutput
@@ -156,6 +162,10 @@ class UpsertEntry extends Tool
             );
         }
 
-        return $entry->toArray();
+        $url = $entry->getUrl();
+        $data = $entry->toArray();
+        $data['url'] = $url;
+
+        return PreviewSuggestion::wrap($data, $url, 'entry', $this->context);
     }
 }

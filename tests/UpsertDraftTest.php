@@ -1,6 +1,8 @@
 <?php
 
 use craft\elements\Entry;
+use markhuot\craftai\agent\ClientType;
+use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertDraft;
 use markhuot\craftai\tools\UpsertEntry;
@@ -18,7 +20,7 @@ function canonicalEntry(ToolRegistry $registry): array
 {
     return decode($registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'Canonical',
-    ]));
+    ]))['entry'];
 }
 
 it('creates a draft of a canonical entry', function () {
@@ -29,7 +31,7 @@ it('creates a draft of a canonical entry', function () {
     ]);
 
     expect($output->isError)->toBeFalse();
-    $draft = decode($output);
+    $draft = decode($output)['draft'];
     expect($draft['title'])->toBe('My Draft');
     expect($draft['draftId'])->not->toBeNull();
     expect($draft['canonicalId'])->toBe($entry['id']);
@@ -45,7 +47,7 @@ it('sets the draft name and notes on creation', function () {
     ]);
 
     expect($output->isError)->toBeFalse();
-    $created = decode($output);
+    $created = decode($output)['draft'];
 
     $draft = Entry::find()->draftId($created['draftId'])->status(null)->one();
     expect($draft->draftName)->toBe('Editorial pass');
@@ -56,14 +58,14 @@ it('updates an existing draft by draftId', function () {
     $entry = canonicalEntry($this->registry);
     $created = decode($this->registry->execute('upsert_draft', [
         'entry' => $entry['id'], 'title' => 'Original Draft',
-    ]));
+    ]))['draft'];
 
     $output = $this->registry->execute('upsert_draft', [
         'draftId' => $created['draftId'], 'title' => 'Updated Draft',
     ]);
 
     expect($output->isError)->toBeFalse();
-    expect(decode($output)['draftId'])->toBe($created['draftId']);
+    expect(decode($output)['draft']['draftId'])->toBe($created['draftId']);
 
     $draft = Entry::find()->draftId($created['draftId'])->status(null)->one();
     expect($draft->title)->toBe('Updated Draft');
@@ -83,7 +85,7 @@ it('creates a fresh draft with no canonical entry from a section', function () {
     ]);
 
     expect($output->isError)->toBeFalse();
-    $draft = decode($output);
+    $draft = decode($output)['draft'];
     expect($draft['title'])->toBe('Fresh Draft');
     expect($draft['draftId'])->not->toBeNull();
 
@@ -119,7 +121,7 @@ it('skips create-only required rules when updating an existing draft', function 
     $entry = canonicalEntry($this->registry);
     $created = decode($this->registry->execute('upsert_draft', [
         'entry' => $entry['id'],
-    ]));
+    ]))['draft'];
 
     $output = $this->registry->execute('upsert_draft', ['draftId' => $created['draftId']]);
 
@@ -131,7 +133,7 @@ it('returns a tokenized preview URL for a draft of a canonical entry', function 
 
     $draft = decode($this->registry->execute('upsert_draft', [
         'entry' => $entry['id'], 'title' => 'My Draft',
-    ]));
+    ]))['draft'];
 
     $tokenParam = Craft::$app->getConfig()->getGeneral()->tokenParam;
     expect($draft['url'])->toContain("$tokenParam=");
@@ -150,7 +152,7 @@ it('returns a tokenized preview URL for a fresh draft', function () {
     $draft = decode($this->registry->execute('upsert_draft', [
         'section' => 'posts',
         'title' => 'Fresh Draft',
-    ]));
+    ]))['draft'];
 
     $tokenParam = Craft::$app->getConfig()->getGeneral()->tokenParam;
     expect($draft['url'])->toContain("$tokenParam=");
@@ -167,11 +169,11 @@ it('returns a tokenized preview URL when updating a draft', function () {
     $entry = canonicalEntry($this->registry);
     $created = decode($this->registry->execute('upsert_draft', [
         'entry' => $entry['id'], 'title' => 'Original',
-    ]));
+    ]))['draft'];
 
     $updated = decode($this->registry->execute('upsert_draft', [
         'draftId' => $created['draftId'], 'title' => 'Updated',
-    ]));
+    ]))['draft'];
 
     $tokenParam = Craft::$app->getConfig()->getGeneral()->tokenParam;
     expect($updated['url'])->toContain("$tokenParam=");
@@ -191,4 +193,35 @@ it('returns a null url for a draft in a section without front-end URLs', functio
     ]));
 
     expect($draft['url'])->toBeNull();
+    expect($draft)->not->toHaveKey('notes');
+    expect($draft)->not->toHaveKey('draft');
+});
+
+it('wraps the response with a notes prompt to call open_preview when the draft has a URL', function () {
+    $entry = canonicalEntry($this->registry);
+
+    $output = decode($this->registry->execute('upsert_draft', [
+        'entry' => $entry['id'], 'title' => 'Previewable',
+    ]));
+
+    expect($output)->toHaveKeys(['notes', 'draft']);
+    expect($output['notes'])->toContain('open_preview');
+    expect($output['notes'])->toContain($output['draft']['url']);
+});
+
+it('emits a generic Draft saved. note for MCP clients without referencing open_preview', function () {
+    $entry = canonicalEntry($this->registry);
+
+    /** @var ToolContext $context */
+    $context = Craft::$container->get(ToolContext::class);
+    $context->begin(null, null, ClientType::MCP);
+
+    $output = decode($this->registry->execute('upsert_draft', [
+        'entry' => $entry['id'], 'title' => 'MCP Draft',
+    ]));
+
+    expect($output)->toHaveKeys(['notes', 'draft']);
+    expect($output['notes'])->toBe('Draft saved.');
+    expect($output['notes'])->not->toContain('open_preview');
+    expect($output['draft']['title'])->toBe('MCP Draft');
 });

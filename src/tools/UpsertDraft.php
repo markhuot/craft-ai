@@ -7,6 +7,7 @@ use craft\elements\Entry;
 use craft\models\EntryType;
 use craft\models\Section;
 use craft\models\Site;
+use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
@@ -16,6 +17,7 @@ use markhuot\craftai\binders\EntryType as EntryTypeBinder;
 use markhuot\craftai\binders\Section as SectionBinder;
 use markhuot\craftai\binders\Site as SiteBinder;
 use markhuot\craftai\helpers\DraftPreview;
+use markhuot\craftai\helpers\PreviewSuggestion;
 use markhuot\craftai\validators\ExistingDraft;
 use markhuot\craftai\validators\ExistingEntry;
 use markhuot\craftai\validators\ExistingEntryType;
@@ -52,6 +54,10 @@ use markhuot\craftai\validators\ExistingSite;
  */
 class UpsertDraft extends Tool
 {
+    public function __construct(
+        private readonly ToolContext $context = new ToolContext(),
+    ) {}
+
     /**
      * @param  array<string, mixed>|null  $fields  Custom field values keyed by field handle
      * @return array<array-key, mixed>|ToolOutput
@@ -152,10 +158,11 @@ class UpsertDraft extends Tool
                 );
             }
 
+            $url = DraftPreview::urlFor($draft);
             $data = $draft->toArray();
-            $data['url'] = DraftPreview::urlFor($draft);
+            $data['url'] = $url;
 
-            return $data;
+            return PreviewSuggestion::wrap($data, $url, 'draft', $this->context);
         } else {
             return new ToolOutput(
                 'Could not save draft: pass `draftId` to update, `entry` to draft an existing entry, or `section` to create a fresh draft.',
@@ -192,9 +199,10 @@ class UpsertDraft extends Tool
             );
         }
 
+        $url = DraftPreview::urlFor($draft);
         $data = $draft->toArray();
-        $data['url'] = DraftPreview::urlFor($draft);
+        $data['url'] = $url;
 
-        return $data;
+        return PreviewSuggestion::wrap($data, $url, 'draft', $this->context);
     }
 }

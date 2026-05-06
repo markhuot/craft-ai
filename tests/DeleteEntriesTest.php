@@ -18,7 +18,7 @@ function createEntry(ToolRegistry $registry, string $title): array
 {
     return json_decode($registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => $title,
-    ])->text, true);
+    ])->text, true)['entry'];
 }
 
 it('deletes a list of entries', function () {

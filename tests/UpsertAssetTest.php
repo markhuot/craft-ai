@@ -1,6 +1,8 @@
 <?php
 
 use craft\elements\Asset;
+use markhuot\craftai\agent\ClientType;
+use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertAsset;
 use markhuot\craftpest\factories\Volume;
@@ -129,4 +131,41 @@ it('binds a volume by numeric ID', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     expect(decode($output)['filename'])->toBe('by-id.jpg');
+});
+
+it('wraps the response with a notes prompt to call open_preview when the asset has a URL', function () {
+    $volume = Craft::$app->volumes->getVolumeByHandle('uploads');
+    $fs = $volume->getFs();
+    $fs->hasUrls = true;
+    $fs->url = 'https://example.test/uploads/';
+    Craft::$app->fs->saveFilesystem($fs);
+
+    $raw = $this->registry->execute('upsert_asset', [
+        'volume' => 'uploads',
+        'filename' => 'previewable-'.uniqid().'.jpg',
+        'sourcePath' => $this->sourceFile,
+    ]);
+    expect($raw->isError)->toBeFalse($raw->text);
+    $output = decode($raw);
+
+    expect($output)->toHaveKeys(['notes', 'asset']);
+    expect($output['notes'])->toContain('open_preview');
+    expect($output['notes'])->toContain($output['asset']['url']);
+    expect($output['asset']['url'])->toStartWith('https://example.test/uploads/');
+});
+
+it('emits a generic Asset saved. note for MCP clients without referencing open_preview', function () {
+    /** @var ToolContext $context */
+    $context = Craft::$container->get(ToolContext::class);
+    $context->begin(null, null, ClientType::MCP);
+
+    $output = decode($this->registry->execute('upsert_asset', [
+        'volume' => 'uploads',
+        'filename' => 'mcp-'.uniqid().'.jpg',
+        'sourcePath' => $this->sourceFile,
+    ]));
+
+    expect($output)->toHaveKeys(['notes', 'asset']);
+    expect($output['notes'])->toBe('Asset saved.');
+    expect($output['notes'])->not->toContain('open_preview');
 });

@@ -1,5 +1,6 @@
 <?php
 
+use markhuot\craftai\agent\ClientType;
 use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\preview\PreviewService;
 use markhuot\craftai\records\PreviewRequestRecord;
@@ -64,7 +65,7 @@ it('returns success when the front-end completes the request', function () {
     );
 
     $context = new ToolContext();
-    $context->begin('session-open-1', 'tu-1');
+    $context->begin('session-open-1', 'tu-1', ClientType::CP);
     $tool = new OpenPreview($service, $context);
 
     $output = $tool('https://example.com');
@@ -86,7 +87,7 @@ it('returns an error output when the front-end fails the request', function () {
     );
 
     $context = new ToolContext();
-    $context->begin('session-open-2', 'tu-2');
+    $context->begin('session-open-2', 'tu-2', ClientType::CP);
     $tool = new OpenPreview($service, $context);
 
     $output = $tool('https://example.com');
@@ -98,7 +99,7 @@ it('returns an error output when the front-end fails the request', function () {
 it('rejects URLs that are not http(s) or root-relative', function () {
     $service = new FakeOpenPreviewService();
     $context = new ToolContext();
-    $context->begin('session-open-3', 'tu-3');
+    $context->begin('session-open-3', 'tu-3', ClientType::CP);
     $tool = new OpenPreview($service, $context);
 
     $output = $tool('javascript:alert(1)');
@@ -117,7 +118,7 @@ it('accepts CP-relative paths starting with "/"', function () {
     );
 
     $context = new ToolContext();
-    $context->begin('session-open-4', 'tu-4');
+    $context->begin('session-open-4', 'tu-4', ClientType::CP);
     $tool = new OpenPreview($service, $context);
 
     $output = $tool('/admin/entries/blog/42');
@@ -126,13 +127,39 @@ it('accepts CP-relative paths starting with "/"', function () {
     expect($service->lastInput['url'])->toBe('/admin/entries/blog/42');
 });
 
-it('errors when invoked without a session context (e.g., MCP/console)', function () {
+it('errors when invoked from a non-CP surface (e.g., MCP/console)', function () {
     $service = new FakeOpenPreviewService();
     $tool = new OpenPreview($service, new ToolContext());
 
     $output = $tool('https://example.com');
 
     expect($output->isError)->toBeTrue();
-    expect($output->text)->toContain('active chat session');
+    expect($output->text)->toContain('CP chat surface');
+    expect($service->createdId)->toBeNull();
+});
+
+it('errors when invoked from MCP', function () {
+    $service = new FakeOpenPreviewService();
+    $context = new ToolContext();
+    $context->begin(null, null, ClientType::MCP);
+    $tool = new OpenPreview($service, $context);
+
+    $output = $tool('https://example.com');
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('CP chat surface');
+    expect($service->createdId)->toBeNull();
+});
+
+it('errors when invoked from the front-end widget', function () {
+    $service = new FakeOpenPreviewService();
+    $context = new ToolContext();
+    $context->begin('session-widget', 'tu-w', ClientType::WIDGET);
+    $tool = new OpenPreview($service, $context);
+
+    $output = $tool('https://example.com');
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('CP chat surface');
     expect($service->createdId)->toBeNull();
 });

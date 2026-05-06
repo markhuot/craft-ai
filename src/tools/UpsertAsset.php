@@ -6,11 +6,13 @@ use Craft;
 use craft\elements\Asset;
 use craft\models\Volume;
 use craft\models\VolumeFolder;
+use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
 use markhuot\craftai\binders\Asset as AssetBinder;
 use markhuot\craftai\binders\Volume as VolumeBinder;
+use markhuot\craftai\helpers\PreviewSuggestion;
 use markhuot\craftai\validators\ExistingAsset;
 use markhuot\craftai\validators\ExistingVolume;
 
@@ -22,6 +24,10 @@ use markhuot\craftai\validators\ExistingVolume;
  */
 class UpsertAsset extends Tool
 {
+    public function __construct(
+        private readonly ToolContext $context = new ToolContext(),
+    ) {}
+
     /**
      * @param  array<string, mixed>|null  $fields  Custom field values keyed by field handle
      * @return array<array-key, mixed>|ToolOutput
@@ -131,7 +137,11 @@ class UpsertAsset extends Tool
             );
         }
 
-        return $asset->toArray();
+        $url = $asset->getUrl();
+        $data = $asset->toArray();
+        $data['url'] = $url;
+
+        return PreviewSuggestion::wrap($data, $url, 'asset', $this->context);
     }
 
     private function resolveFolder(Volume $volume, ?string $path): ?VolumeFolder

@@ -55,7 +55,7 @@ it('creates new matrix blocks via "new1"/"new2" placeholder keys', function () {
 
     expect($output->isError)->toBeFalse($output->text);
 
-    $entry = Entry::find()->id(decode($output)['id'])->status(null)->one();
+    $entry = Entry::find()->id(decode($output)['entry']['id'])->status(null)->one();
     $blocks = $entry->contentBuilder->all();
     expect($blocks)->toHaveCount(2);
     expect($blocks[0]->getType()->handle)->toBe('heading');
@@ -73,7 +73,7 @@ it('updates an existing matrix block by id and adds a new block via "new1"', fun
                 'new1' => ['type' => 'text', 'fields' => ['body' => 'Original']],
             ],
         ],
-    ]));
+    ]))['entry'];
 
     $entry = Entry::find()->id($created['id'])->status(null)->one();
     $existingId = $entry->contentBuilder->all()[0]->id;

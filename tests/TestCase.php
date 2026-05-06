@@ -4,6 +4,8 @@ namespace Tests;
 
 use Craft;
 use craft\elements\User;
+use markhuot\craftai\agent\ClientType;
+use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\migrations\Install;
 use markhuot\craftpest\test\RefreshesDatabase;
 use markhuot\craftpest\test\TestCase as PestTestCase;
@@ -43,5 +45,12 @@ class TestCase extends PestTestCase
         $admin->id = 1;
         $admin->admin = true;
         Craft::$app->getUser()->setIdentity($admin);
+
+        // Default the shared ToolContext to the CP surface so tests model the
+        // primary user-facing path (the in-app chat). Tests exercising the MCP
+        // or widget surfaces can re-call begin() with a different ClientType.
+        /** @var ToolContext $context */
+        $context = Craft::$container->get(ToolContext::class);
+        $context->begin('test-session', null, ClientType::CP);
     }
 }

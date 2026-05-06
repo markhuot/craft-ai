@@ -56,13 +56,28 @@ class FetchWebpage extends Tool
         $body = (string) $response->getBody();
         $status = $response->getStatusCode();
 
-        if ($status >= 400) {
-            return new ToolOutput("HTTP {$status} fetching {$url}", isError: true);
-        }
-
         $output = $fullHtml ? $body : self::extractText($body);
 
+        if ($status >= 400) {
+            $message = "HTTP {$status} fetching {$url}";
+            $snippet = self::truncate($output, 8000);
+            if ($snippet !== '') {
+                $message .= "\n\n".$snippet;
+            }
+
+            return new ToolOutput($message, isError: true);
+        }
+
         return new ToolOutput($output);
+    }
+
+    private static function truncate(string $text, int $limit): string
+    {
+        if (strlen($text) <= $limit) {
+            return $text;
+        }
+
+        return substr($text, 0, $limit)."\n\n[truncated]";
     }
 
     private static function isSameHostAsRequest(string $url): bool

@@ -2,7 +2,6 @@
 
 use craft\elements\Entry;
 use markhuot\craftai\tools\GetDrafts;
-use markhuot\craftai\tools\ToolOutput;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertDraft;
 use markhuot\craftai\tools\UpsertEntry;
@@ -17,14 +16,9 @@ beforeEach(function () {
     $this->registry->register(GetDrafts::class);
 });
 
-function decodeOutput(ToolOutput $output): array
-{
-    return json_decode($output->text, true);
-}
-
 function makeEntry(ToolRegistry $registry, string $title = 'Canonical'): array
 {
-    return decodeOutput($registry->execute('upsert_entry', [
+    return decode($registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => $title,
     ]));
 }
@@ -35,7 +29,7 @@ it('returns an empty list when an entry has no drafts', function () {
     $output = $this->registry->execute('get_drafts', ['entry' => $entry['id']]);
 
     expect($output->isError)->toBeFalse();
-    expect(decodeOutput($output))->toBe([]);
+    expect(decode($output))->toBe([]);
 });
 
 it('lists drafts created for an entry', function () {
@@ -44,7 +38,7 @@ it('lists drafts created for an entry', function () {
     $this->registry->execute('upsert_draft', ['entry' => $entry['id'], 'title' => 'Draft One']);
     $this->registry->execute('upsert_draft', ['entry' => $entry['id'], 'title' => 'Draft Two']);
 
-    $result = decodeOutput($this->registry->execute('get_drafts', ['entry' => $entry['id']]));
+    $result = decode($this->registry->execute('get_drafts', ['entry' => $entry['id']]));
 
     expect($result)->toHaveCount(2);
     $titles = array_column($result, 'title');

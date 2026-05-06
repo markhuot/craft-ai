@@ -1,7 +1,6 @@
 <?php
 
 use craft\elements\Asset;
-use markhuot\craftai\tools\ToolOutput;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertAsset;
 use markhuot\craftpest\factories\Volume;
@@ -22,11 +21,6 @@ afterEach(function () {
     }
 });
 
-function decodeAsset(ToolOutput $output): array
-{
-    return json_decode($output->text, true);
-}
-
 it('creates an asset from a local source path', function () {
     $output = $this->registry->execute('upsert_asset', [
         'volume' => 'uploads',
@@ -35,7 +29,7 @@ it('creates an asset from a local source path', function () {
     ]);
 
     expect($output->isError)->toBeFalse($output->text);
-    $result = decodeAsset($output);
+    $result = decode($output);
     expect($result['filename'])->toBe('hello.jpg');
 
     $asset = Asset::find()->id($result['id'])->status(null)->one();
@@ -52,7 +46,7 @@ it('creates an asset with a title and alt', function () {
     ]);
 
     expect($output->isError)->toBeFalse($output->text);
-    $asset = Asset::find()->id(decodeAsset($output)['id'])->status(null)->one();
+    $asset = Asset::find()->id(decode($output)['id'])->status(null)->one();
     expect($asset->title)->toBe('My Photo');
     expect($asset->alt)->toBe('A gray square');
 });
@@ -105,7 +99,7 @@ it('returns an error for an unknown asset id', function () {
 });
 
 it('updates an existing asset by id', function () {
-    $created = decodeAsset($this->registry->execute('upsert_asset', [
+    $created = decode($this->registry->execute('upsert_asset', [
         'volume' => 'uploads',
         'filename' => 'original.jpg',
         'sourcePath' => $this->sourceFile,
@@ -134,5 +128,5 @@ it('binds a volume by numeric ID', function () {
     ]);
 
     expect($output->isError)->toBeFalse($output->text);
-    expect(decodeAsset($output)['filename'])->toBe('by-id.jpg');
+    expect(decode($output)['filename'])->toBe('by-id.jpg');
 });

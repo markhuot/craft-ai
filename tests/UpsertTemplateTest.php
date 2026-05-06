@@ -14,6 +14,7 @@ beforeEach(function () {
     $this->outsideDir = realpath($this->outsideDir);
 
     $this->originalTemplatesAlias = Craft::getAlias('@templates');
+    $this->originalTemplatesPath = Craft::$app->getView()->getTemplatesPath();
     Craft::setAlias('@templates', $this->tempTemplatesPath);
     Craft::$app->getView()->setTemplatesPath($this->tempTemplatesPath);
 
@@ -23,7 +24,7 @@ beforeEach(function () {
 
 afterEach(function () {
     Craft::setAlias('@templates', $this->originalTemplatesAlias);
-    Craft::$app->getView()->setTemplatesPath($this->originalTemplatesAlias);
+    Craft::$app->getView()->setTemplatesPath($this->originalTemplatesPath);
 
     if (is_dir($this->tempTemplatesPath)) {
         FileHelper::removeDirectory($this->tempTemplatesPath);

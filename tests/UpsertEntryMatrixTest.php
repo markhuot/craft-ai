@@ -2,7 +2,6 @@
 
 use craft\elements\Entry;
 use craft\fields\PlainText;
-use markhuot\craftai\tools\ToolOutput;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertEntry;
 use markhuot\craftpest\factories\EntryType;
@@ -42,11 +41,6 @@ beforeEach(function () {
     $this->registry->register(UpsertEntry::class);
 });
 
-function decodeEntry(ToolOutput $output): array
-{
-    return json_decode($output->text, true);
-}
-
 it('creates new matrix blocks via "new1"/"new2" placeholder keys', function () {
     $output = $this->registry->execute('upsert_entry', [
         'section' => 'posts',
@@ -61,7 +55,7 @@ it('creates new matrix blocks via "new1"/"new2" placeholder keys', function () {
 
     expect($output->isError)->toBeFalse($output->text);
 
-    $entry = Entry::find()->id(decodeEntry($output)['id'])->status(null)->one();
+    $entry = Entry::find()->id(decode($output)['id'])->status(null)->one();
     $blocks = $entry->contentBuilder->all();
     expect($blocks)->toHaveCount(2);
     expect($blocks[0]->getType()->handle)->toBe('heading');
@@ -71,7 +65,7 @@ it('creates new matrix blocks via "new1"/"new2" placeholder keys', function () {
 });
 
 it('updates an existing matrix block by id and adds a new block via "new1"', function () {
-    $created = decodeEntry($this->registry->execute('upsert_entry', [
+    $created = decode($this->registry->execute('upsert_entry', [
         'section' => 'posts',
         'title' => 'Editable',
         'fields' => [

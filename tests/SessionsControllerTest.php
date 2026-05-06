@@ -19,6 +19,14 @@ function loginTestUser(): void {
 beforeEach(function () {
     loginTestUser();
 
+    // SessionsController gates `actionIndex`/`actionView` behind a setup screen
+    // that triggers when config/craft-ai.php has no `provider` set. Tests mock
+    // the LlmProvider directly, so write a stub config to bypass that gate.
+    $configPath = Craft::$app->getPath()->getConfigPath().'/craft-ai.php';
+    if (! is_file($configPath)) {
+        file_put_contents($configPath, "<?php return ['provider' => 'mock'];\n");
+    }
+
     Craft::$container->setSingleton(LlmProvider::class, fn () => new class implements LlmProvider {
         public function createMessage(array $messages, array $tools = [], ?string $system = null): ProviderResponse
         {

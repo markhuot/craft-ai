@@ -9,6 +9,7 @@ beforeEach(function () {
     FileHelper::createDirectory($this->tempTemplatesPath);
 
     $this->originalTemplatesAlias = Craft::getAlias('@templates');
+    $this->originalTemplatesPath = Craft::$app->getView()->getTemplatesPath();
     Craft::setAlias('@templates', $this->tempTemplatesPath);
     Craft::$app->getView()->setTemplatesPath($this->tempTemplatesPath);
 
@@ -18,22 +19,15 @@ beforeEach(function () {
 
 afterEach(function () {
     Craft::setAlias('@templates', $this->originalTemplatesAlias);
-    Craft::$app->getView()->setTemplatesPath($this->originalTemplatesAlias);
+    Craft::$app->getView()->setTemplatesPath($this->originalTemplatesPath);
 
     if (is_dir($this->tempTemplatesPath)) {
         FileHelper::removeDirectory($this->tempTemplatesPath);
     }
 });
 
-function writeTemplateFile(string $base, string $relative, string $contents): void
-{
-    $path = $base.'/'.ltrim($relative, '/');
-    FileHelper::createDirectory(dirname($path));
-    file_put_contents($path, $contents);
-}
-
 it('returns the contents of a template by full path', function () {
-    writeTemplateFile($this->tempTemplatesPath, 'blog/post.twig', '<article>{{ entry.title }}</article>');
+    writeTemplate($this->tempTemplatesPath, 'blog/post.twig', '<article>{{ entry.title }}</article>');
 
     $output = $this->registry->execute('get_template', ['path' => 'blog/post.twig']);
 
@@ -45,7 +39,7 @@ it('returns the contents of a template by full path', function () {
 });
 
 it('resolves a bare template name without an extension', function () {
-    writeTemplateFile($this->tempTemplatesPath, 'blog/post.twig', 'POST CONTENT');
+    writeTemplate($this->tempTemplatesPath, 'blog/post.twig', 'POST CONTENT');
 
     $output = $this->registry->execute('get_template', ['path' => 'blog/post']);
 
@@ -56,7 +50,7 @@ it('resolves a bare template name without an extension', function () {
 });
 
 it('resolves a directory name to its index template', function () {
-    writeTemplateFile($this->tempTemplatesPath, 'blog/index.twig', 'INDEX CONTENT');
+    writeTemplate($this->tempTemplatesPath, 'blog/index.twig', 'INDEX CONTENT');
 
     $output = $this->registry->execute('get_template', ['path' => 'blog']);
 

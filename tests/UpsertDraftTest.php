@@ -1,7 +1,6 @@
 <?php
 
 use craft\elements\Entry;
-use markhuot\craftai\tools\ToolOutput;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertDraft;
 use markhuot\craftai\tools\UpsertEntry;
@@ -15,14 +14,9 @@ beforeEach(function () {
     $this->registry->register(UpsertDraft::class);
 });
 
-function decodeDraft(ToolOutput $output): array
-{
-    return json_decode($output->text, true);
-}
-
 function canonicalEntry(ToolRegistry $registry): array
 {
-    return decodeDraft($registry->execute('upsert_entry', [
+    return decode($registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'Canonical',
     ]));
 }
@@ -35,7 +29,7 @@ it('creates a draft of a canonical entry', function () {
     ]);
 
     expect($output->isError)->toBeFalse();
-    $draft = decodeDraft($output);
+    $draft = decode($output);
     expect($draft['title'])->toBe('My Draft');
     expect($draft['draftId'])->not->toBeNull();
     expect($draft['canonicalId'])->toBe($entry['id']);
@@ -51,7 +45,7 @@ it('sets the draft name and notes on creation', function () {
     ]);
 
     expect($output->isError)->toBeFalse();
-    $created = decodeDraft($output);
+    $created = decode($output);
 
     $draft = Entry::find()->draftId($created['draftId'])->status(null)->one();
     expect($draft->draftName)->toBe('Editorial pass');
@@ -60,7 +54,7 @@ it('sets the draft name and notes on creation', function () {
 
 it('updates an existing draft by draftId', function () {
     $entry = canonicalEntry($this->registry);
-    $created = decodeDraft($this->registry->execute('upsert_draft', [
+    $created = decode($this->registry->execute('upsert_draft', [
         'entry' => $entry['id'], 'title' => 'Original Draft',
     ]));
 
@@ -69,7 +63,7 @@ it('updates an existing draft by draftId', function () {
     ]);
 
     expect($output->isError)->toBeFalse();
-    expect(decodeDraft($output)['draftId'])->toBe($created['draftId']);
+    expect(decode($output)['draftId'])->toBe($created['draftId']);
 
     $draft = Entry::find()->draftId($created['draftId'])->status(null)->one();
     expect($draft->title)->toBe('Updated Draft');
@@ -89,7 +83,7 @@ it('creates a fresh draft with no canonical entry from a section', function () {
     ]);
 
     expect($output->isError)->toBeFalse();
-    $draft = decodeDraft($output);
+    $draft = decode($output);
     expect($draft['title'])->toBe('Fresh Draft');
     expect($draft['draftId'])->not->toBeNull();
 
@@ -123,7 +117,7 @@ it('errors on an unknown canonical entry id', function () {
 
 it('skips create-only required rules when updating an existing draft', function () {
     $entry = canonicalEntry($this->registry);
-    $created = decodeDraft($this->registry->execute('upsert_draft', [
+    $created = decode($this->registry->execute('upsert_draft', [
         'entry' => $entry['id'],
     ]));
 

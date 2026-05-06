@@ -3,7 +3,6 @@
 use markhuot\craftai\tools\GetDraft;
 use markhuot\craftai\tools\GetDrafts;
 use markhuot\craftai\tools\GetEntry;
-use markhuot\craftai\tools\ToolOutput;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertDraft;
 use markhuot\craftai\tools\UpsertEntry;
@@ -19,11 +18,6 @@ beforeEach(function () {
     $this->registry->register(GetDraft::class);
     $this->registry->register(GetDrafts::class);
 });
-
-function decode(ToolOutput $output): array
-{
-    return json_decode($output->text, true);
-}
 
 it('round-trips a fresh draft via get_draft', function () {
     $created = decode($this->registry->execute('upsert_draft', [

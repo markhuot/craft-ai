@@ -1,7 +1,6 @@
 <?php
 
 use craft\elements\Entry;
-use markhuot\craftai\tools\ToolOutput;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertEntry;
 use markhuot\craftpest\factories\Section;
@@ -12,11 +11,6 @@ beforeEach(function () {
     $this->registry = new ToolRegistry();
     $this->registry->register(UpsertEntry::class);
 });
-
-function decode(ToolOutput $output): array
-{
-    return json_decode($output->text, true);
-}
 
 it('creates an entry with a title', function () {
     $output = $this->registry->execute('upsert_entry', ['section' => 'posts', 'title' => 'Hello World']);

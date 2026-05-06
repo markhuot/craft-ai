@@ -9,6 +9,7 @@ beforeEach(function () {
     FileHelper::createDirectory($this->tempTemplatesPath);
 
     $this->originalTemplatesAlias = Craft::getAlias('@templates');
+    $this->originalTemplatesPath = Craft::$app->getView()->getTemplatesPath();
     Craft::setAlias('@templates', $this->tempTemplatesPath);
     Craft::$app->getView()->setTemplatesPath($this->tempTemplatesPath);
 
@@ -18,19 +19,12 @@ beforeEach(function () {
 
 afterEach(function () {
     Craft::setAlias('@templates', $this->originalTemplatesAlias);
-    Craft::$app->getView()->setTemplatesPath($this->originalTemplatesAlias);
+    Craft::$app->getView()->setTemplatesPath($this->originalTemplatesPath);
 
     if (is_dir($this->tempTemplatesPath)) {
         FileHelper::removeDirectory($this->tempTemplatesPath);
     }
 });
-
-function writeTemplate(string $base, string $relative, string $contents): void
-{
-    $path = $base.'/'.ltrim($relative, '/');
-    FileHelper::createDirectory(dirname($path));
-    file_put_contents($path, $contents);
-}
 
 it('lists templates in the site templates directory', function () {
     writeTemplate($this->tempTemplatesPath, 'index.twig', '<h1>Home</h1>');

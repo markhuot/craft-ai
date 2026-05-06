@@ -17,9 +17,11 @@ import {
   PromptInputToolbar,
   PromptInputUpload,
 } from "./components/prompt-input";
+import { ResizeDivider } from "./components/resize-divider";
 import { Response } from "./components/response";
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from "./components/tool";
 import { openAssetSelector, type AssetSelectorOpener } from "./lib/assetSelector";
+import { useResizableSplit } from "./lib/useResizableSplit";
 import type {
   Attachment,
   ChatBootstrap,
@@ -45,9 +47,23 @@ export interface ChatProps {
    * we last attached to a send for this session. Tests can supply a fake.
    */
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem">;
+  /**
+   * Fires whenever the chat transitions in or out of peek mode (preview open
+   * and not expanded). The Shell uses this to auto-collapse the sessions
+   * sidebar so the peek pane gets more horizontal room.
+   */
+  onPreviewPeekChange?: (peek: boolean) => void;
 }
 
 const CONTEXT_FP_STORAGE_PREFIX = "craftai-widget:context-fp:";
+// Defaults match the pre-resizable layout so first-time users see the same
+// split until they drag. Persisted under separate keys per mode because the
+// modes have very different "primary pane" mental models — peek treats the
+// transcript as the focus, expanded treats the preview as the focus.
+const PEEK_TRANSCRIPT_DEFAULT_PCT = 67;
+const EXPANDED_TRANSCRIPT_DEFAULT_PCT = 33;
+const PEEK_TRANSCRIPT_STORAGE_KEY = "craftai-chat:transcript-pct:peek";
+const EXPANDED_TRANSCRIPT_STORAGE_KEY = "craftai-chat:transcript-pct:expanded";
 
 export function Chat({
   bootstrap,
@@ -56,6 +72,7 @@ export function Chat({
   openAssetSelector: openAssetSelectorOverride,
   enableAttachments = true,
   storage,
+  onPreviewPeekChange,
 }: ChatProps) {
   const api = useMemo(
     () =>
@@ -98,6 +115,15 @@ export function Chat({
   // clicking links inside the preview.
   const [previewLiveUrl, setPreviewLiveUrl] = useState<string | null>(null);
   const previewPaneRef = useRef<PreviewPaneHandle | null>(null);
+  const layoutContainerRef = useRef<HTMLDivElement | null>(null);
+  const [peekTranscriptPct, setPeekTranscriptPct] = useResizableSplit(
+    PEEK_TRANSCRIPT_STORAGE_KEY,
+    PEEK_TRANSCRIPT_DEFAULT_PCT,
+  );
+  const [expandedTranscriptPct, setExpandedTranscriptPct] = useResizableSplit(
+    EXPANDED_TRANSCRIPT_STORAGE_KEY,
+    EXPANDED_TRANSCRIPT_DEFAULT_PCT,
+  );
   // Requests we've already started to handle. Polling can return the same
   // pending row repeatedly until we resolve it server-side; without dedup,
   // a slow respond() POST would race itself.
@@ -289,6 +315,15 @@ export function Chat({
     const id = setInterval(poll, pollIntervalMs);
     return () => clearInterval(id);
   }, [poll, pollIntervalMs]);
+
+  // Tell the host (Shell) when the chat is showing a peek-mode preview, so
+  // it can collapse the sessions sidebar to free up horizontal space.
+  // Expanded mode breaks out into a fixed overlay that already covers the
+  // sidebar, so we treat that case as "not peeking" for this signal.
+  useEffect(() => {
+    if (!onPreviewPeekChange) return;
+    onPreviewPeekChange(previewUrl !== null && previewMode === "peek");
+  }, [onPreviewPeekChange, previewUrl, previewMode]);
 
   const onSubmit = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
@@ -494,37 +529,58 @@ export function Chat({
 
   if (previewMode === "expanded") {
     // Break out of the CP page container so we can claim the whole viewport.
-    // 1/3 chat on the left, 2/3 preview on the right. The X button sits over
-    // the transcript column (provided by PreviewPane's collapse control).
+    // Default split is 1/3 chat / 2/3 preview, but the user can drag the
+    // divider and the choice persists across reloads.
     return (
       <div
+        ref={layoutContainerRef}
         data-testid="chat-with-preview"
         data-preview-mode="expanded"
         className="ai:fixed ai:inset-0 ai:z-50 ai:flex ai:bg-craftai-bg"
       >
-        <div className="ai:flex ai:basis-1/3 ai:min-w-0 ai:flex-col ai:overflow-hidden ai:border-r ai:border-craftai-border ai:p-3">
+        <div
+          data-testid="chat-transcript-pane"
+          style={{ width: `${expandedTranscriptPct}%` }}
+          className="ai:flex ai:min-w-0 ai:flex-col ai:overflow-hidden ai:p-3"
+        >
           {transcript}
         </div>
-        <div className="ai:flex ai:basis-2/3 ai:min-w-0 ai:flex-col ai:p-3">
+        <ResizeDivider
+          containerRef={layoutContainerRef}
+          onResize={setExpandedTranscriptPct}
+          ariaValueNow={expandedTranscriptPct}
+        />
+        <div className="ai:flex ai:flex-1 ai:min-w-0 ai:flex-col ai:p-3">
           {previewPane}
         </div>
       </div>
     );
   }
 
-  // Peek: stay inside the CP page container. 2/3 chat / 1/3 preview, side
-  // by side. Clicking expand on the preview header flips us to the fixed
-  // overlay above; closing returns to the transcript-only view.
+  // Peek: stay inside the CP page container. Default split is 2/3 chat /
+  // 1/3 preview, with the same drag-to-resize divider as expanded mode.
+  // Clicking expand on the preview header flips us to the fixed overlay
+  // above; closing returns to the transcript-only view.
   return (
     <div
+      ref={layoutContainerRef}
       data-testid="chat-with-preview"
       data-preview-mode="peek"
-      className="ai:flex ai:min-h-0 ai:flex-1 ai:gap-3"
+      className="ai:flex ai:min-h-0 ai:flex-1"
     >
-      <div className="ai:flex ai:basis-2/3 ai:min-w-0 ai:flex-col">
+      <div
+        data-testid="chat-transcript-pane"
+        style={{ width: `${peekTranscriptPct}%` }}
+        className="ai:flex ai:min-w-0 ai:flex-col"
+      >
         {transcript}
       </div>
-      <div className="ai:flex ai:basis-1/3 ai:min-w-0 ai:flex-col">
+      <ResizeDivider
+        containerRef={layoutContainerRef}
+        onResize={setPeekTranscriptPct}
+        ariaValueNow={peekTranscriptPct}
+      />
+      <div className="ai:flex ai:flex-1 ai:min-w-0 ai:flex-col">
         {previewPane}
       </div>
     </div>

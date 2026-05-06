@@ -9,7 +9,10 @@ import type {
   PreviewRequest,
 } from "../types";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
 
 function bootstrap(): ChatBootstrap {
   return {
@@ -477,6 +480,199 @@ describe("<Chat /> preview pane integration", () => {
     expect(responses.length).toBe(1);
     expect(responses[0]?.id).toBe(90);
     expect(responses[0]?.status).toBe("completed");
+  });
+
+  test("renders a resize divider in peek mode that sits between the transcript and preview", async () => {
+    const api = makeApi({
+      fetchMessagesAfter: async () =>
+        envelope([], {
+          id: 100,
+          type: "open",
+          status: "pending",
+          input: { url: "https://example.com" },
+        }),
+      respondToPreviewRequest: async () => {},
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
+    await waitFor(() => screen.getByTestId("preview-pane"));
+
+    const layout = screen.getByTestId("chat-with-preview");
+    expect(layout.dataset.previewMode).toBe("peek");
+    expect(screen.getByTestId("preview-resize")).toBeTruthy();
+
+    // Default peek split: 67% transcript / 33% preview, applied as an inline
+    // width on the transcript pane. The preview pane fills the remainder via
+    // flex-1, so we don't need to assert its width directly.
+    const transcript = screen.getByTestId("chat-transcript-pane");
+    expect(transcript.style.width).toBe("67%");
+  });
+
+  test("renders a resize divider in expanded mode and respects the saved expanded percent", async () => {
+    window.localStorage.setItem("craftai-chat:transcript-pct:expanded", "45");
+    const api = makeApi({
+      fetchMessagesAfter: async () =>
+        envelope([], {
+          id: 101,
+          type: "open",
+          status: "pending",
+          input: { url: "https://example.com" },
+        }),
+      respondToPreviewRequest: async () => {},
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
+    await waitFor(() => screen.getByTestId("preview-pane"));
+
+    fireEvent.click(screen.getByTestId("preview-expand"));
+    expect(screen.getByTestId("chat-with-preview").dataset.previewMode).toBe("expanded");
+    expect(screen.getByTestId("preview-resize")).toBeTruthy();
+    expect(screen.getByTestId("chat-transcript-pane").style.width).toBe("45%");
+  });
+
+  test("hydrates the peek transcript width from localStorage on first render", async () => {
+    window.localStorage.setItem("craftai-chat:transcript-pct:peek", "55");
+    const api = makeApi({
+      fetchMessagesAfter: async () =>
+        envelope([], {
+          id: 102,
+          type: "open",
+          status: "pending",
+          input: { url: "https://example.com" },
+        }),
+      respondToPreviewRequest: async () => {},
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
+    await waitFor(() => screen.getByTestId("preview-pane"));
+
+    expect(screen.getByTestId("chat-transcript-pane").style.width).toBe("55%");
+  });
+
+  test("dragging the divider updates the transcript width and persists it", async () => {
+    const api = makeApi({
+      fetchMessagesAfter: async () =>
+        envelope([], {
+          id: 103,
+          type: "open",
+          status: "pending",
+          input: { url: "https://example.com" },
+        }),
+      respondToPreviewRequest: async () => {},
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
+    await waitFor(() => screen.getByTestId("preview-pane"));
+
+    const layout = screen.getByTestId("chat-with-preview");
+    // happy-dom doesn't lay anything out, so pin a known container rect.
+    layout.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        right: 1000,
+        bottom: 0,
+        width: 1000,
+        height: 0,
+        x: 0,
+        y: 0,
+        toJSON() {},
+      }) as DOMRect;
+
+    const divider = screen.getByTestId("preview-resize");
+    fireEvent.pointerDown(divider, { clientX: 670 });
+    fireEvent.pointerMove(window, { clientX: 400 });
+    fireEvent.pointerUp(window);
+
+    // 400 / 1000 = 40%, clamped to the [20, 80] band.
+    await waitFor(() =>
+      expect(screen.getByTestId("chat-transcript-pane").style.width).toBe("40%"),
+    );
+    expect(window.localStorage.getItem("craftai-chat:transcript-pct:peek")).toBe("40");
+  });
+
+  test("dragging far past the right edge clamps the transcript to 80%", async () => {
+    const api = makeApi({
+      fetchMessagesAfter: async () =>
+        envelope([], {
+          id: 104,
+          type: "open",
+          status: "pending",
+          input: { url: "https://example.com" },
+        }),
+      respondToPreviewRequest: async () => {},
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
+    await waitFor(() => screen.getByTestId("preview-pane"));
+
+    const layout = screen.getByTestId("chat-with-preview");
+    layout.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        right: 1000,
+        bottom: 0,
+        width: 1000,
+        height: 0,
+        x: 0,
+        y: 0,
+        toJSON() {},
+      }) as DOMRect;
+
+    fireEvent.pointerDown(screen.getByTestId("preview-resize"), { clientX: 670 });
+    fireEvent.pointerMove(window, { clientX: 5000 });
+    fireEvent.pointerUp(window);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("chat-transcript-pane").style.width).toBe("80%"),
+    );
+  });
+
+  test("notifies the host when peek opens, expands, and closes", async () => {
+    const peekStates: boolean[] = [];
+    let pollCount = 0;
+    const api = makeApi({
+      fetchMessagesAfter: async () => {
+        pollCount += 1;
+        if (pollCount === 1) {
+          return envelope([], {
+            id: 110,
+            type: "open",
+            status: "pending",
+            input: { url: "https://example.com" },
+          });
+        }
+        return envelope([]);
+      },
+      respondToPreviewRequest: async () => {},
+    });
+
+    render(
+      <Chat
+        bootstrap={bootstrap()}
+        api={api}
+        pollIntervalMs={1_000_000}
+        onPreviewPeekChange={(peek) => peekStates.push(peek)}
+      />,
+    );
+
+    // Initial state: peek=false (no preview yet).
+    await waitFor(() => expect(peekStates[0]).toBe(false));
+    // After the OpenPreview poll, we transition to peek=true.
+    await waitFor(() => expect(peekStates).toContain(true));
+
+    // Expanding the preview takes us out of peek mode for the host's purposes.
+    fireEvent.click(screen.getByTestId("preview-expand"));
+    await waitFor(() => expect(peekStates[peekStates.length - 1]).toBe(false));
+
+    // Collapsing back puts us in peek again.
+    fireEvent.click(screen.getByTestId("preview-shrink"));
+    await waitFor(() => expect(peekStates[peekStates.length - 1]).toBe(true));
+
+    // Closing the preview entirely returns to peek=false.
+    fireEvent.click(screen.getByTestId("preview-close"));
+    await waitFor(() => expect(peekStates[peekStates.length - 1]).toBe(false));
   });
 
   test("a get_preview request without an open iframe is rejected with an error", async () => {

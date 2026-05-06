@@ -306,6 +306,179 @@ describe("<Chat /> preview pane integration", () => {
     expect(screen.queryByTestId("preview-toggle")).toBeNull();
   });
 
+  test("an in-iframe navigation rides along on the next message as page context", async () => {
+    const sends: Array<{ context?: unknown }> = [];
+    let pollCount = 0;
+    const api = makeApi({
+      fetchMessagesAfter: async () => {
+        pollCount += 1;
+        if (pollCount === 1) {
+          return envelope([], {
+            id: 80,
+            type: "open",
+            status: "pending",
+            input: { url: "https://example.com/v1" },
+          });
+        }
+        return envelope([]);
+      },
+      respondToPreviewRequest: async () => {},
+    });
+    api.sendMessage = async (_msg, _ids, context) => {
+      sends.push({ context });
+    };
+
+    const data = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        data.set(k, v);
+      },
+      removeItem: (k: string) => {
+        data.delete(k);
+      },
+    };
+
+    render(
+      <Chat
+        bootstrap={bootstrap()}
+        api={api}
+        pollIntervalMs={1_000_000}
+        storage={storage}
+      />,
+    );
+    await waitFor(() => screen.getByTestId("preview-iframe"));
+
+    const iframe = screen.getByTestId("preview-iframe") as HTMLIFrameElement;
+    // Initial load resolves the OpenPreview at /v1.
+    fireEvent.load(iframe);
+
+    // User clicks a link inside the iframe and the frame navigates to /v2.
+    Object.defineProperty(iframe, "contentWindow", {
+      configurable: true,
+      get: () => ({ location: { href: "https://example.com/v2" } }),
+    });
+    fireEvent.load(iframe);
+
+    fireEvent.change(screen.getByPlaceholderText("Send a message…"), {
+      target: { value: "what does this say" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    await waitFor(() => expect(sends.length).toBe(1));
+    // The page-context payload reflects the URL the user is actually
+    // looking at after the in-iframe navigation, not the URL the agent
+    // originally requested.
+    expect(sends[0]?.context).toEqual({ url: "https://example.com/v2" });
+    expect(data.get("craftai-widget:context-fp:session-preview")).toBe(
+      "preview:https://example.com/v2",
+    );
+  });
+
+  test("the same preview URL is not re-sent as context on the next message", async () => {
+    const sends: Array<{ context?: unknown }> = [];
+    let pollCount = 0;
+    const api = makeApi({
+      fetchMessagesAfter: async () => {
+        pollCount += 1;
+        if (pollCount === 1) {
+          return envelope([], {
+            id: 81,
+            type: "open",
+            status: "pending",
+            input: { url: "https://example.com/v1" },
+          });
+        }
+        // Flip status back to idle so the second send isn't blocked.
+        if (pollCount === 2) {
+          return envelope([
+            { id: 1, role: "assistant", content: [{ type: "text", text: "ok" }] },
+          ]);
+        }
+        return envelope([]);
+      },
+      respondToPreviewRequest: async () => {},
+    });
+    api.sendMessage = async (_msg, _ids, context) => {
+      sends.push({ context });
+    };
+
+    const data = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        data.set(k, v);
+      },
+      removeItem: (k: string) => {
+        data.delete(k);
+      },
+    };
+
+    render(
+      <Chat
+        bootstrap={bootstrap()}
+        api={api}
+        pollIntervalMs={1_000_000}
+        storage={storage}
+      />,
+    );
+    await waitFor(() => screen.getByTestId("preview-iframe"));
+    const iframe = screen.getByTestId("preview-iframe") as HTMLIFrameElement;
+    Object.defineProperty(iframe, "contentWindow", {
+      configurable: true,
+      get: () => ({ location: { href: "https://example.com/v1" } }),
+    });
+    fireEvent.load(iframe);
+
+    const textarea = screen.getByPlaceholderText("Send a message…");
+    fireEvent.change(textarea, { target: { value: "first" } });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    await waitFor(() => expect(sends.length).toBe(1));
+    await waitFor(() => expect(screen.queryByText("ok")).toBeTruthy());
+
+    fireEvent.change(textarea, { target: { value: "second" } });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    await waitFor(() => expect(sends.length).toBe(2));
+
+    expect(sends[0]?.context).toEqual({ url: "https://example.com/v1" });
+    // Same URL, fingerprint already cached → omit the payload.
+    expect(sends[1]?.context).toBeUndefined();
+  });
+
+  test("a navigation does not double-resolve the original OpenPreview request", async () => {
+    const responses: Array<{ id: number; status: string }> = [];
+    const api = makeApi({
+      fetchMessagesAfter: async () =>
+        envelope([], {
+          id: 90,
+          type: "open",
+          status: "pending",
+          input: { url: "https://example.com/v1" },
+        }),
+      respondToPreviewRequest: async (id, status) => {
+        responses.push({ id, status });
+      },
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
+    await waitFor(() => screen.getByTestId("preview-iframe"));
+
+    const iframe = screen.getByTestId("preview-iframe") as HTMLIFrameElement;
+    fireEvent.load(iframe);
+
+    Object.defineProperty(iframe, "contentWindow", {
+      configurable: true,
+      get: () => ({ location: { href: "https://example.com/v2" } }),
+    });
+    fireEvent.load(iframe);
+
+    // Let any straggling responds settle.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(responses.length).toBe(1);
+    expect(responses[0]?.id).toBe(90);
+    expect(responses[0]?.status).toBe("completed");
+  });
+
   test("a get_preview request without an open iframe is rejected with an error", async () => {
     const responses: Array<{ id: number; status: string; result: Record<string, unknown> }> = [];
     const api = makeApi({

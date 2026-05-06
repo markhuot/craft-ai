@@ -135,6 +135,73 @@ describe("<PreviewPane />", () => {
     expect(captured.url).toBe("https://example.com/foo");
   });
 
+  test("fires onLoad again with the new URL when the iframe navigates inside the frame", () => {
+    const captured: string[] = [];
+    render(
+      <PreviewPane
+        url="https://example.com/v1"
+        mode="peek"
+        loading={false}
+        onLoad={(url) => captured.push(url)}
+        onError={noop}
+        onExpand={noop}
+        onCollapse={noop}
+        onClose={noop}
+      />,
+    );
+    const iframe = screen.getByTestId("preview-iframe") as HTMLIFrameElement;
+
+    // Initial load. happy-dom hands us about:blank for an unfetched iframe,
+    // which the component filters out — so finalUrl falls back to the prop.
+    fireEvent.load(iframe);
+    expect(captured).toEqual(["https://example.com/v1"]);
+
+    // Simulate an in-iframe link click: real browsers update
+    // contentWindow.location.href to the new same-origin page. Shimming the
+    // getter is the cleanest way to drive that path through happy-dom.
+    Object.defineProperty(iframe, "contentWindow", {
+      configurable: true,
+      get: () => ({ location: { href: "https://example.com/v2" } }),
+    });
+    fireEvent.load(iframe);
+    expect(captured).toEqual([
+      "https://example.com/v1",
+      "https://example.com/v2",
+    ]);
+
+    // Re-firing for the same destination is a no-op — only real moves count.
+    fireEvent.load(iframe);
+    expect(captured.length).toBe(2);
+  });
+
+  test("renders the live iframe URL in the header after a navigation", () => {
+    render(
+      <PreviewPane
+        url="https://example.com/v1"
+        mode="peek"
+        loading={false}
+        onLoad={noop}
+        onError={noop}
+        onExpand={noop}
+        onCollapse={noop}
+        onClose={noop}
+      />,
+    );
+    const iframe = screen.getByTestId("preview-iframe") as HTMLIFrameElement;
+    expect(screen.getByTestId("preview-url").textContent).toContain(
+      "https://example.com/v1",
+    );
+
+    Object.defineProperty(iframe, "contentWindow", {
+      configurable: true,
+      get: () => ({ location: { href: "https://example.com/v2" } }),
+    });
+    fireEvent.load(iframe);
+    expect(screen.getByTestId("preview-url").textContent).toContain(
+      "https://example.com/v2",
+    );
+  });
+
   test("readContents returns the iframe document text", () => {
     const ref = createRef<PreviewPaneHandle>();
     render(

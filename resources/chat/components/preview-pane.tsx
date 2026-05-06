@@ -42,9 +42,11 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(funct
   ref,
 ) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  // Track which url has fired its onLoad. A re-render shouldn't replay the
-  // load callback, but a `url` change should reset us so the new request
-  // gets a fresh load signal.
+  // Tracks the URL we last fired onLoad for. Dedupes by the *resolved*
+  // location (not the requested `url` prop) so a real in-iframe navigation
+  // — user clicks a link inside the preview, frame loads a different page —
+  // still surfaces an onLoad with the new URL, while a re-fired load event
+  // for the same document collapses to a single callback.
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
 
   useImperativeHandle(
@@ -81,20 +83,23 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(funct
   );
 
   useEffect(() => {
+    // Parent swapped the requested URL out from under us — clear so the
+    // next load signal fires fresh even if the iframe ends up at the same
+    // address we last reported.
     setLoadedUrl(null);
   }, [url]);
 
   const handleLoad = () => {
-    if (loadedUrl === url) return;
-    setLoadedUrl(url);
     let finalUrl = url;
     try {
       const href = iframeRef.current?.contentWindow?.location?.href;
-      if (href) finalUrl = href;
+      if (href && href !== "about:blank") finalUrl = href;
     } catch {
       // Cross-origin: keep the requested URL, the agent can fall back
       // to fetch_webpage if it needs to verify the actual destination.
     }
+    if (loadedUrl === finalUrl) return;
+    setLoadedUrl(finalUrl);
     onLoad(finalUrl);
   };
 
@@ -110,8 +115,12 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(funct
       aria-label="Page preview"
     >
       <header className="ai:flex ai:items-center ai:gap-2 ai:border-b ai:border-craftai-border ai:bg-craftai-bg ai:px-2 ai:py-1.5 ai:text-xs">
-        <span className="ai:flex-1 ai:truncate ai:text-craftai-muted" title={url}>
-          {url}
+        <span
+          data-testid="preview-url"
+          className="ai:flex-1 ai:truncate ai:text-craftai-muted"
+          title={loadedUrl ?? url}
+        >
+          {loadedUrl ?? url}
         </span>
         {mode === "peek" ? (
           <button

@@ -91,6 +91,12 @@ export function Chat({
   // globe so a page reload (which wipes the previewUrl React state) still
   // lets the user re-mount the iframe with one click.
   const [lastPreviewUrl, setLastPreviewUrl] = useState<string | null>(null);
+  // The actual URL the iframe is currently displaying — updates whenever
+  // PreviewPane reports a load (initial mount, redirects, in-iframe link
+  // clicks). Used to ride along on the next outgoing message as page
+  // context so the agent learns about navigations the user makes by
+  // clicking links inside the preview.
+  const [previewLiveUrl, setPreviewLiveUrl] = useState<string | null>(null);
   const previewPaneRef = useRef<PreviewPaneHandle | null>(null);
   // Requests we've already started to handle. Polling can return the same
   // pending row repeatedly until we resolve it server-side; without dedup,
@@ -213,6 +219,15 @@ export function Chat({
 
   const handlePreviewLoaded = useCallback(
     (finalUrl: string) => {
+      // Reflect every load — including in-iframe link clicks that don't
+      // go through the agent — so the next user message can attach the
+      // actual URL as context. Fingerprint dedup in onSubmit prevents
+      // the same URL from being re-sent across messages.
+      //
+      // Note we deliberately don't touch lastPreviewUrl here: that pointer
+      // is server-authoritative (only the agent's resolved opens persist),
+      // so a client-only override would be undone by the next poll.
+      setPreviewLiveUrl(finalUrl);
       const id = pendingOpenRequestId;
       if (id === null) return;
       setPendingOpenRequestId(null);
@@ -237,6 +252,10 @@ export function Chat({
   const closePreview = useCallback(() => {
     setPreviewUrl(null);
     setPreviewMode("peek");
+    // Stop riding the closed iframe's URL into context sends. The globe
+    // still keeps lastPreviewUrl so the user can reopen, but until they do
+    // there's no "preview the user is looking at" to advertise.
+    setPreviewLiveUrl(null);
     if (pendingOpenRequestId !== null) {
       // Resolve any in-flight OpenPreview as an error so the agent doesn't
       // hang waiting for a load that will never fire.
@@ -283,22 +302,42 @@ export function Chat({
       // Decide whether the page context is "new" relative to what we last
       // attached on this session. If the fingerprint matches, omit the
       // payload — the LLM already has it.
+      //
+      // Two sources of context can flow here:
+      //   * The widget bootstrap, set once when the chat mounts on a
+      //     front-end page (rich element-level details).
+      //   * A live preview URL the user is currently looking at. If the
+      //     iframe has loaded a real URL, we prefer that — it represents
+      //     the user's actual focus, including pages they reached by
+      //     clicking links inside the preview. The fingerprint key is
+      //     namespaced so it never collides with bootstrap SHA-1 hashes.
       const store =
         storage ??
         (typeof window !== "undefined" && window.localStorage ? window.localStorage : null);
-      const fp = bootstrap.contextFingerprint ?? "";
-      const ctx = bootstrap.context;
       const fpKey = `${CONTEXT_FP_STORAGE_PREFIX}${bootstrap.sessionId}`;
+      let activeCtx: unknown = undefined;
+      let activeFp = "";
+      if (previewLiveUrl !== null && previewLiveUrl !== "") {
+        activeCtx = { url: previewLiveUrl };
+        activeFp = `preview:${previewLiveUrl}`;
+      } else if (
+        bootstrap.context !== undefined &&
+        bootstrap.context !== null &&
+        (bootstrap.contextFingerprint ?? "") !== ""
+      ) {
+        activeCtx = bootstrap.context;
+        activeFp = bootstrap.contextFingerprint!;
+      }
       let attachContext: unknown = undefined;
-      if (ctx !== undefined && ctx !== null && fp !== "") {
+      if (activeCtx !== undefined && activeFp !== "") {
         let prior: string | null = null;
         try {
           prior = store?.getItem(fpKey) ?? null;
         } catch {
           prior = null;
         }
-        if (prior !== fp) {
-          attachContext = ctx;
+        if (prior !== activeFp) {
+          attachContext = activeCtx;
         }
       }
 
@@ -308,11 +347,11 @@ export function Chat({
           pendingAttachments.map((a) => a.id),
           attachContext,
         );
-        if (attachContext !== undefined && fp !== "") {
+        if (attachContext !== undefined && activeFp !== "") {
           // Only mark the fingerprint as sent on success — a failed send
           // should retry context attachment on the next attempt.
           try {
-            store?.setItem(fpKey, fp);
+            store?.setItem(fpKey, activeFp);
           } catch {
             // localStorage can throw in private mode / quota-exceeded — keep
             // sending context until it sticks.
@@ -327,7 +366,7 @@ export function Chat({
         setError(err instanceof Error ? err.message : "Failed to send message");
       }
     },
-    [api, bootstrap.context, bootstrap.contextFingerprint, bootstrap.sessionId, draft, pendingAttachments, poll, status, storage],
+    [api, bootstrap.context, bootstrap.contextFingerprint, bootstrap.sessionId, draft, pendingAttachments, poll, previewLiveUrl, status, storage],
   );
 
   const onAddAttachments = useCallback(async () => {

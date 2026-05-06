@@ -14,6 +14,13 @@ use markhuot\craftai\records\SessionRecord;
  * (closer to what a human reader sees); pass `fullHtml: true` to get the
  * raw outerHTML instead.
  *
+ * Use this tool to inspect the rendered FRONT-END UI of the site (the public
+ * page a visitor would see for an entry/draft). Do NOT use it to load
+ * control panel / admin pages — the preview pane is for site output, not
+ * CP screens, and pointing it at a CP URL produces a useless or errored
+ * result. If you need to read the current CP page, use the page-context the
+ * widget already attaches to user messages instead.
+ *
  * CP-only: the preview pane only exists in the CP chat surface. If no
  * preview is open, or the loaded URL is cross-origin (so the iframe's
  * contents can't be read from JS), the tool returns an error and the agent

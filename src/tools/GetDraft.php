@@ -7,6 +7,7 @@ use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
 use markhuot\craftai\binders\Draft as DraftBinder;
+use markhuot\craftai\helpers\DraftPreview;
 use markhuot\craftai\validators\ExistingDraft;
 
 /**
@@ -29,6 +30,9 @@ class GetDraft extends Tool
             throw new \LogicException('Draft was not bound before invocation.');
         }
 
-        return $draftId->toArray();
+        $data = $draftId->toArray();
+        $data['url'] = DraftPreview::urlFor($draftId);
+
+        return $data;
     }
 }

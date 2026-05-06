@@ -125,3 +125,70 @@ it('skips create-only required rules when updating an existing draft', function 
 
     expect($output->isError)->toBeFalse();
 });
+
+it('returns a tokenized preview URL for a draft of a canonical entry', function () {
+    $entry = canonicalEntry($this->registry);
+
+    $draft = decode($this->registry->execute('upsert_draft', [
+        'entry' => $entry['id'], 'title' => 'My Draft',
+    ]));
+
+    $tokenParam = Craft::$app->getConfig()->getGeneral()->tokenParam;
+    expect($draft['url'])->toContain("$tokenParam=");
+
+    parse_str(parse_url($draft['url'], PHP_URL_QUERY), $query);
+    $route = Craft::$app->getTokens()->getTokenRoute($query[$tokenParam]);
+
+    expect($route)->not->toBeFalse();
+    expect($route[0])->toBe('preview/preview');
+    expect($route[1]['draftId'])->toBe($draft['draftId']);
+    expect($route[1]['canonicalId'])->toBe($entry['id']);
+    expect($route[1]['elementType'])->toBe(Entry::class);
+});
+
+it('returns a tokenized preview URL for a fresh draft', function () {
+    $draft = decode($this->registry->execute('upsert_draft', [
+        'section' => 'posts',
+        'title' => 'Fresh Draft',
+    ]));
+
+    $tokenParam = Craft::$app->getConfig()->getGeneral()->tokenParam;
+    expect($draft['url'])->toContain("$tokenParam=");
+
+    parse_str(parse_url($draft['url'], PHP_URL_QUERY), $query);
+    $route = Craft::$app->getTokens()->getTokenRoute($query[$tokenParam]);
+
+    expect($route)->not->toBeFalse();
+    expect($route[0])->toBe('preview/preview');
+    expect($route[1]['draftId'])->toBe($draft['draftId']);
+});
+
+it('returns a tokenized preview URL when updating a draft', function () {
+    $entry = canonicalEntry($this->registry);
+    $created = decode($this->registry->execute('upsert_draft', [
+        'entry' => $entry['id'], 'title' => 'Original',
+    ]));
+
+    $updated = decode($this->registry->execute('upsert_draft', [
+        'draftId' => $created['draftId'], 'title' => 'Updated',
+    ]));
+
+    $tokenParam = Craft::$app->getConfig()->getGeneral()->tokenParam;
+    expect($updated['url'])->toContain("$tokenParam=");
+
+    parse_str(parse_url($updated['url'], PHP_URL_QUERY), $query);
+    $route = Craft::$app->getTokens()->getTokenRoute($query[$tokenParam]);
+
+    expect($route[1]['draftId'])->toBe($updated['draftId']);
+});
+
+it('returns a null url for a draft in a section without front-end URLs', function () {
+    Section::factory()->name('Hidden')->handle('hidden')->hasUrls(false)->create();
+
+    $draft = decode($this->registry->execute('upsert_draft', [
+        'section' => 'hidden',
+        'title' => 'Invisible',
+    ]));
+
+    expect($draft['url'])->toBeNull();
+});

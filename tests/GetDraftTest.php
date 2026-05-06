@@ -67,3 +67,22 @@ it('does not return a draft from get_entry', function () {
 
     expect($output->isError)->toBeTrue();
 });
+
+it('returns a tokenized preview URL routed to the draft', function () {
+    $created = decode($this->registry->execute('upsert_draft', [
+        'section' => 'posts',
+        'title' => 'Drafted',
+    ]));
+
+    $fetched = decode($this->registry->execute('get_draft', ['draftId' => $created['draftId']]));
+
+    $tokenParam = Craft::$app->getConfig()->getGeneral()->tokenParam;
+    expect($fetched['url'])->toContain("$tokenParam=");
+
+    parse_str(parse_url($fetched['url'], PHP_URL_QUERY), $query);
+    $route = Craft::$app->getTokens()->getTokenRoute($query[$tokenParam]);
+
+    expect($route)->not->toBeFalse();
+    expect($route[0])->toBe('preview/preview');
+    expect($route[1]['draftId'])->toBe($created['draftId']);
+});

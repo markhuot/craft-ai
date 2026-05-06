@@ -15,6 +15,7 @@ use markhuot\craftai\binders\Entry as EntryBinder;
 use markhuot\craftai\binders\EntryType as EntryTypeBinder;
 use markhuot\craftai\binders\Section as SectionBinder;
 use markhuot\craftai\binders\Site as SiteBinder;
+use markhuot\craftai\helpers\DraftPreview;
 use markhuot\craftai\validators\ExistingDraft;
 use markhuot\craftai\validators\ExistingEntry;
 use markhuot\craftai\validators\ExistingEntryType;
@@ -151,7 +152,10 @@ class UpsertDraft extends Tool
                 );
             }
 
-            return $draft->toArray();
+            $data = $draft->toArray();
+            $data['url'] = DraftPreview::urlFor($draft);
+
+            return $data;
         } else {
             return new ToolOutput(
                 'Could not save draft: pass `draftId` to update, `entry` to draft an existing entry, or `section` to create a fresh draft.',
@@ -188,6 +192,9 @@ class UpsertDraft extends Tool
             );
         }
 
-        return $draft->toArray();
+        $data = $draft->toArray();
+        $data['url'] = DraftPreview::urlFor($draft);
+
+        return $data;
     }
 }

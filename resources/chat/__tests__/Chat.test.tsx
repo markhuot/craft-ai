@@ -2,7 +2,13 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Chat } from "../Chat";
 import { ChatApi } from "../api";
-import type { Attachment, ChatBootstrap, ChatMessage } from "../types";
+import type {
+  Attachment,
+  ChatBootstrap,
+  ChatMessage,
+  MessagesResponse,
+  PreviewRequest,
+} from "../types";
 
 afterEach(() => cleanup());
 
@@ -15,6 +21,7 @@ function bootstrap(initialMessages: ChatMessage[] = []): ChatBootstrap {
     newSessionUrl: "http://localhost/sessions/new",
     sessionsIndexUrl: "http://localhost/sessions",
     assetsInfoUrl: "http://localhost/assets/info",
+    previewRespondUrl: "http://localhost/preview/respond",
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
     initialMessages,
@@ -22,19 +29,26 @@ function bootstrap(initialMessages: ChatMessage[] = []): ChatBootstrap {
   };
 }
 
+function envelope(messages: ChatMessage[], previewRequest: PreviewRequest | null = null): MessagesResponse {
+  return { messages, previewRequest };
+}
+
 function makeApi(overrides: Partial<{
-  fetchMessagesAfter: (lastId: number) => Promise<ChatMessage[]>;
+  fetchMessagesAfter: (lastId: number) => Promise<MessagesResponse>;
   sendMessage: (msg: string, assetIds?: number[], context?: unknown) => Promise<void>;
   fetchAssetInfo: (ids: number[]) => Promise<Attachment[]>;
+  respondToPreviewRequest: (id: number, status: "completed" | "errored", result: Record<string, unknown>) => Promise<void>;
 }> = {}) {
   const api = new ChatApi({
     messagesUrl: "http://localhost/messages",
     sendUrl: "http://localhost/send",
     assetsInfoUrl: "http://localhost/assets/info",
+    previewRespondUrl: "http://localhost/preview/respond",
     sessionId: "session-1",
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
-    fetchImpl: async () => new Response("[]", { status: 200 }),
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ messages: [], previewRequest: null }), { status: 200 }),
   });
   if (overrides.fetchMessagesAfter) {
     api.fetchMessagesAfter = overrides.fetchMessagesAfter;
@@ -44,6 +58,9 @@ function makeApi(overrides: Partial<{
   }
   if (overrides.fetchAssetInfo) {
     api.fetchAssetInfo = overrides.fetchAssetInfo;
+  }
+  if (overrides.respondToPreviewRequest) {
+    api.respondToPreviewRequest = overrides.respondToPreviewRequest;
   }
   return api;
 }
@@ -96,7 +113,7 @@ describe("<Chat />", () => {
       sendMessage: async (msg) => {
         sent = msg;
       },
-      fetchMessagesAfter: async () => [],
+      fetchMessagesAfter: async () => envelope([]),
     });
 
     render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
@@ -134,11 +151,11 @@ describe("<Chat />", () => {
       fetchMessagesAfter: async () => {
         calls += 1;
         if (calls === 1) {
-          return [
+          return envelope([
             { id: 5, role: "assistant", content: [{ type: "text", text: "later" }] },
-          ];
+          ]);
         }
-        return [];
+        return envelope([]);
       },
     });
     render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={20} />);
@@ -261,9 +278,11 @@ describe("<Chat />", () => {
         // rejected by the busy guard in onSubmit.
         pollCalls += 1;
         if (pollCalls === 2) {
-          return [{ id: 1, role: "assistant", content: [{ type: "text", text: "ack" }] }];
+          return envelope([
+            { id: 1, role: "assistant", content: [{ type: "text", text: "ack" }] },
+          ]);
         }
-        return [];
+        return envelope([]);
       },
     });
 
@@ -312,7 +331,7 @@ describe("<Chat />", () => {
       sendMessage: async (_msg, _ids, context) => {
         sends.push({ context });
       },
-      fetchMessagesAfter: async () => [],
+      fetchMessagesAfter: async () => envelope([]),
     });
 
     const data = new Map<string, string>();

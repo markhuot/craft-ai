@@ -3,6 +3,11 @@ import { ChatApi } from "./api";
 import { Conversation, ConversationContent } from "./components/conversation";
 import { Message, MessageContent } from "./components/message";
 import {
+  PreviewPane,
+  type PreviewPaneHandle,
+  type PreviewPaneMode,
+} from "./components/preview-pane";
+import {
   AttachmentChip,
   PromptInput,
   PromptInputAttachments,
@@ -14,7 +19,13 @@ import {
 import { Response } from "./components/response";
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from "./components/tool";
 import { openAssetSelector, type AssetSelectorOpener } from "./lib/assetSelector";
-import type { Attachment, ChatBootstrap, ChatMessage, ContentBlock } from "./types";
+import type {
+  Attachment,
+  ChatBootstrap,
+  ChatMessage,
+  ContentBlock,
+  PreviewRequest,
+} from "./types";
 
 export interface ChatProps {
   bootstrap: ChatBootstrap;
@@ -52,6 +63,7 @@ export function Chat({
         messagesUrl: bootstrap.messagesUrl,
         sendUrl: bootstrap.sendUrl,
         assetsInfoUrl: bootstrap.assetsInfoUrl,
+        previewRespondUrl: bootstrap.previewRespondUrl,
         sessionId: bootstrap.sessionId,
         csrfTokenName: bootstrap.csrfTokenName,
         csrfTokenValue: bootstrap.csrfTokenValue,
@@ -67,6 +79,18 @@ export function Chat({
   const [status, setStatus] = useState<"idle" | "submitting" | "streaming">("idle");
   const [error, setError] = useState<string | null>(null);
 
+  // The preview pane survives across requests on the same session — opening
+  // a second URL replaces the first, but a `GetPreview` between them reads
+  // whatever's currently mounted.
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<PreviewPaneMode>("peek");
+  const [pendingOpenRequestId, setPendingOpenRequestId] = useState<number | null>(null);
+  const previewPaneRef = useRef<PreviewPaneHandle | null>(null);
+  // Requests we've already started to handle. Polling can return the same
+  // pending row repeatedly until we resolve it server-side; without dedup,
+  // a slow respond() POST would race itself.
+  const handledRequestIdsRef = useRef<Set<number>>(new Set());
+
   const lastIdRef = useRef<number>(
     bootstrap.initialMessages.reduce((max, m) => Math.max(max, m.id), 0),
   );
@@ -74,26 +98,115 @@ export function Chat({
   const poll = useCallback(async () => {
     try {
       const fetched = await api.fetchMessagesAfter(lastIdRef.current);
-      if (fetched.length === 0) return;
-      setMessages((prev) => {
-        const seen = new Set(prev.map((m) => m.id));
-        const merged = [...prev];
-        for (const m of fetched) {
-          if (!seen.has(m.id)) {
-            merged.push(m);
-            if (m.id > lastIdRef.current) lastIdRef.current = m.id;
+      if (fetched.messages.length > 0) {
+        setMessages((prev) => {
+          const seen = new Set(prev.map((m) => m.id));
+          const merged = [...prev];
+          for (const m of fetched.messages) {
+            if (!seen.has(m.id)) {
+              merged.push(m);
+              if (m.id > lastIdRef.current) lastIdRef.current = m.id;
+            }
           }
+          return merged;
+        });
+        const last = fetched.messages[fetched.messages.length - 1];
+        if (last && last.role === "assistant") {
+          setStatus("idle");
         }
-        return merged;
-      });
-      const last = fetched[fetched.length - 1];
-      if (last && last.role === "assistant") {
-        setStatus("idle");
+      }
+      if (fetched.previewRequest) {
+        void handlePreviewRequest(fetched.previewRequest);
       }
     } catch {
       // transient — keep polling
     }
+    // handlePreviewRequest is stable via useCallback below; including it in
+    // the dep array would force every render to allocate a new poll closure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api]);
+
+  const handlePreviewRequest = useCallback(
+    async (req: PreviewRequest) => {
+      if (handledRequestIdsRef.current.has(req.id)) return;
+      handledRequestIdsRef.current.add(req.id);
+
+      if (req.type === "open") {
+        const url = typeof req.input.url === "string" ? req.input.url : "";
+        if (!url) {
+          await api.respondToPreviewRequest(req.id, "errored", {
+            error: "OpenPreview was called without a url.",
+          });
+          return;
+        }
+        setPreviewUrl(url);
+        setPreviewMode("peek");
+        // Don't resolve here — the iframe's onLoad handler resolves it once
+        // the new URL has actually finished loading. We pin the request id
+        // so onLoad/onError know which one to ack.
+        setPendingOpenRequestId(req.id);
+        return;
+      }
+
+      if (req.type === "get") {
+        const fullHtml = req.input.fullHtml === true;
+        if (!previewPaneRef.current) {
+          await api.respondToPreviewRequest(req.id, "errored", {
+            error: "No preview is open. Call open_preview first or use fetch_webpage.",
+          });
+          return;
+        }
+        try {
+          const content = previewPaneRef.current.readContents(fullHtml ? "full" : "text");
+          await api.respondToPreviewRequest(req.id, "completed", {
+            content,
+            mode: fullHtml ? "full" : "text",
+          });
+        } catch (err) {
+          await api.respondToPreviewRequest(req.id, "errored", {
+            error: err instanceof Error ? err.message : "Failed to read preview contents.",
+          });
+        }
+      }
+    },
+    [api],
+  );
+
+  const handlePreviewLoaded = useCallback(
+    (finalUrl: string) => {
+      const id = pendingOpenRequestId;
+      if (id === null) return;
+      setPendingOpenRequestId(null);
+      void api.respondToPreviewRequest(id, "completed", {
+        loadedAt: Date.now(),
+        finalUrl,
+      });
+    },
+    [api, pendingOpenRequestId],
+  );
+
+  const handlePreviewError = useCallback(
+    (message: string) => {
+      const id = pendingOpenRequestId;
+      if (id === null) return;
+      setPendingOpenRequestId(null);
+      void api.respondToPreviewRequest(id, "errored", { error: message });
+    },
+    [api, pendingOpenRequestId],
+  );
+
+  const closePreview = useCallback(() => {
+    setPreviewUrl(null);
+    setPreviewMode("peek");
+    if (pendingOpenRequestId !== null) {
+      // Resolve any in-flight OpenPreview as an error so the agent doesn't
+      // hang waiting for a load that will never fire.
+      void api.respondToPreviewRequest(pendingOpenRequestId, "errored", {
+        error: "User closed the preview before it finished loading.",
+      });
+      setPendingOpenRequestId(null);
+    }
+  }, [api, pendingOpenRequestId]);
 
   useEffect(() => {
     // Fire once immediately so a freshly-mounted Chat (e.g. the widget
@@ -186,8 +299,8 @@ export function Chat({
     setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  return (
-    <div className="craftai-chat ai:flex ai:flex-col ai:gap-3">
+  const transcript = (
+    <div className="craftai-chat ai:flex ai:min-h-0 ai:flex-1 ai:flex-col ai:gap-3">
       <Conversation>
         <ConversationContent>
           {messages.length === 0 ? (
@@ -246,6 +359,64 @@ export function Chat({
           />
         </PromptInputToolbar>
       </PromptInput>
+    </div>
+  );
+
+  // No preview open — keep the original flow exactly so non-CP surfaces and
+  // tests that don't exercise preview behavior see no layout change.
+  if (previewUrl === null) {
+    return transcript;
+  }
+
+  const previewPane = (
+    <PreviewPane
+      ref={previewPaneRef}
+      url={previewUrl}
+      mode={previewMode}
+      loading={pendingOpenRequestId !== null}
+      onLoad={handlePreviewLoaded}
+      onError={handlePreviewError}
+      onExpand={() => setPreviewMode("expanded")}
+      onCollapse={() => setPreviewMode("peek")}
+      onClose={closePreview}
+    />
+  );
+
+  if (previewMode === "expanded") {
+    // Break out of the CP page container so we can claim the whole viewport.
+    // 1/3 chat on the left, 2/3 preview on the right. The X button sits over
+    // the transcript column (provided by PreviewPane's collapse control).
+    return (
+      <div
+        data-testid="chat-with-preview"
+        data-preview-mode="expanded"
+        className="ai:fixed ai:inset-0 ai:z-50 ai:flex ai:bg-craftai-bg"
+      >
+        <div className="ai:flex ai:basis-1/3 ai:min-w-0 ai:flex-col ai:overflow-hidden ai:border-r ai:border-craftai-border ai:p-3">
+          {transcript}
+        </div>
+        <div className="ai:flex ai:basis-2/3 ai:min-w-0 ai:flex-col ai:p-3">
+          {previewPane}
+        </div>
+      </div>
+    );
+  }
+
+  // Peek: stay inside the CP page container. 2/3 chat / 1/3 preview, side
+  // by side. Clicking expand on the preview header flips us to the fixed
+  // overlay above; closing returns to the transcript-only view.
+  return (
+    <div
+      data-testid="chat-with-preview"
+      data-preview-mode="peek"
+      className="ai:flex ai:min-h-0 ai:flex-1 ai:gap-3"
+    >
+      <div className="ai:flex ai:basis-2/3 ai:min-w-0 ai:flex-col">
+        {transcript}
+      </div>
+      <div className="ai:flex ai:basis-1/3 ai:min-w-0 ai:flex-col">
+        {previewPane}
+      </div>
     </div>
   );
 }
@@ -390,7 +561,7 @@ function RenderedBlock({ block }: { block: ContentBlock }) {
   if (block.type === "tool_result") {
     const b = block as { content: string; is_error?: boolean };
     return (
-      <Tool>
+      <Tool defaultOpen={b.is_error}>
         <ToolHeader name="Tool result" status={b.is_error ? "error" : "complete"} />
         <ToolContent>
           <ToolOutput output={b.content} isError={b.is_error} />

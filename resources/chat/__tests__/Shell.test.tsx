@@ -17,6 +17,7 @@ function bootstrap(
     newSessionUrl: "http://localhost/sessions/new",
     sessionsIndexUrl: "http://localhost/sessions",
     assetsInfoUrl: "http://localhost/assets/info",
+    previewRespondUrl: "http://localhost/preview/respond",
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
     initialMessages: [],

@@ -14,7 +14,9 @@ use craft\web\UrlManager;
 use craft\web\View;
 use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\agent\PageContextSerializer;
+use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\permissions\ToolPermissions;
+use markhuot\craftai\preview\PreviewService;
 use markhuot\craftai\agent\providers\AnthropicProvider;
 use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\agent\providers\OpenAiProvider;
@@ -27,6 +29,7 @@ use markhuot\craftai\tools\DeleteSections;
 use markhuot\craftai\tools\FetchWebpage;
 use markhuot\craftai\tools\GetAsset;
 use markhuot\craftai\tools\GetDraft;
+use markhuot\craftai\tools\GetPreview;
 use markhuot\craftai\tools\GetDrafts;
 use markhuot\craftai\tools\GetEntries;
 use markhuot\craftai\tools\GetEntry;
@@ -37,6 +40,7 @@ use markhuot\craftai\tools\GetSections;
 use markhuot\craftai\tools\GetTemplate;
 use markhuot\craftai\tools\GetTemplates;
 use markhuot\craftai\tools\GetVolumes;
+use markhuot\craftai\tools\OpenPreview;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertAsset;
 use markhuot\craftai\tools\UpsertDraft;
@@ -51,7 +55,7 @@ use yii\base\Event;
 
 class Plugin extends BasePlugin
 {
-    public string $schemaVersion = '1.5.0';
+    public string $schemaVersion = '1.6.0';
 
     public bool $hasCpSection = true;
 
@@ -109,6 +113,8 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(DeleteEntryTypes::class);
         $this->toolRegistry->register(DeleteFields::class);
         $this->toolRegistry->register(FetchWebpage::class, cpOnly: true);
+        $this->toolRegistry->register(OpenPreview::class, cpOnly: true);
+        $this->toolRegistry->register(GetPreview::class, cpOnly: true);
 
         $this->registerContainerBindings();
 
@@ -145,6 +151,7 @@ class Plugin extends BasePlugin
                 $event->rules['POST ai/sessions/new'] = 'craft-ai/sessions/new';
                 $event->rules['POST ai/sessions/delete'] = 'craft-ai/sessions/delete';
                 $event->rules['POST ai/sessions/stop'] = 'craft-ai/sessions/stop';
+                $event->rules['POST ai/preview/respond'] = 'craft-ai/preview/respond';
                 $event->rules['ai/session/<uuid:[A-Za-z0-9\-]+>'] = 'craft-ai/sessions/view';
             },
         );
@@ -247,6 +254,10 @@ class Plugin extends BasePlugin
             'sessionsIndexUrl' => UrlHelper::cpUrl('ai/sessions'),
             'messagesUrl' => UrlHelper::actionUrl('craft-ai/messages'),
             'sendUrl' => UrlHelper::actionUrl('craft-ai/sessions/send'),
+            // Front-end widget never receives a previewRequest (tools are CP-only),
+            // but we ship the URL anyway so the shared Chat component can stay
+            // bootstrap-agnostic and we don't fork the type for a single use case.
+            'previewRespondUrl' => UrlHelper::actionUrl('craft-ai/preview/respond'),
             'csrfTokenName' => Craft::$app->getConfig()->getGeneral()->csrfTokenName,
             'csrfTokenValue' => $request->getCsrfToken(),
             'context' => $context,
@@ -470,6 +481,8 @@ HTML;
     private function registerContainerBindings(): void
     {
         Craft::$container->setSingleton(ToolRegistry::class, fn () => $this->toolRegistry);
+        Craft::$container->setSingleton(ToolContext::class);
+        Craft::$container->setSingleton(PreviewService::class);
 
         Craft::$container->setSingleton(LlmProvider::class, function (): LlmProvider {
             $settings = $this->getSettingsArray();
@@ -493,6 +506,7 @@ HTML;
         Craft::$container->setSingleton(AgentLoop::class, fn () => new AgentLoop(
             Craft::$container->get(LlmProvider::class),
             $this->toolRegistry,
+            Craft::$container->get(ToolContext::class),
         ));
     }
 }

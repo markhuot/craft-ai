@@ -41,9 +41,10 @@ it('returns messages for a session as JSON, ordered by id', function () {
     $response = test()->get('admin?action=craft-ai/messages&sessionId=mc-1');
 
     $response->assertOk();
-    $response->assertJsonCount(3);
-    $response->assertJsonPath('0.content.0.text', 'hi');
-    $response->assertJsonPath('2.content.0.text', 'goodbye');
+    $response->assertJsonCount(3, 'messages');
+    $response->assertJsonPath('messages.0.content.0.text', 'hi');
+    $response->assertJsonPath('messages.2.content.0.text', 'goodbye');
+    $response->assertJsonPath('previewRequest', null);
 });
 
 it('filters by the after parameter', function () {
@@ -60,7 +61,7 @@ it('filters by the after parameter', function () {
     $response = test()->get('admin?action=craft-ai/messages&sessionId=mc-2&after='.$ids[0]);
 
     $response->assertOk();
-    $response->assertJsonCount(2);
+    $response->assertJsonCount(2, 'messages');
 });
 
 it('queues an AgentJob via async create', function () {
@@ -115,9 +116,9 @@ it('includes resolved attachments on user messages in the messages JSON', functi
     $response = test()->get('admin?action=craft-ai/messages&sessionId=mc-attachments');
 
     $response->assertOk();
-    $response->assertJsonCount(1);
-    $response->assertJsonPath('0.attachments.0.id', $assetId);
-    $response->assertJsonPath('0.attachments.0.filename', 'message-attachment.jpg');
+    $response->assertJsonCount(1, 'messages');
+    $response->assertJsonPath('messages.0.attachments.0.id', $assetId);
+    $response->assertJsonPath('messages.0.attachments.0.filename', 'message-attachment.jpg');
 });
 
 it('returns an empty attachments array when the user message has no assetIds', function () {
@@ -130,5 +131,36 @@ it('returns an empty attachments array when the user message has no assetIds', f
     $response = test()->get('admin?action=craft-ai/messages&sessionId=mc-no-attachments');
 
     $response->assertOk();
-    $response->assertJsonPath('0.attachments', []);
+    $response->assertJsonPath('messages.0.attachments', []);
+});
+
+it('surfaces the next pending preview request alongside the messages', function () {
+    $r = new MessageRecord();
+    $r->sessionId = 'mc-preview';
+    $r->role = 'user';
+    $r->content = json_encode([['type' => 'text', 'text' => 'show me']]);
+    $r->save();
+
+    $service = new \markhuot\craftai\preview\PreviewService();
+    $service->create('mc-preview', 'tu-1', 'open', ['url' => 'https://example.com']);
+
+    $response = test()->get('admin?action=craft-ai/messages&sessionId=mc-preview');
+
+    $response->assertOk();
+    $response->assertJsonPath('previewRequest.type', 'open');
+    $response->assertJsonPath('previewRequest.status', 'pending');
+    $response->assertJsonPath('previewRequest.input.url', 'https://example.com');
+});
+
+it('omits the previewRequest when nothing is pending for the session', function () {
+    $r = new MessageRecord();
+    $r->sessionId = 'mc-no-preview';
+    $r->role = 'user';
+    $r->content = json_encode([['type' => 'text', 'text' => 'hi']]);
+    $r->save();
+
+    $response = test()->get('admin?action=craft-ai/messages&sessionId=mc-no-preview');
+
+    $response->assertOk();
+    $response->assertJsonPath('previewRequest', null);
 });

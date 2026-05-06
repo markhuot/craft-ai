@@ -305,6 +305,7 @@ function chatBootstrapFor(bootstrap: WidgetBootstrap, sessionId: string): ChatBo
     newSessionUrl: bootstrap.newSessionUrl,
     sessionsIndexUrl: bootstrap.sessionsIndexUrl,
     assetsInfoUrl: "",
+    previewRespondUrl: bootstrap.previewRespondUrl,
     csrfTokenName: bootstrap.csrfTokenName,
     csrfTokenValue: bootstrap.csrfTokenValue,
     initialMessages: [],

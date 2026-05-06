@@ -11,6 +11,7 @@ function bootstrap(): WidgetBootstrap {
     sessionsIndexUrl: "http://localhost/cp/ai/sessions",
     messagesUrl: "http://localhost/messages",
     sendUrl: "http://localhost/sessions/send",
+    previewRespondUrl: "http://localhost/preview/respond",
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
     context: {

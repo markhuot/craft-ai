@@ -13,6 +13,7 @@ class AgentLoop
     public function __construct(
         private readonly LlmProvider $provider,
         private readonly ToolRegistry $registry,
+        private readonly ToolContext $toolContext = new ToolContext(),
     ) {}
 
     /**
@@ -98,7 +99,14 @@ class AgentLoop
                 /** @var array<string, mixed> $input */
                 $input = $block['input'] ?? [];
 
-                $output = $this->registry->execute($name, $input);
+                $toolUseId = is_string($block['id'] ?? null) ? $block['id'] : null;
+
+                $this->toolContext->begin($sessionId, $toolUseId);
+                try {
+                    $output = $this->registry->execute($name, $input);
+                } finally {
+                    $this->toolContext->end();
+                }
 
                 $toolResults[] = [
                     'type' => 'tool_result',

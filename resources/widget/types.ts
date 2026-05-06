@@ -12,6 +12,7 @@ export interface WidgetBootstrap {
   sessionsIndexUrl: string;
   messagesUrl: string;
   sendUrl: string;
+  previewRespondUrl: string;
   csrfTokenName: string;
   csrfTokenValue: string;
   /**

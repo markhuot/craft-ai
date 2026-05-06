@@ -18,30 +18,119 @@ describe("ChatApi.fetchMessagesAfter", () => {
     let capturedUrl = "";
     const api = makeApi(async (input) => {
       capturedUrl = String(input);
-      return new Response(JSON.stringify([{ id: 7, role: "assistant", content: [] }]), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          messages: [{ id: 7, role: "assistant", content: [] }],
+          previewRequest: null,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     });
 
-    const messages = await api.fetchMessagesAfter(3);
+    const result = await api.fetchMessagesAfter(3);
     expect(capturedUrl).toContain("sessionId=abc-123");
     expect(capturedUrl).toContain("after=3");
-    expect(messages).toHaveLength(1);
-    expect(messages[0]?.id).toBe(7);
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]?.id).toBe(7);
+    expect(result.previewRequest).toBeNull();
   });
 
-  test("returns empty array on non-array response", async () => {
+  test("tolerates a legacy bare-array response", async () => {
+    const api = makeApi(async () =>
+      new Response(JSON.stringify([{ id: 1, role: "user", content: [] }]), { status: 200 }),
+    );
+    const result = await api.fetchMessagesAfter(0);
+    expect(result.messages).toHaveLength(1);
+    expect(result.previewRequest).toBeNull();
+  });
+
+  test("returns empty messages on unexpected response shape", async () => {
     const api = makeApi(async () =>
       new Response(JSON.stringify({ unexpected: true }), { status: 200 }),
     );
-    const messages = await api.fetchMessagesAfter(0);
-    expect(messages).toEqual([]);
+    const result = await api.fetchMessagesAfter(0);
+    expect(result.messages).toEqual([]);
+    expect(result.previewRequest).toBeNull();
+  });
+
+  test("surfaces a previewRequest envelope when present", async () => {
+    const api = makeApi(async () =>
+      new Response(
+        JSON.stringify({
+          messages: [],
+          previewRequest: {
+            id: 42,
+            type: "open",
+            status: "pending",
+            input: { url: "https://example.com" },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    const result = await api.fetchMessagesAfter(0);
+    expect(result.previewRequest).toEqual({
+      id: 42,
+      type: "open",
+      status: "pending",
+      input: { url: "https://example.com" },
+    });
+  });
+
+  test("drops a previewRequest with an unknown type", async () => {
+    const api = makeApi(async () =>
+      new Response(
+        JSON.stringify({
+          messages: [],
+          previewRequest: { id: 1, type: "garbage", status: "pending", input: {} },
+        }),
+        { status: 200 },
+      ),
+    );
+    const result = await api.fetchMessagesAfter(0);
+    expect(result.previewRequest).toBeNull();
   });
 
   test("throws on non-ok response", async () => {
     const api = makeApi(async () => new Response("nope", { status: 500 }));
     await expect(api.fetchMessagesAfter(0)).rejects.toThrow(/500/);
+  });
+});
+
+describe("ChatApi.respondToPreviewRequest", () => {
+  test("posts id, status, and JSON-encoded result", async () => {
+    let captured: { url: string; init: RequestInit | undefined } = { url: "", init: undefined };
+    const api = new ChatApi({
+      messagesUrl: "http://localhost/actions/craft-ai/messages",
+      sendUrl: "http://localhost/actions/craft-ai/sessions/send",
+      assetsInfoUrl: "http://localhost/actions/craft-ai/assets/info",
+      previewRespondUrl: "http://localhost/actions/craft-ai/preview/respond",
+      sessionId: "abc-123",
+      csrfTokenName: "CRAFT_CSRF",
+      csrfTokenValue: "token-value",
+      fetchImpl: async (input, init) => {
+        captured = { url: String(input), init };
+        return new Response("{}", { status: 200 });
+      },
+    });
+
+    await api.respondToPreviewRequest(7, "completed", { content: "hi" });
+
+    expect(captured.url).toBe("http://localhost/actions/craft-ai/preview/respond");
+    const body = captured.init?.body as FormData;
+    expect(body.get("id")).toBe("7");
+    expect(body.get("status")).toBe("completed");
+    expect(JSON.parse(body.get("result") as string)).toEqual({ content: "hi" });
+  });
+
+  test("throws when no respond url is configured", async () => {
+    const api = makeApi(async () => new Response("{}", { status: 200 }));
+    await expect(
+      api.respondToPreviewRequest(1, "completed", {}),
+    ).rejects.toThrow(/not configured/);
   });
 });
 

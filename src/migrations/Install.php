@@ -54,6 +54,25 @@ class Install extends Migration
             'CASCADE',
         );
 
+        $this->createTable('{{%craftai_preview_requests}}', [
+            'id' => $this->primaryKey(),
+            'sessionId' => $this->string(36)->notNull(),
+            'toolUseId' => $this->string(64)->null(),
+            'type' => $this->string(16)->notNull(),
+            'input' => $this->text()->notNull(),
+            'status' => $this->string(16)->notNull()->defaultValue('pending'),
+            'result' => $this->mediumText()->null(),
+            'dateCreated' => $this->dateTime()->notNull(),
+            'dateUpdated' => $this->dateTime()->notNull(),
+            'uid' => $this->uid(),
+        ]);
+
+        $this->createIndex(
+            'idx_craftai_preview_requests_session_status',
+            '{{%craftai_preview_requests}}',
+            ['sessionId', 'status'],
+        );
+
         return true;
     }
 
@@ -61,6 +80,7 @@ class Install extends Migration
     {
         $this->dropTableIfExists('{{%craftai_messages}}');
         $this->dropTableIfExists('{{%craftai_sessions}}');
+        $this->dropTableIfExists('{{%craftai_preview_requests}}');
 
         return true;
     }

@@ -1,0 +1,169 @@
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { Maximize2, Minimize2, X } from "lucide-react";
+
+export type PreviewPaneMode = "peek" | "expanded";
+
+export interface PreviewPaneHandle {
+  /**
+   * Read the iframe's contents from the host. Returns text or HTML
+   * depending on the requested mode. Throws on cross-origin iframes —
+   * the iframe document isn't accessible from JS in that case.
+   */
+  readContents(mode: "text" | "full"): string;
+}
+
+export interface PreviewPaneProps {
+  url: string;
+  mode: PreviewPaneMode;
+  /**
+   * `true` while the agent is waiting on this iframe (i.e., between
+   * mount and onload). Used to overlay a small spinner so the user
+   * sees something is happening.
+   */
+  loading: boolean;
+  onLoad: (finalUrl: string) => void;
+  onError: (message: string) => void;
+  onExpand: () => void;
+  onCollapse: () => void;
+  onClose: () => void;
+}
+
+/**
+ * The iframe pane itself — header bar with expand/collapse/close, plus the
+ * iframe. Layout/positioning (peek slot vs. fixed-overlay) is the parent's
+ * concern; this component only knows about its two visual modes for the
+ * controls it surfaces.
+ *
+ * Exposes a `readContents` imperative handle so the chat surface can pull
+ * iframe text/HTML when a `GetPreview` tool request comes through.
+ */
+export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(function PreviewPane(
+  { url, mode, loading, onLoad, onError, onExpand, onCollapse, onClose },
+  ref,
+) {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // Track which url has fired its onLoad. A re-render shouldn't replay the
+  // load callback, but a `url` change should reset us so the new request
+  // gets a fresh load signal.
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      readContents(contentMode) {
+        const frame = iframeRef.current;
+        if (!frame) {
+          throw new Error("Preview frame is not mounted.");
+        }
+        // contentDocument throws a SecurityError on cross-origin frames.
+        // The catch path lets the parent surface that as a graceful tool
+        // error instead of an uncaught exception in the React render.
+        let doc: Document | null;
+        try {
+          doc = frame.contentDocument;
+        } catch (err) {
+          throw new Error(
+            err instanceof Error
+              ? `Cross-origin preview: ${err.message}`
+              : "Cross-origin preview: cannot read iframe contents.",
+          );
+        }
+        if (!doc) {
+          throw new Error("Preview frame has no document yet.");
+        }
+        if (contentMode === "full") {
+          return doc.documentElement?.outerHTML ?? "";
+        }
+        return doc.body?.innerText ?? doc.documentElement?.textContent ?? "";
+      },
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    setLoadedUrl(null);
+  }, [url]);
+
+  const handleLoad = () => {
+    if (loadedUrl === url) return;
+    setLoadedUrl(url);
+    let finalUrl = url;
+    try {
+      const href = iframeRef.current?.contentWindow?.location?.href;
+      if (href) finalUrl = href;
+    } catch {
+      // Cross-origin: keep the requested URL, the agent can fall back
+      // to fetch_webpage if it needs to verify the actual destination.
+    }
+    onLoad(finalUrl);
+  };
+
+  const handleError = () => {
+    onError("Preview iframe failed to load.");
+  };
+
+  return (
+    <div
+      data-testid="preview-pane"
+      data-mode={mode}
+      className="ai:flex ai:min-h-0 ai:flex-1 ai:flex-col ai:overflow-hidden ai:rounded ai:border ai:border-craftai-border ai:bg-white"
+      aria-label="Page preview"
+    >
+      <header className="ai:flex ai:items-center ai:gap-2 ai:border-b ai:border-craftai-border ai:bg-craftai-bg ai:px-2 ai:py-1.5 ai:text-xs">
+        <span className="ai:flex-1 ai:truncate ai:text-craftai-muted" title={url}>
+          {url}
+        </span>
+        {mode === "peek" ? (
+          <button
+            type="button"
+            data-testid="preview-expand"
+            aria-label="Expand preview"
+            onClick={onExpand}
+            className="ai:inline-flex ai:h-7 ai:w-7 ai:items-center ai:justify-center ai:rounded ai:text-craftai-fg hover:ai:bg-craftai-border/30"
+          >
+            <Maximize2 aria-hidden className="ai:h-3.5 ai:w-3.5" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            data-testid="preview-shrink"
+            aria-label="Shrink preview"
+            onClick={onCollapse}
+            className="ai:inline-flex ai:h-7 ai:w-7 ai:items-center ai:justify-center ai:rounded ai:text-craftai-fg hover:ai:bg-craftai-border/30"
+          >
+            <Minimize2 aria-hidden className="ai:h-3.5 ai:w-3.5" />
+          </button>
+        )}
+        <button
+          type="button"
+          data-testid="preview-close"
+          aria-label="Close preview"
+          onClick={onClose}
+          className="ai:inline-flex ai:h-7 ai:w-7 ai:items-center ai:justify-center ai:rounded ai:text-craftai-fg hover:ai:bg-craftai-border/30"
+        >
+          <X aria-hidden className="ai:h-4 ai:w-4" />
+        </button>
+      </header>
+
+      <div className="ai:relative ai:flex ai:min-h-0 ai:flex-1 ai:bg-white">
+        <iframe
+          ref={iframeRef}
+          data-testid="preview-iframe"
+          src={url}
+          title="Preview"
+          onLoad={handleLoad}
+          onError={handleError}
+          className="ai:h-full ai:w-full ai:border-0"
+        />
+        {loading && (
+          <div
+            data-testid="preview-loading"
+            className="ai:pointer-events-none ai:absolute ai:right-2 ai:top-2 ai:rounded ai:bg-black/60 ai:px-2 ai:py-1 ai:text-[11px] ai:text-white"
+          >
+            Loading…
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});

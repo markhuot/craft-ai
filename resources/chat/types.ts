@@ -43,6 +43,13 @@ export interface ChatBootstrap {
   newSessionUrl: string;
   sessionsIndexUrl: string;
   assetsInfoUrl: string;
+  /**
+   * Endpoint the preview pane uses to resolve a pending request once the
+   * iframe has loaded (or its contents have been read). The widget on the
+   * front-end populates this too even though OpenPreview/GetPreview are
+   * CP-only — keeps the shared bootstrap shape stable.
+   */
+  previewRespondUrl: string;
   csrfTokenName: string;
   csrfTokenValue: string;
   initialMessages: ChatMessage[];
@@ -54,4 +61,22 @@ export interface ChatBootstrap {
    */
   context?: unknown;
   contextFingerprint?: string;
+}
+
+/**
+ * Out-of-band request from a blocking tool (OpenPreview/GetPreview) running
+ * inside the agent loop. The chat surface picks these up by piggybacking on
+ * the existing message poll, mounts/reads the iframe, and resolves them
+ * through the preview-respond endpoint.
+ */
+export interface PreviewRequest {
+  id: number;
+  type: "open" | "get";
+  status: "pending";
+  input: Record<string, unknown>;
+}
+
+export interface MessagesResponse {
+  messages: ChatMessage[];
+  previewRequest: PreviewRequest | null;
 }

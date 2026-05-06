@@ -6,8 +6,10 @@ use Craft;
 use craft\elements\Asset;
 use craft\web\Controller;
 use markhuot\craftai\agent\AgentLoop;
+use markhuot\craftai\preview\PreviewService;
 use markhuot\craftai\queue\AgentJob;
 use markhuot\craftai\records\MessageRecord;
+use markhuot\craftai\records\PreviewRequestRecord;
 use yii\web\Response;
 
 class MessagesController extends Controller
@@ -34,7 +36,31 @@ class MessagesController extends Controller
             $records,
         );
 
-        return $this->asJson($messages);
+        return $this->asJson([
+            'messages' => $messages,
+            'previewRequest' => $this->nextPreviewRequest($sessionId),
+        ]);
+    }
+
+    /**
+     * @return ?array{id: int, type: string, status: string, input: array<string, mixed>}
+     */
+    private function nextPreviewRequest(string $sessionId): ?array
+    {
+        /** @var PreviewService $service */
+        $service = Craft::$container->get(PreviewService::class);
+        $next = $service->nextActionable($sessionId);
+
+        if ($next === null) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $next->id,
+            'type' => $next->type,
+            'status' => $next->status,
+            'input' => $service->decodeInput($next),
+        ];
     }
 
     /**

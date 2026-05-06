@@ -22,6 +22,7 @@ function readBootstrap(): WidgetBootstrap | null {
       sessionsIndexUrl: String(obj.sessionsIndexUrl ?? ""),
       messagesUrl: String(obj.messagesUrl ?? ""),
       sendUrl: String(obj.sendUrl ?? ""),
+      previewRespondUrl: String(obj.previewRespondUrl ?? ""),
       csrfTokenName: String(obj.csrfTokenName ?? "CRAFT_CSRF_TOKEN"),
       csrfTokenValue: String(obj.csrfTokenValue ?? ""),
       context: normalizeContext(obj.context),

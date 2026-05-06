@@ -30,6 +30,7 @@ function readBootstrap(root: HTMLElement): ChatBootstrap {
     newSessionUrl: String(obj.newSessionUrl ?? ""),
     sessionsIndexUrl: String(obj.sessionsIndexUrl ?? ""),
     assetsInfoUrl: String(obj.assetsInfoUrl ?? ""),
+    previewRespondUrl: String(obj.previewRespondUrl ?? ""),
     csrfTokenName: String(obj.csrfTokenName ?? window.Craft?.csrfTokenName ?? "CRAFT_CSRF_TOKEN"),
     csrfTokenValue: String(obj.csrfTokenValue ?? window.Craft?.csrfTokenValue ?? ""),
     initialMessages: initial,

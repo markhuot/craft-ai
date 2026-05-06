@@ -24,6 +24,9 @@ class TestCase extends PestTestCase
             if ($db->getSchema()->getTableSchema('{{%craftai_sessions}}', true) !== null) {
                 $db->createCommand()->dropTable('{{%craftai_sessions}}')->execute();
             }
+            if ($db->getSchema()->getTableSchema('{{%craftai_preview_requests}}', true) !== null) {
+                $db->createCommand()->dropTable('{{%craftai_preview_requests}}')->execute();
+            }
 
             $plugins = Craft::$app->getPlugins();
             if ($plugins->getPlugin('craft-ai') === null) {

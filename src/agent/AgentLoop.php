@@ -50,7 +50,7 @@ class AgentLoop
 
     public function run(string $sessionId): void
     {
-        $messages = $this->loadMessages($sessionId);
+        $messages = $this->ensureToolResults($this->loadMessages($sessionId));
         $tools = $this->registry->descriptors(onlyAllowed: true);
 
         while (true) {
@@ -226,6 +226,90 @@ class AgentLoop
         }
 
         return $messages;
+    }
+
+    /**
+     * Anthropic and OpenAI both reject conversations where an assistant
+     * `tool_use` block isn't immediately followed by a user turn containing
+     * `tool_result` blocks for every tool_use_id. That invariant can break
+     * when the queue worker fails between executing a tool and persisting
+     * its result — e.g. a 1406 "Data too long" on the messages table — and
+     * leaves an orphan tool_use without a tool_result.
+     *
+     * This method walks the assembled message list and synthesizes an error
+     * tool_result for any orphan, so a stale broken session can recover on
+     * its own when the user sends a new message. The synthesized result is
+     * marked is_error=true and explains the situation to the model so it
+     * doesn't blindly retry.
+     *
+     * @param list<array{role: string, content: list<array<string, mixed>>}> $messages
+     * @return list<array{role: string, content: list<array<string, mixed>>}>
+     */
+    private function ensureToolResults(array $messages): array
+    {
+        $healed = [];
+        $count = count($messages);
+        $i = 0;
+
+        while ($i < $count) {
+            $message = $messages[$i];
+            $healed[] = $message;
+
+            if ($message['role'] !== 'assistant') {
+                $i++;
+                continue;
+            }
+
+            $orphanIds = [];
+            foreach ($message['content'] as $block) {
+                if (($block['type'] ?? '') === 'tool_use' && is_string($block['id'] ?? null)) {
+                    $orphanIds[$block['id']] = true;
+                }
+            }
+
+            if ($orphanIds === []) {
+                $i++;
+                continue;
+            }
+
+            $next = $messages[$i + 1] ?? null;
+            if ($next !== null && $next['role'] === 'user') {
+                foreach ($next['content'] as $block) {
+                    if (($block['type'] ?? '') === 'tool_result' && is_string($block['tool_use_id'] ?? null)) {
+                        unset($orphanIds[$block['tool_use_id']]);
+                    }
+                }
+            }
+
+            if ($orphanIds === []) {
+                $i++;
+                continue;
+            }
+
+            $synthetic = [];
+            foreach (array_keys($orphanIds) as $toolUseId) {
+                $synthetic[] = [
+                    'type' => 'tool_result',
+                    'tool_use_id' => $toolUseId,
+                    'content' => 'The tool did not return a result — the worker likely failed mid-execution. Try a different approach or summarize what you have so far.',
+                    'is_error' => true,
+                ];
+            }
+
+            if ($next !== null && $next['role'] === 'user') {
+                // Prepend the synthesized results onto the existing user turn
+                // so its tool_result blocks (if any) still get sent.
+                $merged = array_merge($synthetic, $next['content']);
+                $healed[] = ['role' => 'user', 'content' => $merged];
+                $i += 2;
+                continue;
+            }
+
+            $healed[] = ['role' => 'user', 'content' => $synthetic];
+            $i++;
+        }
+
+        return $healed;
     }
 
     /**

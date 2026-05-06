@@ -102,6 +102,49 @@ it('waitFor short-circuits when the abort hook returns true', function () {
     expect($elapsed)->toBeLessThan(1.0);
 });
 
+it('lastOpenedUrl returns the most recent completed open finalUrl for the session', function () {
+    $service = new PreviewService();
+
+    $first = $service->create('session-last-1', null, 'open', ['url' => 'https://example.com/a']);
+    $service->complete($first, ['loadedAt' => 1, 'finalUrl' => 'https://example.com/a/final']);
+
+    $second = $service->create('session-last-1', null, 'open', ['url' => 'https://example.com/b']);
+    $service->complete($second, ['loadedAt' => 2, 'finalUrl' => 'https://example.com/b/final']);
+
+    expect($service->lastOpenedUrl('session-last-1'))->toBe('https://example.com/b/final');
+});
+
+it('lastOpenedUrl falls back to the input url when finalUrl is missing', function () {
+    $service = new PreviewService();
+
+    $id = $service->create('session-last-fallback', null, 'open', ['url' => '/admin/entries/blog/42']);
+    // Simulate a thin response that didn't include finalUrl (e.g., cross-origin).
+    $service->complete($id, ['loadedAt' => 1]);
+
+    expect($service->lastOpenedUrl('session-last-fallback'))->toBe('/admin/entries/blog/42');
+});
+
+it('lastOpenedUrl ignores get requests and pending/errored opens', function () {
+    $service = new PreviewService();
+
+    // Errored open — should be skipped.
+    $errored = $service->create('session-last-skip', null, 'open', ['url' => '/errored']);
+    $service->fail($errored, 'load failed');
+
+    // get is the wrong type — also skipped.
+    $get = $service->create('session-last-skip', null, 'get', ['fullHtml' => false]);
+    $service->complete($get, ['content' => 'x', 'mode' => 'text']);
+
+    // Pending open — also skipped (only completed counts).
+    $service->create('session-last-skip', null, 'open', ['url' => '/pending']);
+
+    expect($service->lastOpenedUrl('session-last-skip'))->toBeNull();
+});
+
+it('lastOpenedUrl returns null for a session that has never had a preview', function () {
+    expect((new PreviewService())->lastOpenedUrl('session-none'))->toBeNull();
+});
+
 it('complete is idempotent — re-completing a finished row is a no-op', function () {
     $service = new PreviewService();
 

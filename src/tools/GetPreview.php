@@ -21,6 +21,15 @@ use markhuot\craftai\records\SessionRecord;
  */
 class GetPreview extends Tool
 {
+    /**
+     * Hard cap on bytes returned to the agent. CP edit pages can render
+     * megabytes of HTML; piping all of that into the LLM context burns
+     * tokens fast and (historically) overflowed the messages table column.
+     * Beyond this cap we truncate and append a `[Truncated: …]` marker so
+     * the model knows the content was clipped.
+     */
+    public const MAX_OUTPUT_BYTES = 200_000;
+
     public function __construct(
         private readonly PreviewService $preview = new PreviewService(),
         private readonly ToolContext $context = new ToolContext(),
@@ -64,6 +73,11 @@ class GetPreview extends Tool
 
         $payload = $this->preview->decodeResult($resolved);
         $content = is_string($payload['content'] ?? null) ? $payload['content'] : '';
+
+        if (strlen($content) > self::MAX_OUTPUT_BYTES) {
+            $content = substr($content, 0, self::MAX_OUTPUT_BYTES)
+                ."\n\n[Truncated: preview content exceeded ".self::MAX_OUTPUT_BYTES." bytes. Use fetch_webpage with a specific URL or call get_preview again with fullHtml: false for plain text.]";
+        }
 
         return new ToolOutput($content);
     }

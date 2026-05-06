@@ -107,6 +107,45 @@ class PreviewService
     }
 
     /**
+     * Return the URL of the most recent successful `open` request for the
+     * session, or null if the session has never had a preview open. Used by
+     * the chat surface to render a "reopen preview" affordance that survives
+     * page reload — the in-memory iframe state is gone, but the persisted
+     * row tells us what to mount when the user clicks the globe.
+     *
+     * Prefers the `finalUrl` in the result payload (which captures redirect
+     * landings) and falls back to the input URL when the result was thin.
+     */
+    public function lastOpenedUrl(string $sessionId): ?string
+    {
+        /** @var ?PreviewRequestRecord $record */
+        $record = PreviewRequestRecord::find()
+            ->where([
+                'sessionId' => $sessionId,
+                'type' => PreviewRequestRecord::TYPE_OPEN,
+                'status' => PreviewRequestRecord::STATUS_COMPLETED,
+            ])
+            ->orderBy(['id' => SORT_DESC])
+            ->one();
+
+        if ($record === null) {
+            return null;
+        }
+
+        $result = $this->decodeResult($record);
+        if (is_string($result['finalUrl'] ?? null) && $result['finalUrl'] !== '') {
+            return $result['finalUrl'];
+        }
+
+        $input = $this->decodeInput($record);
+        if (is_string($input['url'] ?? null) && $input['url'] !== '') {
+            return $input['url'];
+        }
+
+        return null;
+    }
+
+    /**
      * Return the oldest pending request for the session — what the front-end's
      * poll handler should pick up next. Returns null when nothing is pending.
      * The front-end's local dedup keeps a single tab from re-handling the

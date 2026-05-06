@@ -131,14 +131,26 @@ export class ChatApi {
  */
 function parseMessagesResponse(data: unknown): MessagesResponse {
   if (Array.isArray(data)) {
-    return { messages: data as ChatMessage[], previewRequest: null };
+    return { messages: data as ChatMessage[], previewRequest: null, lastPreviewUrl: null };
   }
   if (typeof data !== "object" || data === null) {
-    return { messages: [], previewRequest: null };
+    return { messages: [], previewRequest: null, lastPreviewUrl: null };
   }
-  const obj = data as { messages?: unknown; previewRequest?: unknown };
+  const obj = data as {
+    messages?: unknown;
+    previewRequest?: unknown;
+    lastPreviewUrl?: unknown;
+  };
   const messages = Array.isArray(obj.messages) ? (obj.messages as ChatMessage[]) : [];
-  return { messages, previewRequest: parsePreviewRequest(obj.previewRequest) };
+  const lastPreviewUrl =
+    typeof obj.lastPreviewUrl === "string" && obj.lastPreviewUrl !== ""
+      ? obj.lastPreviewUrl
+      : null;
+  return {
+    messages,
+    previewRequest: parsePreviewRequest(obj.previewRequest),
+    lastPreviewUrl,
+  };
 }
 
 function parsePreviewRequest(value: unknown): PreviewRequest | null {

@@ -9,7 +9,6 @@ use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\preview\PreviewService;
 use markhuot\craftai\queue\AgentJob;
 use markhuot\craftai\records\MessageRecord;
-use markhuot\craftai\records\PreviewRequestRecord;
 use yii\web\Response;
 
 class MessagesController extends Controller
@@ -36,19 +35,25 @@ class MessagesController extends Controller
             $records,
         );
 
+        /** @var PreviewService $preview */
+        $preview = Craft::$container->get(PreviewService::class);
+
         return $this->asJson([
             'messages' => $messages,
-            'previewRequest' => $this->nextPreviewRequest($sessionId),
+            'previewRequest' => $this->nextPreviewRequest($sessionId, $preview),
+            // Sticky pointer at the most recent preview the agent successfully
+            // opened. Drives the toolbar globe so a page reload still lets
+            // the user re-mount the iframe — the in-memory React state is
+            // wiped but this row survives.
+            'lastPreviewUrl' => $preview->lastOpenedUrl($sessionId),
         ]);
     }
 
     /**
      * @return ?array{id: int, type: string, status: string, input: array<string, mixed>}
      */
-    private function nextPreviewRequest(string $sessionId): ?array
+    private function nextPreviewRequest(string $sessionId, PreviewService $service): ?array
     {
-        /** @var PreviewService $service */
-        $service = Craft::$container->get(PreviewService::class);
         $next = $service->nextActionable($sessionId);
 
         if ($next === null) {

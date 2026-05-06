@@ -105,3 +105,26 @@ it('errors when invoked without a session context', function () {
     expect($output->isError)->toBeTrue();
     expect($output->text)->toContain('active chat session');
 });
+
+it('truncates oversized content with a clear marker so the LLM context stays bounded', function () {
+    // Mark's bug: a CP edit page returned 205KB of HTML, which both
+    // burned tokens and (before the schema fix) overflowed the messages
+    // table column. Even with the wider column, we cap aggressively so
+    // future huge pages don't fill the LLM context.
+    $oversized = str_repeat('x', GetPreview::MAX_OUTPUT_BYTES + 50_000);
+    $service = new FakeGetPreviewService();
+    $service->next = getPreviewRecord(PreviewRequestRecord::STATUS_COMPLETED, [
+        'content' => $oversized,
+        'mode' => 'full',
+    ]);
+
+    $context = new ToolContext();
+    $context->begin('session-get-truncate', 'tu-g-truncate');
+    $tool = new GetPreview($service, $context);
+
+    $output = $tool(fullHtml: true);
+
+    expect($output->isError)->toBeFalse();
+    expect(strlen($output->text))->toBeLessThanOrEqual(GetPreview::MAX_OUTPUT_BYTES + 500);
+    expect($output->text)->toContain('[Truncated:');
+});

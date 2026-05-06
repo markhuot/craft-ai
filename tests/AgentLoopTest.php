@@ -292,6 +292,148 @@ it('preserves the system row in the persisted transcript even after folding for 
     expect($records[2]->role)->toBe('assistant');
 });
 
+it('synthesizes a tool_result when an orphan tool_use was persisted without one', function () {
+    // Replays the failure mode that bricked sessions before this heal: the
+    // queue worker died after writing an assistant tool_use but before the
+    // matching tool_result row got persisted. Without healing, the next LLM
+    // call rejects the conversation as malformed.
+    $sessionId = 'session-orphan';
+
+    $u = new MessageRecord();
+    $u->sessionId = $sessionId;
+    $u->role = 'user';
+    $u->content = json_encode([['type' => 'text', 'text' => 'show me the preview']]);
+    $u->save();
+
+    $a = new MessageRecord();
+    $a->sessionId = $sessionId;
+    $a->role = 'assistant';
+    $a->content = json_encode([
+        ['type' => 'text', 'text' => 'opening it'],
+        ['type' => 'tool_use', 'id' => 'tu_orphan', 'name' => 'get_preview', 'input' => []],
+    ]);
+    $a->save();
+
+    // No user/tool_result row follows — the worker died mid-execute.
+    $u2 = new MessageRecord();
+    $u2->sessionId = $sessionId;
+    $u2->role = 'user';
+    $u2->content = json_encode([['type' => 'text', 'text' => 'still there?']]);
+    $u2->save();
+
+    $provider = new FakeProvider([
+        new ProviderResponse('msg_recover', [['type' => 'text', 'text' => 'recovering']], 'end_turn'),
+    ]);
+
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->run($sessionId);
+
+    expect($provider->calls)->toHaveCount(1);
+    $messages = $provider->calls[0]['messages'];
+
+    // Sequence sent to the provider: user "show me the preview", assistant
+    // (text + orphan tool_use), then a healed user turn that prepends the
+    // synthetic tool_result onto the user's "still there?" text — preserving
+    // the LLM's tool_use → tool_result invariant.
+    expect($messages[1]['role'])->toBe('assistant');
+    $orphanTurn = $messages[2];
+    expect($orphanTurn['role'])->toBe('user');
+    $blocks = $orphanTurn['content'];
+    expect($blocks[0]['type'])->toBe('tool_result');
+    expect($blocks[0]['tool_use_id'])->toBe('tu_orphan');
+    expect($blocks[0]['is_error'])->toBeTrue();
+    expect($blocks[0]['content'])->toContain('worker likely failed');
+    // The user's actual second message survives, just folded after the heal.
+    $textBlocks = array_values(array_filter(
+        $blocks,
+        static fn ($b): bool => ($b['type'] ?? '') === 'text',
+    ));
+    expect($textBlocks)->toHaveCount(1);
+    expect($textBlocks[0]['text'])->toBe('still there?');
+});
+
+it('inserts a synthesized user turn when the orphan tool_use is the very last record', function () {
+    // Same failure mode but the worker died before *any* follow-up user
+    // message was sent. The next agent run still needs a tool_result before
+    // the provider call can succeed.
+    $sessionId = 'session-orphan-trailing';
+
+    $u = new MessageRecord();
+    $u->sessionId = $sessionId;
+    $u->role = 'user';
+    $u->content = json_encode([['type' => 'text', 'text' => 'go']]);
+    $u->save();
+
+    $a = new MessageRecord();
+    $a->sessionId = $sessionId;
+    $a->role = 'assistant';
+    $a->content = json_encode([
+        ['type' => 'tool_use', 'id' => 'tu_trail', 'name' => 'get_preview', 'input' => []],
+    ]);
+    $a->save();
+
+    $provider = new FakeProvider([
+        new ProviderResponse('msg_recover', [['type' => 'text', 'text' => 'ok']], 'end_turn'),
+    ]);
+
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->run($sessionId);
+
+    $messages = $provider->calls[0]['messages'];
+    // user (go), assistant (tool_use), user (synthesized tool_result)
+    expect($messages)->toHaveCount(3);
+    expect($messages[2]['role'])->toBe('user');
+    expect($messages[2]['content'][0]['type'])->toBe('tool_result');
+    expect($messages[2]['content'][0]['tool_use_id'])->toBe('tu_trail');
+});
+
+it('leaves intact assistant tool_use turns alone when the matching tool_result is already present', function () {
+    $sessionId = 'session-no-orphan';
+
+    $u = new MessageRecord();
+    $u->sessionId = $sessionId;
+    $u->role = 'user';
+    $u->content = json_encode([['type' => 'text', 'text' => 'go']]);
+    $u->save();
+
+    $a = new MessageRecord();
+    $a->sessionId = $sessionId;
+    $a->role = 'assistant';
+    $a->content = json_encode([
+        ['type' => 'tool_use', 'id' => 'tu_ok', 'name' => 'get_health', 'input' => []],
+    ]);
+    $a->save();
+
+    $tr = new MessageRecord();
+    $tr->sessionId = $sessionId;
+    $tr->role = 'user';
+    $tr->content = json_encode([
+        ['type' => 'tool_result', 'tool_use_id' => 'tu_ok', 'content' => 'ok', 'is_error' => false],
+    ]);
+    $tr->save();
+
+    $provider = new FakeProvider([
+        new ProviderResponse('msg_done', [['type' => 'text', 'text' => 'great']], 'end_turn'),
+    ]);
+
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->run($sessionId);
+
+    $messages = $provider->calls[0]['messages'];
+    // No synthetic tool_result added; the existing one survives unchanged.
+    $toolResults = [];
+    foreach ($messages as $m) {
+        foreach ($m['content'] as $block) {
+            if (($block['type'] ?? '') === 'tool_result') {
+                $toolResults[] = $block;
+            }
+        }
+    }
+    expect($toolResults)->toHaveCount(1);
+    expect($toolResults[0]['content'])->toBe('ok');
+    expect($toolResults[0]['is_error'])->toBeFalse();
+});
+
 it('fabricates stopped tool_results and exits when stop is requested mid tool_use turn', function () {
     $session = new SessionRecord();
     $session->id = 'session-stop-mid';

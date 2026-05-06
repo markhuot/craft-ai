@@ -38,12 +38,22 @@ class AgentJob extends BaseJob
         try {
             $loop->run($this->sessionId);
         } catch (\Throwable $e) {
+            // Truncate the error text aggressively. PDO exceptions for
+            // "Data too long" embed the failed SQL — which can be megabytes
+            // when a tool returned huge content — and persisting the entire
+            // thing would re-trigger the same column-overflow on this very
+            // INSERT. 4KB is plenty for a human-readable error message.
+            $message = $e->getMessage();
+            if (strlen($message) > 4000) {
+                $message = substr($message, 0, 4000).'… [truncated]';
+            }
+
             $record = new MessageRecord();
             $record->sessionId = $this->sessionId;
             $record->role = 'assistant';
             $record->content = json_encode([[
                 'type' => 'error',
-                'text' => $e->getMessage(),
+                'text' => $message,
             ]], JSON_THROW_ON_ERROR);
             $record->save();
 

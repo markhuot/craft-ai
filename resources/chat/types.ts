@@ -79,4 +79,11 @@ export interface PreviewRequest {
 export interface MessagesResponse {
   messages: ChatMessage[];
   previewRequest: PreviewRequest | null;
+  /**
+   * URL of the most recent successfully-opened preview for this session,
+   * or null if the session has never had one. Sticky on the server side —
+   * survives page reload so the chat surface can render a "reopen preview"
+   * affordance even after the in-memory iframe state is wiped.
+   */
+  lastPreviewUrl: string | null;
 }

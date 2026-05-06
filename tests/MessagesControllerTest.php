@@ -163,4 +163,22 @@ it('omits the previewRequest when nothing is pending for the session', function 
 
     $response->assertOk();
     $response->assertJsonPath('previewRequest', null);
+    $response->assertJsonPath('lastPreviewUrl', null);
+});
+
+it('exposes the last successfully-opened preview URL on the messages envelope', function () {
+    $r = new MessageRecord();
+    $r->sessionId = 'mc-last-url';
+    $r->role = 'user';
+    $r->content = json_encode([['type' => 'text', 'text' => 'hi']]);
+    $r->save();
+
+    $service = new \markhuot\craftai\preview\PreviewService();
+    $id = $service->create('mc-last-url', null, 'open', ['url' => 'https://example.com/x']);
+    $service->complete($id, ['loadedAt' => 1, 'finalUrl' => 'https://example.com/x/final']);
+
+    $response = test()->get('admin?action=craft-ai/messages&sessionId=mc-last-url');
+
+    $response->assertOk();
+    $response->assertJsonPath('lastPreviewUrl', 'https://example.com/x/final');
 });

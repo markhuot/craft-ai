@@ -31,8 +31,9 @@ function bootstrap(): ChatBootstrap {
 function envelope(
   messages: ChatMessage[],
   previewRequest: PreviewRequest | null = null,
+  lastPreviewUrl: string | null = null,
 ): MessagesResponse {
-  return { messages, previewRequest };
+  return { messages, previewRequest, lastPreviewUrl };
 }
 
 interface ApiHandlers {
@@ -170,6 +171,52 @@ describe("<Chat /> preview pane integration", () => {
     expect(screen.getByTestId("preview-shrink")).toBeTruthy();
   });
 
+  test("a follow-up open_preview keeps the user's expanded view instead of yanking back to peek", async () => {
+    // Real-world flow: user expands the preview, then asks the agent for
+    // an edit. The agent re-runs open_preview to refresh the URL after
+    // the change. The pane URL should swap, but the expand state must
+    // survive — only the user's X click can return to peek.
+    let pollCount = 0;
+    const api = makeApi({
+      fetchMessagesAfter: async () => {
+        pollCount += 1;
+        if (pollCount === 1) {
+          return envelope([], {
+            id: 70,
+            type: "open",
+            status: "pending",
+            input: { url: "https://example.com/v1" },
+          });
+        }
+        if (pollCount === 2) {
+          return envelope([], {
+            id: 71,
+            type: "open",
+            status: "pending",
+            input: { url: "https://example.com/v2" },
+          });
+        }
+        return envelope([]);
+      },
+      respondToPreviewRequest: async () => {},
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={20} />);
+    await waitFor(() => screen.getByTestId("preview-pane"));
+
+    fireEvent.click(screen.getByTestId("preview-expand"));
+    expect(screen.getByTestId("chat-with-preview").dataset.previewMode).toBe("expanded");
+
+    // Wait for the second open_preview poll to be picked up — we'll know
+    // because the iframe src updates to /v2 even though the mode stays.
+    await waitFor(() => {
+      const iframe = screen.getByTestId("preview-iframe") as HTMLIFrameElement;
+      expect(iframe.src).toContain("/v2");
+    });
+    expect(screen.getByTestId("chat-with-preview").dataset.previewMode).toBe("expanded");
+    expect(screen.getByTestId("preview-shrink")).toBeTruthy();
+  });
+
   test("close errors any in-flight open request so the agent loop unblocks", async () => {
     const responses: Array<{ id: number; status: string }> = [];
     const api = makeApi({
@@ -195,6 +242,68 @@ describe("<Chat /> preview pane integration", () => {
     expect(responses[0]?.status).toBe("errored");
     // Pane should be torn down too so a future request mounts a fresh one.
     expect(screen.queryByTestId("preview-pane")).toBeNull();
+  });
+
+  test("renders the toolbar globe once the server reports a lastPreviewUrl", async () => {
+    const api = makeApi({
+      fetchMessagesAfter: async () =>
+        envelope([], null, "https://example.com/last"),
+      respondToPreviewRequest: async () => {},
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
+
+    await waitFor(() => expect(screen.getByTestId("preview-toggle")).toBeTruthy());
+    // No iframe yet — the user hasn't clicked the globe.
+    expect(screen.queryByTestId("preview-iframe")).toBeNull();
+  });
+
+  test("clicking the globe re-mounts the iframe at the last URL after a reload", async () => {
+    const api = makeApi({
+      fetchMessagesAfter: async () =>
+        envelope([], null, "https://example.com/last"),
+      respondToPreviewRequest: async () => {},
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
+
+    fireEvent.click(await screen.findByTestId("preview-toggle"));
+
+    const iframe = (await screen.findByTestId("preview-iframe")) as HTMLIFrameElement;
+    expect(iframe.src).toContain("https://example.com/last");
+    // Once the iframe is mounted, the toolbar globe steps aside — the X on
+    // the preview pane header is the close affordance from here on.
+    expect(screen.queryByTestId("preview-toggle")).toBeNull();
+  });
+
+  test("closing via the pane X brings the globe back so the user can reopen", async () => {
+    const api = makeApi({
+      fetchMessagesAfter: async () =>
+        envelope([], null, "https://example.com/last"),
+      respondToPreviewRequest: async () => {},
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
+
+    fireEvent.click(await screen.findByTestId("preview-toggle"));
+    await waitFor(() => screen.getByTestId("preview-iframe"));
+
+    fireEvent.click(screen.getByTestId("preview-close"));
+
+    await waitFor(() => expect(screen.queryByTestId("preview-iframe")).toBeNull());
+    // Globe is back so the user has a way to reopen.
+    expect(screen.getByTestId("preview-toggle")).toBeTruthy();
+  });
+
+  test("does not render the globe when the session has never had a preview", () => {
+    const api = makeApi({
+      fetchMessagesAfter: async () => envelope([]),
+      respondToPreviewRequest: async () => {},
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
+
+    expect(screen.queryByTestId("preview-toggle")).toBeNull();
   });
 
   test("a get_preview request without an open iframe is rejected with an error", async () => {

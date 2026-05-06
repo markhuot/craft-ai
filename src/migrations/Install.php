@@ -12,7 +12,9 @@ class Install extends Migration
             'id' => $this->primaryKey(),
             'sessionId' => $this->string(36)->notNull(),
             'role' => $this->string(20)->notNull(),
-            'content' => $this->text()->notNull(),
+            // MEDIUMTEXT (16MB) — tool outputs (e.g. `get_preview` returning
+            // full HTML of a CP edit page) can exceed the 64KB TEXT cap.
+            'content' => $this->mediumText()->notNull(),
             'rawResponse' => $this->mediumText()->null(),
             'assetIds' => $this->text()->null(),
             'dateCreated' => $this->dateTime()->notNull(),

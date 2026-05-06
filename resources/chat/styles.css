@@ -32,3 +32,15 @@
 .craftai-chat pre {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
+
+/*
+ * In the expanded preview overlay the chat column owns the full viewport
+ * height. The default 70vh cap on the conversation is right for the in-page
+ * chat (where the page is naturally taller than the chat), but inside the
+ * fixed-position overlay it leaves a gap below the prompt input. Lifting
+ * the cap here lets the conversation grow flex-1 and pins the prompt to
+ * the bottom of the column.
+ */
+[data-preview-mode="expanded"] [data-slot="conversation"] {
+  max-height: none;
+}

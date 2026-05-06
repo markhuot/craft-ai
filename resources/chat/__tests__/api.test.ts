@@ -80,6 +80,32 @@ describe("ChatApi.fetchMessagesAfter", () => {
     });
   });
 
+  test("surfaces lastPreviewUrl when the server pins one", async () => {
+    const api = makeApi(async () =>
+      new Response(
+        JSON.stringify({
+          messages: [],
+          previewRequest: null,
+          lastPreviewUrl: "https://example.com/last",
+        }),
+        { status: 200 },
+      ),
+    );
+    const result = await api.fetchMessagesAfter(0);
+    expect(result.lastPreviewUrl).toBe("https://example.com/last");
+  });
+
+  test("treats an empty-string lastPreviewUrl as null", async () => {
+    const api = makeApi(async () =>
+      new Response(
+        JSON.stringify({ messages: [], previewRequest: null, lastPreviewUrl: "" }),
+        { status: 200 },
+      ),
+    );
+    const result = await api.fetchMessagesAfter(0);
+    expect(result.lastPreviewUrl).toBeNull();
+  });
+
   test("drops a previewRequest with an unknown type", async () => {
     const api = makeApi(async () =>
       new Response(

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Globe } from "lucide-react";
 import { ChatApi } from "./api";
 import { Conversation, ConversationContent } from "./components/conversation";
 import { Message, MessageContent } from "./components/message";
@@ -85,6 +86,11 @@ export function Chat({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState<PreviewPaneMode>("peek");
   const [pendingOpenRequestId, setPendingOpenRequestId] = useState<number | null>(null);
+  // Sticky pointer at the most recent URL the agent has opened in this
+  // session, sourced from the messages poll envelope. Drives the toolbar
+  // globe so a page reload (which wipes the previewUrl React state) still
+  // lets the user re-mount the iframe with one click.
+  const [lastPreviewUrl, setLastPreviewUrl] = useState<string | null>(null);
   const previewPaneRef = useRef<PreviewPaneHandle | null>(null);
   // Requests we've already started to handle. Polling can return the same
   // pending row repeatedly until we resolve it server-side; without dedup,
@@ -118,6 +124,10 @@ export function Chat({
       if (fetched.previewRequest) {
         void handlePreviewRequest(fetched.previewRequest);
       }
+      // The server's authoritative pointer at the most recent open. On the
+      // first poll after a page reload this is what restores the globe
+      // toggle to the toolbar even though previewUrl is null.
+      setLastPreviewUrl(fetched.lastPreviewUrl);
     } catch {
       // transient — keep polling
     }
@@ -125,6 +135,26 @@ export function Chat({
     // the dep array would force every render to allocate a new poll closure.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api]);
+
+  // Wrap respondToPreviewRequest so a failed POST surfaces in the chat
+  // surface instead of silently rejecting the promise. The agent's wait
+  // loop will eventually time out either way, but a visible error tells
+  // the user why their preview command went quiet.
+  const safeRespond = useCallback(
+    async (
+      id: number,
+      status: "completed" | "errored",
+      result: Record<string, unknown>,
+    ) => {
+      try {
+        await api.respondToPreviewRequest(id, status, result);
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : "Unknown error";
+        setError(`Preview response failed: ${detail}. The agent will time out and recover.`);
+      }
+    },
+    [api],
+  );
 
   const handlePreviewRequest = useCallback(
     async (req: PreviewRequest) => {
@@ -134,16 +164,23 @@ export function Chat({
       if (req.type === "open") {
         const url = typeof req.input.url === "string" ? req.input.url : "";
         if (!url) {
-          await api.respondToPreviewRequest(req.id, "errored", {
+          await safeRespond(req.id, "errored", {
             error: "OpenPreview was called without a url.",
           });
           return;
         }
         setPreviewUrl(url);
-        setPreviewMode("peek");
-        // Don't resolve here — the iframe's onLoad handler resolves it once
-        // the new URL has actually finished loading. We pin the request id
-        // so onLoad/onError know which one to ack.
+        // Optimistically update the globe pointer so the toolbar reflects
+        // the new URL instantly, before the server's next poll round-trips.
+        setLastPreviewUrl(url);
+        // Don't touch previewMode here. The user owns that — peek is the
+        // default after `closePreview` resets it (or initial mount), and an
+        // explicit expand-button click flips to expanded. Re-opening (e.g.
+        // the agent refreshing the URL after an edit) must not yank an
+        // expanded pane back to peek mid-conversation.
+        // The iframe's onLoad handler resolves the request once the new
+        // URL finishes loading; we pin the request id so onLoad/onError
+        // know which one to ack.
         setPendingOpenRequestId(req.id);
         return;
       }
@@ -151,25 +188,27 @@ export function Chat({
       if (req.type === "get") {
         const fullHtml = req.input.fullHtml === true;
         if (!previewPaneRef.current) {
-          await api.respondToPreviewRequest(req.id, "errored", {
+          await safeRespond(req.id, "errored", {
             error: "No preview is open. Call open_preview first or use fetch_webpage.",
           });
           return;
         }
+        let content: string;
         try {
-          const content = previewPaneRef.current.readContents(fullHtml ? "full" : "text");
-          await api.respondToPreviewRequest(req.id, "completed", {
-            content,
-            mode: fullHtml ? "full" : "text",
-          });
+          content = previewPaneRef.current.readContents(fullHtml ? "full" : "text");
         } catch (err) {
-          await api.respondToPreviewRequest(req.id, "errored", {
+          await safeRespond(req.id, "errored", {
             error: err instanceof Error ? err.message : "Failed to read preview contents.",
           });
+          return;
         }
+        await safeRespond(req.id, "completed", {
+          content,
+          mode: fullHtml ? "full" : "text",
+        });
       }
     },
-    [api],
+    [safeRespond],
   );
 
   const handlePreviewLoaded = useCallback(
@@ -177,12 +216,12 @@ export function Chat({
       const id = pendingOpenRequestId;
       if (id === null) return;
       setPendingOpenRequestId(null);
-      void api.respondToPreviewRequest(id, "completed", {
+      void safeRespond(id, "completed", {
         loadedAt: Date.now(),
         finalUrl,
       });
     },
-    [api, pendingOpenRequestId],
+    [safeRespond, pendingOpenRequestId],
   );
 
   const handlePreviewError = useCallback(
@@ -190,9 +229,9 @@ export function Chat({
       const id = pendingOpenRequestId;
       if (id === null) return;
       setPendingOpenRequestId(null);
-      void api.respondToPreviewRequest(id, "errored", { error: message });
+      void safeRespond(id, "errored", { error: message });
     },
-    [api, pendingOpenRequestId],
+    [safeRespond, pendingOpenRequestId],
   );
 
   const closePreview = useCallback(() => {
@@ -201,12 +240,27 @@ export function Chat({
     if (pendingOpenRequestId !== null) {
       // Resolve any in-flight OpenPreview as an error so the agent doesn't
       // hang waiting for a load that will never fire.
-      void api.respondToPreviewRequest(pendingOpenRequestId, "errored", {
+      void safeRespond(pendingOpenRequestId, "errored", {
         error: "User closed the preview before it finished loading.",
       });
       setPendingOpenRequestId(null);
     }
-  }, [api, pendingOpenRequestId]);
+    // Note: lastPreviewUrl is intentionally preserved so the globe stays
+    // available. "Close" is hide-for-now, not permanent dismissal.
+  }, [safeRespond, pendingOpenRequestId]);
+
+  const togglePreview = useCallback(() => {
+    if (previewUrl !== null) {
+      closePreview();
+      return;
+    }
+    if (lastPreviewUrl) {
+      // User-initiated reopen — no agent is waiting on this, so we don't
+      // pin a pendingOpenRequestId. Iframe just shows up.
+      setPreviewUrl(lastPreviewUrl);
+      setPreviewMode("peek");
+    }
+  }, [previewUrl, lastPreviewUrl, closePreview]);
 
   useEffect(() => {
     // Fire once immediately so a freshly-mounted Chat (e.g. the widget
@@ -348,11 +402,28 @@ export function Chat({
           />
         )}
         <PromptInputToolbar>
-          {enableAttachments ? (
-            <PromptInputUpload onClick={onAddAttachments} disabled={status !== "idle"} />
-          ) : (
-            <span />
-          )}
+          <div className="ai:flex ai:items-center ai:gap-1.5">
+            {enableAttachments && (
+              <PromptInputUpload onClick={onAddAttachments} disabled={status !== "idle"} />
+            )}
+            {lastPreviewUrl !== null && previewUrl === null && (
+              // Only render when there's a preview to reopen but it's
+              // currently hidden. While the pane is mounted, the X on its
+              // own header is the close affordance — a redundant toolbar
+              // button would just be visual noise.
+              <button
+                type="button"
+                onClick={togglePreview}
+                aria-label="Show preview"
+                title="Show preview"
+                data-testid="preview-toggle"
+                className="ai:inline-flex ai:items-center ai:gap-1.5 ai:rounded-md ai:border ai:border-craftai-border ai:bg-white ai:px-3 ai:py-1.5 ai:text-xs ai:font-medium ai:text-craftai-fg ai:transition hover:ai:bg-craftai-border/20"
+              >
+                <Globe className="ai:h-3.5 ai:w-3.5" aria-hidden />
+                Preview
+              </button>
+            )}
+          </div>
           <PromptInputSubmit
             status={status}
             disabled={!draft.trim() && pendingAttachments.length === 0}

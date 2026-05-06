@@ -29,8 +29,12 @@ function bootstrap(initialMessages: ChatMessage[] = []): ChatBootstrap {
   };
 }
 
-function envelope(messages: ChatMessage[], previewRequest: PreviewRequest | null = null): MessagesResponse {
-  return { messages, previewRequest };
+function envelope(
+  messages: ChatMessage[],
+  previewRequest: PreviewRequest | null = null,
+  lastPreviewUrl: string | null = null,
+): MessagesResponse {
+  return { messages, previewRequest, lastPreviewUrl };
 }
 
 function makeApi(overrides: Partial<{

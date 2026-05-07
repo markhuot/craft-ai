@@ -4,9 +4,10 @@ Craft AI brings an AI agent into Craft CMS. It adds a control panel chat interfa
 
 ![Craft AI in the Craft control panel](branding/cp_ui.png)
 
-<video src="branding/screencast.mov" controls muted playsinline width="100%"></video>
-
-> Browser doesn't render the embed? [Watch the screencast](branding/screencast.mov).
+<video controls muted playsinline width="100%">
+  <source src="https://github.com/markhuot/craft-ai/raw/main/branding/screencast.mov" type="video/mp4">
+  Your browser can't play the embedded video. <a href="https://github.com/markhuot/craft-ai/raw/main/branding/screencast.mov">Download the screencast</a> instead.
+</video>
 
 ## What it can do
 

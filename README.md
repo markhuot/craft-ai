@@ -2,6 +2,12 @@
 
 Craft AI brings an AI agent into Craft CMS. It adds a control panel chat interface, an optional front-end widget for logged-in control panel users, and an MCP server so external AI clients can safely work with your Craft content and project structure.
 
+![Craft AI in the Craft control panel](branding/cp_ui.png)
+
+<video src="branding/screencast.mov" controls muted playsinline width="100%"></video>
+
+> Browser doesn't render the embed? [Watch the screencast](branding/screencast.mov).
+
 ## What it can do
 
 Craft AI gives an LLM access to Craft-aware tools that can:
@@ -9,9 +15,12 @@ Craft AI gives an LLM access to Craft-aware tools that can:
 - Search and inspect entries, drafts, sections, entry types, fields, field layouts, templates, assets, and volumes.
 - Create or update entries, drafts, sections, entry types, fields, field layout elements, templates, and assets.
 - Delete entries, drafts, sections, entry types, fields, and assets when the current user has permission.
+- Generate images directly into a Craft asset volume via OpenAI (gpt-image-1 / dall-e-3) or Google's Gemini "Nano Banana" model (`gemini-2.5-flash-image`).
+- Open a Craft entry or draft in a side-by-side preview pane and read the rendered page back so the agent can iterate on its own output.
 - Fetch webpage content for research and content assistance from inside the control panel agent.
 - Attach Craft assets to chat prompts so the agent can inspect them when needed.
 - Keep per-user AI sessions with conversation history, generated session titles, stop controls, and queued background processing.
+- Scope each session's tool surface — pick `full`, `draft`-only, `readonly`, or a `custom` allowlist when you want to keep an agent run on a tighter rail.
 - Expose the same Craft tools over MCP using either the built-in HTTP endpoint with OAuth or the console stdio server.
 
 The in-app agent supports Anthropic and OpenAI-compatible providers. OpenAI-compatible configuration can point at alternate base URLs such as Azure OpenAI, Groq, Together, OpenRouter, Ollama, or LM Studio.
@@ -56,6 +65,24 @@ Available settings include:
 - `smallModel`: an optional smaller model for lightweight tasks like session titles.
 - `system`: an optional system prompt prepended to conversations.
 - `baseUrl`: an optional OpenAI-compatible API base URL override.
+- `imageProviders`: optional map of image generation providers. Keys registered here add the matching tool to the agent — leave a key out to keep its tool hidden. Multiple providers can be enabled at once and the agent will pick between them per prompt.
+
+To turn on image generation, register one or both providers under `imageProviders`:
+
+```php
+'imageProviders' => [
+    'openai' => [
+        'apiKey' => getenv('OPENAI_API_KEY'),
+    ],
+    'gemini' => [
+        'apiKey' => getenv('GEMINI_API_KEY'),
+        // Optional, defaults to 'gemini-2.5-flash-image'.
+        'model' => 'gemini-2.5-flash-image',
+    ],
+],
+```
+
+Registering `openai` exposes the `generate_image_gpt_image` tool (gpt-image-1 / dall-e-3); registering `gemini` exposes `generate_image_nano_banana` (gemini-2.5-flash-image). See `src/config.php` for the full list of options.
 
 After configuration, make sure your Craft queue is running so agent jobs can process in the background.
 
@@ -63,11 +90,13 @@ After configuration, make sure your Craft queue is running so agent jobs can pro
 
 ### Control panel chat
 
-Open **AI Sessions** in the control panel to start a new conversation. The chat UI supports ongoing sessions, message polling while the agent works, stopping an active run, and attaching Craft assets to a prompt.
+Open **AI Sessions** in the control panel to start a new conversation. The chat UI supports ongoing sessions, message polling while the agent works, stopping an active run, attaching Craft assets to a prompt, and a resizable side-by-side preview pane the agent can drive when it's working on an entry or draft. A collapsible sessions sidebar keeps prior conversations one click away. Each session also has a tool-mode picker (`full` / `draft` / `readonly` / `custom`) so you can scope which tools the agent can call for that conversation.
 
 ### Front-end widget
 
 For logged-in users with control panel access, Craft AI injects a small site widget on front-end pages. The widget reuses the same sessions and chat flow, making it easy to ask site-aware questions while browsing the site.
+
+![Craft AI front-end widget](branding/fe_ui.png)
 
 ### MCP clients
 

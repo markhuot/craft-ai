@@ -124,6 +124,58 @@ describe("<Chat /> preview pane integration", () => {
     expect(responses[0]?.result).toMatchObject({ finalUrl: expect.any(String) });
   });
 
+  test("a repeat open_preview for the same URL still resolves the new request", async () => {
+    // Regression: without the reload-key bump, setting previewUrl to the
+    // value React already has is a no-op, the iframe's src= attribute
+    // doesn't change, no navigation happens, and the second request hangs
+    // until the agent's waitFor() times out.
+    const responses: Array<{ id: number; status: string }> = [];
+    let pollCount = 0;
+    const api = makeApi({
+      fetchMessagesAfter: async () => {
+        pollCount += 1;
+        if (pollCount === 1) {
+          return envelope([], {
+            id: 130,
+            type: "open",
+            status: "pending",
+            input: { url: "https://example.com" },
+          });
+        }
+        if (pollCount === 2) {
+          return envelope([], {
+            id: 131,
+            type: "open",
+            status: "pending",
+            input: { url: "https://example.com" },
+          });
+        }
+        return envelope([]);
+      },
+      respondToPreviewRequest: async (id, status) => {
+        responses.push({ id, status });
+      },
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={20} />);
+
+    // First request: load and ack.
+    await waitFor(() => screen.getByTestId("preview-iframe"));
+    fireEvent.load(screen.getByTestId("preview-iframe"));
+    await waitFor(() => expect(responses.length).toBe(1));
+    expect(responses[0]).toMatchObject({ id: 130, status: "completed" });
+
+    // Wait for the second poll to deliver request 131. The reload-key bump
+    // remounts the iframe with the same URL — fire load on the fresh
+    // element to ack the new request.
+    await waitFor(() => expect(pollCount).toBeGreaterThanOrEqual(2));
+    // Give React a tick to commit the remount triggered by the second poll.
+    await new Promise((r) => setTimeout(r, 20));
+    fireEvent.load(screen.getByTestId("preview-iframe"));
+    await waitFor(() => expect(responses.length).toBe(2));
+    expect(responses[1]).toMatchObject({ id: 131, status: "completed" });
+  });
+
   test("does not double-handle the same request when polling returns it twice", async () => {
     // A get_preview without an open iframe resolves immediately by posting
     // an error. If the dedup set in Chat works, the same request returned

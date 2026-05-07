@@ -103,6 +103,11 @@ export function Chat({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState<PreviewPaneMode>("peek");
   const [pendingOpenRequestId, setPendingOpenRequestId] = useState<number | null>(null);
+  // Counter passed to PreviewPane — bumping it forces the iframe to remount
+  // even when the URL is unchanged. Without this, a repeat open_preview for
+  // the URL the iframe is already showing would be a React no-op and the
+  // tool would time out waiting for an onLoad that never fires.
+  const [previewReloadKey, setPreviewReloadKey] = useState(0);
   // Sticky pointer at the most recent URL the agent has opened in this
   // session, sourced from the messages poll envelope. Drives the toolbar
   // globe so a page reload (which wipes the previewUrl React state) still
@@ -205,6 +210,11 @@ export function Chat({
         // Optimistically update the globe pointer so the toolbar reflects
         // the new URL instantly, before the server's next poll round-trips.
         setLastPreviewUrl(url);
+        // Bump the reload key so PreviewPane remounts the iframe even when
+        // the URL hasn't changed (e.g. the agent re-opens the same URL
+        // after an edit). Without this, React's diff skips the src= update
+        // and onLoad never fires, hanging the tool until timeout.
+        setPreviewReloadKey((n) => n + 1);
         // Don't touch previewMode here. The user owns that — peek is the
         // default after `closePreview` resets it (or initial mount), and an
         // explicit expand-button click flips to expanded. Re-opening (e.g.
@@ -519,6 +529,7 @@ export function Chat({
       url={previewUrl}
       mode={previewMode}
       loading={pendingOpenRequestId !== null}
+      reloadKey={previewReloadKey}
       onLoad={handlePreviewLoaded}
       onError={handlePreviewError}
       onExpand={() => setPreviewMode("expanded")}

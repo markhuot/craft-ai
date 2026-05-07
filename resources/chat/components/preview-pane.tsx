@@ -21,6 +21,14 @@ export interface PreviewPaneProps {
    * sees something is happening.
    */
   loading: boolean;
+  /**
+   * Bump this counter to force the iframe to reload even if `url` hasn't
+   * changed. Repeat `open_preview` calls for the URL the iframe is
+   * already showing would otherwise be a React no-op (same `src` string
+   * skipped by the DOM diff), so `onLoad` would never fire and the new
+   * request would time out.
+   */
+  reloadKey?: number;
   onLoad: (finalUrl: string) => void;
   onError: (message: string) => void;
   onExpand: () => void;
@@ -38,7 +46,7 @@ export interface PreviewPaneProps {
  * iframe text/HTML when a `GetPreview` tool request comes through.
  */
 export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(function PreviewPane(
-  { url, mode, loading, onLoad, onError, onExpand, onCollapse, onClose },
+  { url, mode, loading, reloadKey = 0, onLoad, onError, onExpand, onCollapse, onClose },
   ref,
 ) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -85,9 +93,11 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(funct
   useEffect(() => {
     // Parent swapped the requested URL out from under us — clear so the
     // next load signal fires fresh even if the iframe ends up at the same
-    // address we last reported.
+    // address we last reported. Also reacts to reloadKey bumps so a
+    // repeat-open of the same URL doesn't get dedup'd against the prior
+    // resolved location.
     setLoadedUrl(null);
-  }, [url]);
+  }, [url, reloadKey]);
 
   const handleLoad = () => {
     let finalUrl = url;
@@ -156,6 +166,11 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(funct
 
       <div className="ai:relative ai:flex ai:min-h-0 ai:flex-1 ai:bg-white">
         <iframe
+          // Keying on (url, reloadKey) forces React to unmount the prior
+          // iframe and mount a new one whenever the parent signals a fresh
+          // open — otherwise setting iframe.src to the same value is a no-op
+          // and onLoad never fires for the second request.
+          key={`${url}#${reloadKey}`}
           ref={iframeRef}
           data-testid="preview-iframe"
           src={url}

@@ -18,6 +18,8 @@ use markhuot\craftai\validators\ExistingEntry;
  */
 class GetEntry extends Tool
 {
+    public const KIND = ToolKind::Read;
+
     /**
      * @return array<array-key, mixed>
      */

@@ -55,7 +55,7 @@ use yii\base\Event;
 
 class Plugin extends BasePlugin
 {
-    public string $schemaVersion = '1.7.0';
+    public string $schemaVersion = '1.8.0';
 
     public bool $hasCpSection = true;
 
@@ -258,6 +258,8 @@ class Plugin extends BasePlugin
             // but we ship the URL anyway so the shared Chat component can stay
             // bootstrap-agnostic and we don't fork the type for a single use case.
             'previewRespondUrl' => UrlHelper::actionUrl('craft-ai/preview/respond'),
+            'toolModeUrl' => UrlHelper::actionUrl('craft-ai/sessions/tool-mode'),
+            'updateToolModeUrl' => UrlHelper::actionUrl('craft-ai/sessions/update-tool-mode'),
             'csrfTokenName' => Craft::$app->getConfig()->getGeneral()->csrfTokenName,
             'csrfTokenValue' => $request->getCsrfToken(),
             'context' => $context,

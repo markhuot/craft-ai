@@ -17,6 +17,8 @@ function bootstrap(): WidgetBootstrap {
     messagesUrl: "http://localhost/messages",
     sendUrl: "http://localhost/sessions/send",
     previewRespondUrl: "http://localhost/preview/respond",
+    toolModeUrl: "http://localhost/tool-mode",
+    updateToolModeUrl: "http://localhost/update-tool-mode",
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
     context: {

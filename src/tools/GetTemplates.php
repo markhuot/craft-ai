@@ -23,6 +23,8 @@ use SplFileInfo;
  */
 class GetTemplates extends Tool
 {
+    public const KIND = ToolKind::Read;
+
     /**
      * @return list<array{path: string, absolutePath: string, size: int}>
      */

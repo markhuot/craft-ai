@@ -26,6 +26,8 @@ use markhuot\craftai\records\SessionRecord;
  */
 class OpenPreview extends Tool
 {
+    public const KIND = ToolKind::Read;
+
     public function __construct(
         private readonly PreviewService $preview = new PreviewService(),
         private readonly ToolContext $context = new ToolContext(),

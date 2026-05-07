@@ -19,6 +19,8 @@ use markhuot\craftai\validators\ExistingAsset;
  */
 class GetAsset extends Tool
 {
+    public const KIND = ToolKind::Read;
+
     /**
      * @return array<array-key, mixed>
      */

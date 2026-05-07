@@ -8,6 +8,7 @@ import {
   type PreviewPaneHandle,
   type PreviewPaneMode,
 } from "./components/preview-pane";
+import { PermissionMode } from "./components/permission-mode";
 import {
   AttachmentChip,
   PromptInput,
@@ -24,10 +25,12 @@ import { openAssetSelector, type AssetSelectorOpener } from "./lib/assetSelector
 import { useResizableSplit } from "./lib/useResizableSplit";
 import type {
   Attachment,
+  AvailableTool,
   ChatBootstrap,
   ChatMessage,
   ContentBlock,
   PreviewRequest,
+  ToolMode,
 } from "./types";
 
 export interface ChatProps {
@@ -82,6 +85,8 @@ export function Chat({
         sendUrl: bootstrap.sendUrl,
         assetsInfoUrl: bootstrap.assetsInfoUrl,
         previewRespondUrl: bootstrap.previewRespondUrl,
+        toolModeUrl: bootstrap.toolModeUrl,
+        updateToolModeUrl: bootstrap.updateToolModeUrl,
         sessionId: bootstrap.sessionId,
         csrfTokenName: bootstrap.csrfTokenName,
         csrfTokenValue: bootstrap.csrfTokenValue,
@@ -96,6 +101,15 @@ export function Chat({
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
   const [status, setStatus] = useState<"idle" | "submitting" | "streaming">("idle");
   const [error, setError] = useState<string | null>(null);
+
+  // Tool-mode selection for this session. Hydrated lazily on mount so the
+  // Chat component works the same way for the CP view (where sessionId is
+  // known up front via bootstrap) and the widget (where sessionId is picked
+  // client-side after the user opens a session).
+  const [toolMode, setToolMode] = useState<ToolMode>("full");
+  const [enabledTools, setEnabledTools] = useState<string[] | null>(null);
+  const [availableTools, setAvailableTools] = useState<AvailableTool[]>([]);
+  const [toolModeLoaded, setToolModeLoaded] = useState(false);
 
   // The preview pane survives across requests on the same session — opening
   // a second URL replaces the first, but a `GetPreview` between them reads
@@ -326,6 +340,56 @@ export function Chat({
     return () => clearInterval(id);
   }, [poll, pollIntervalMs]);
 
+  useEffect(() => {
+    // Reset between session switches (the widget remounts <Chat /> with a
+    // new key, but be defensive in case a future caller doesn't) so a stale
+    // payload doesn't briefly leak into the UI.
+    setToolModeLoaded(false);
+    let cancelled = false;
+    void api
+      .fetchToolMode()
+      .then((payload) => {
+        if (cancelled) return;
+        setToolMode(payload.toolMode);
+        setEnabledTools(payload.enabledTools);
+        setAvailableTools(payload.availableTools);
+        setToolModeLoaded(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Failure is non-fatal — the menu hides itself until tools load,
+        // and the agent run still uses whatever the DB says (default 'full').
+        setToolModeLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api]);
+
+  const handleToolModeChange = useCallback(
+    (mode: ToolMode, nextEnabled: string[] | null) => {
+      // Optimistic update so the menu reflects the user's choice instantly.
+      // If the POST fails we roll back to the server's authoritative state.
+      const prevMode = toolMode;
+      const prevEnabled = enabledTools;
+      setToolMode(mode);
+      setEnabledTools(nextEnabled);
+      void api
+        .updateToolMode(mode, nextEnabled)
+        .then((payload) => {
+          setToolMode(payload.toolMode);
+          setEnabledTools(payload.enabledTools);
+          setAvailableTools(payload.availableTools);
+        })
+        .catch((err) => {
+          setToolMode(prevMode);
+          setEnabledTools(prevEnabled);
+          setError(err instanceof Error ? err.message : "Failed to update permission mode");
+        });
+    },
+    [api, enabledTools, toolMode],
+  );
+
   // Tell the host (Shell) when the chat is showing a peek-mode preview, so
   // it can collapse the sessions sidebar to free up horizontal space.
   // Expanded mode breaks out into a fixed overlay that already covers the
@@ -489,6 +553,15 @@ export function Chat({
           <div className="ai:flex ai:items-center ai:gap-1.5">
             {enableAttachments && (
               <PromptInputUpload onClick={onAddAttachments} disabled={status !== "idle"} />
+            )}
+            {toolModeLoaded && availableTools.length > 0 && (
+              <PermissionMode
+                mode={toolMode}
+                enabledTools={enabledTools}
+                availableTools={availableTools}
+                onChange={handleToolModeChange}
+                disabled={status !== "idle"}
+              />
             )}
             {lastPreviewUrl !== null && previewUrl === null && (
               // Only render when there's a preview to reopen but it's

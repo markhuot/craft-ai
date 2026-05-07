@@ -54,6 +54,8 @@ use markhuot\craftai\validators\ExistingSite;
  */
 class UpsertDraft extends Tool
 {
+    public const KIND = ToolKind::DraftWrite;
+
     public function __construct(
         private readonly ToolContext $context = new ToolContext(),
     ) {}

@@ -8,6 +8,8 @@ import type {
   ChatMessage,
   MessagesResponse,
   PreviewRequest,
+  ToolMode,
+  ToolModePayload,
 } from "../types";
 
 afterEach(() => cleanup());
@@ -22,6 +24,8 @@ function bootstrap(initialMessages: ChatMessage[] = []): ChatBootstrap {
     sessionsIndexUrl: "http://localhost/sessions",
     assetsInfoUrl: "http://localhost/assets/info",
     previewRespondUrl: "http://localhost/preview/respond",
+    toolModeUrl: "http://localhost/tool-mode",
+    updateToolModeUrl: "http://localhost/update-tool-mode",
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
     initialMessages,
@@ -42,12 +46,16 @@ function makeApi(overrides: Partial<{
   sendMessage: (msg: string, assetIds?: number[], context?: unknown) => Promise<void>;
   fetchAssetInfo: (ids: number[]) => Promise<Attachment[]>;
   respondToPreviewRequest: (id: number, status: "completed" | "errored", result: Record<string, unknown>) => Promise<void>;
+  fetchToolMode: () => Promise<ToolModePayload>;
+  updateToolMode: (mode: ToolMode, enabled: string[] | null) => Promise<ToolModePayload>;
 }> = {}) {
   const api = new ChatApi({
     messagesUrl: "http://localhost/messages",
     sendUrl: "http://localhost/send",
     assetsInfoUrl: "http://localhost/assets/info",
     previewRespondUrl: "http://localhost/preview/respond",
+    toolModeUrl: "http://localhost/tool-mode",
+    updateToolModeUrl: "http://localhost/update-tool-mode",
     sessionId: "session-1",
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
@@ -65,6 +73,13 @@ function makeApi(overrides: Partial<{
   }
   if (overrides.respondToPreviewRequest) {
     api.respondToPreviewRequest = overrides.respondToPreviewRequest;
+  }
+  // Default to a never-resolving promise so the existing test suite — which
+  // doesn't care about tool mode — never sees the menu render and never
+  // triggers an unwrapped state update during teardown.
+  api.fetchToolMode = overrides.fetchToolMode ?? (() => new Promise(() => {}));
+  if (overrides.updateToolMode) {
+    api.updateToolMode = overrides.updateToolMode;
   }
   return api;
 }

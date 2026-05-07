@@ -24,6 +24,8 @@ function bootstrap(): ChatBootstrap {
     sessionsIndexUrl: "http://localhost/sessions",
     assetsInfoUrl: "http://localhost/assets/info",
     previewRespondUrl: "http://localhost/preview/respond",
+    toolModeUrl: "http://localhost/tool-mode",
+    updateToolModeUrl: "http://localhost/update-tool-mode",
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
     initialMessages: [] as ChatMessage[],
@@ -54,6 +56,8 @@ function makeApi(h: ApiHandlers): ChatApi {
     sendUrl: "http://localhost/send",
     assetsInfoUrl: "http://localhost/assets/info",
     previewRespondUrl: "http://localhost/preview/respond",
+    toolModeUrl: "http://localhost/tool-mode",
+    updateToolModeUrl: "http://localhost/update-tool-mode",
     sessionId: "session-preview",
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
@@ -61,6 +65,9 @@ function makeApi(h: ApiHandlers): ChatApi {
   });
   api.fetchMessagesAfter = h.fetchMessagesAfter;
   if (h.respondToPreviewRequest) api.respondToPreviewRequest = h.respondToPreviewRequest;
+  // Pin to a never-resolving promise so this preview test suite is isolated
+  // from the tool-mode hydration path entirely.
+  api.fetchToolMode = () => new Promise(() => {});
   return api;
 }
 

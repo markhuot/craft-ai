@@ -143,6 +143,53 @@ it('passes the tool descriptor catalog from the registry into every provider cal
     expect($provider->calls[0]['tools'][0]->name)->toBe('get_health');
 });
 
+it('hides write-only tools from the LLM when the session is in readonly mode', function () {
+    $registry = new ToolRegistry();
+    $registry->register(\markhuot\craftai\tools\GetHealth::class);
+    $registry->register(\markhuot\craftai\tools\UpsertEntry::class);
+
+    $session = new SessionRecord();
+    $session->id = 'session-readonly';
+    $session->userId = 1;
+    $session->toolMode = 'readonly';
+    $session->save();
+
+    $provider = new FakeProvider([
+        new ProviderResponse('msg_ro', [['type' => 'text', 'text' => 'ok']], 'end_turn'),
+    ]);
+
+    $loop = new AgentLoop($provider, $registry);
+    $loop->appendUserMessage('session-readonly', 'hi');
+    $loop->run('session-readonly');
+
+    $names = array_map(static fn (ToolDescriptor $d): string => $d->name, $provider->calls[0]['tools']);
+    expect($names)->toBe(['get_health']);
+});
+
+it('honors a custom enabledTools allowlist when the session is in custom mode', function () {
+    $registry = new ToolRegistry();
+    $registry->register(\markhuot\craftai\tools\GetHealth::class);
+    $registry->register(\markhuot\craftai\tools\UpsertEntry::class);
+
+    $session = new SessionRecord();
+    $session->id = 'session-custom';
+    $session->userId = 1;
+    $session->toolMode = 'custom';
+    $session->enabledTools = json_encode(['upsert_entry']);
+    $session->save();
+
+    $provider = new FakeProvider([
+        new ProviderResponse('msg_custom', [['type' => 'text', 'text' => 'ok']], 'end_turn'),
+    ]);
+
+    $loop = new AgentLoop($provider, $registry);
+    $loop->appendUserMessage('session-custom', 'hi');
+    $loop->run('session-custom');
+
+    $names = array_map(static fn (ToolDescriptor $d): string => $d->name, $provider->calls[0]['tools']);
+    expect($names)->toBe(['upsert_entry']);
+});
+
 it('breaks immediately and writes a stop marker when stopRequested is set before the next turn', function () {
     $session = new SessionRecord();
     $session->id = 'session-stop-pre';

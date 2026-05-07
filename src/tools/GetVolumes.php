@@ -12,6 +12,8 @@ use craft\models\Volume;
  */
 class GetVolumes extends Tool
 {
+    public const KIND = ToolKind::Read;
+
     /**
      * @return list<array<array-key, mixed>>
      */

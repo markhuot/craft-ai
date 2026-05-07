@@ -13,6 +13,8 @@ export interface WidgetBootstrap {
   messagesUrl: string;
   sendUrl: string;
   previewRespondUrl: string;
+  toolModeUrl: string;
+  updateToolModeUrl: string;
   csrfTokenName: string;
   csrfTokenValue: string;
   /**

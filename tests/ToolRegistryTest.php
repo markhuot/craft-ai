@@ -4,10 +4,15 @@ use Craft;
 use craft\elements\User;
 use markhuot\craftai\permissions\ToolPermissionDeniedException;
 use markhuot\craftai\permissions\ToolPermissions;
+use markhuot\craftai\tools\DeleteDrafts;
 use markhuot\craftai\tools\GetHealth;
 use markhuot\craftai\tools\Tool;
+use markhuot\craftai\tools\ToolDescriptor;
+use markhuot\craftai\tools\ToolKind;
 use markhuot\craftai\tools\ToolOutput;
 use markhuot\craftai\tools\ToolRegistry;
+use markhuot\craftai\tools\UpsertDraft;
+use markhuot\craftai\tools\UpsertEntry;
 
 /** Echo back the input for testing */
 class ToolRegistryEchoFixture extends Tool
@@ -115,4 +120,77 @@ it('catches exceptions thrown by tools and returns an error ToolOutput', functio
 
     expect($output->isError)->toBeTrue();
     expect($output->text)->toBe('boom');
+});
+
+function descriptorsForToolModeTest(): array
+{
+    return [
+        new ToolDescriptor(GetHealth::class),     // read
+        new ToolDescriptor(UpsertDraft::class),   // draftWrite
+        new ToolDescriptor(DeleteDrafts::class),  // draftWrite
+        new ToolDescriptor(UpsertEntry::class),   // liveWrite (default)
+    ];
+}
+
+it('keeps every descriptor in full mode', function () {
+    $filtered = (new ToolRegistry())->filterByToolMode(descriptorsForToolModeTest(), 'full');
+
+    expect(array_map(fn ($d) => $d->name, $filtered))->toBe([
+        'get_health',
+        'upsert_draft',
+        'delete_drafts',
+        'upsert_entry',
+    ]);
+});
+
+it('keeps only Read descriptors in readonly mode', function () {
+    $filtered = (new ToolRegistry())->filterByToolMode(descriptorsForToolModeTest(), 'readonly');
+
+    expect(array_map(fn ($d) => $d->name, $filtered))->toBe(['get_health']);
+});
+
+it('keeps Read and DraftWrite descriptors in draft mode', function () {
+    $filtered = (new ToolRegistry())->filterByToolMode(descriptorsForToolModeTest(), 'draft');
+
+    expect(array_map(fn ($d) => $d->name, $filtered))->toBe([
+        'get_health',
+        'upsert_draft',
+        'delete_drafts',
+    ]);
+});
+
+it('keeps only the explicitly enabled descriptors in custom mode', function () {
+    $filtered = (new ToolRegistry())->filterByToolMode(
+        descriptorsForToolModeTest(),
+        'custom',
+        json_encode(['get_health', 'upsert_entry']),
+    );
+
+    expect(array_map(fn ($d) => $d->name, $filtered))->toBe(['get_health', 'upsert_entry']);
+});
+
+it('treats a missing custom allowlist as an empty selection', function () {
+    $filtered = (new ToolRegistry())->filterByToolMode(
+        descriptorsForToolModeTest(),
+        'custom',
+        null,
+    );
+
+    expect($filtered)->toBe([]);
+});
+
+it('falls back to full mode for an unrecognized mode value', function () {
+    $filtered = (new ToolRegistry())->filterByToolMode(descriptorsForToolModeTest(), 'totally-bogus');
+
+    expect($filtered)->toHaveCount(4);
+});
+
+it('ignores garbage JSON in the custom allowlist without throwing', function () {
+    $filtered = (new ToolRegistry())->filterByToolMode(
+        descriptorsForToolModeTest(),
+        'custom',
+        '{not valid json',
+    );
+
+    expect($filtered)->toBe([]);
 });

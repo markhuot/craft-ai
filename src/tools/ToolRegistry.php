@@ -58,6 +58,79 @@ class ToolRegistry
         }
     }
 
+    /**
+     * Filter a descriptor list down to what a session's tool-mode setting
+     * exposes. Read-only mode keeps Read tools; Draft mode keeps Read +
+     * DraftWrite; Custom mode keeps the explicit allowlist intersected with
+     * the input list (so a tool the user previously checked but no longer has
+     * permission for is still excluded). Any unrecognized mode falls back to
+     * Full (no further filtering) — this matches the column default.
+     *
+     * @param  list<ToolDescriptor>  $descriptors
+     * @return list<ToolDescriptor>
+     */
+    public function filterByToolMode(array $descriptors, string $mode, ?string $enabledToolsJson = null): array
+    {
+        if ($mode === 'full' || $mode === '') {
+            return $descriptors;
+        }
+
+        if ($mode === 'readonly') {
+            return array_values(array_filter(
+                $descriptors,
+                static fn (ToolDescriptor $d): bool => $d->kind === ToolKind::Read,
+            ));
+        }
+
+        if ($mode === 'draft') {
+            return array_values(array_filter(
+                $descriptors,
+                static fn (ToolDescriptor $d): bool => $d->kind === ToolKind::Read || $d->kind === ToolKind::DraftWrite,
+            ));
+        }
+
+        if ($mode === 'custom') {
+            $enabled = $this->decodeEnabledTools($enabledToolsJson);
+
+            return array_values(array_filter(
+                $descriptors,
+                static fn (ToolDescriptor $d): bool => in_array($d->name, $enabled, true),
+            ));
+        }
+
+        return $descriptors;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function decodeEnabledTools(?string $json): array
+    {
+        if ($json === null || $json === '') {
+            return [];
+        }
+
+        try {
+            /** @var mixed $decoded */
+            $decoded = json_decode($json, true, 8, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        $names = [];
+        foreach ($decoded as $entry) {
+            if (is_string($entry) && $entry !== '') {
+                $names[] = $entry;
+            }
+        }
+
+        return $names;
+    }
+
     public function describe(string $name): ?ToolDescriptor
     {
         if (! isset($this->tools[$name])) {

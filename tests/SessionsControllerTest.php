@@ -410,6 +410,157 @@ it('is idempotent when the session is not currently active', function () {
     expect((bool) $reloaded->stopRequested)->toBeTrue();
 });
 
+function postUpdateToolMode(array $body) {
+    return test()->http('post', 'admin')
+        ->withCsrfToken()
+        ->addHeader('Accept', 'application/json')
+        ->setBody(['action' => 'craft-ai/sessions/update-tool-mode', ...$body])
+        ->send();
+}
+
+function getToolMode(string $sessionId) {
+    return test()->http('get', 'admin')
+        ->addHeader('Accept', 'application/json')
+        ->setBody(['action' => 'craft-ai/sessions/tool-mode', 'sessionId' => $sessionId])
+        ->send();
+}
+
+it('persists the tool mode and returns the resulting payload', function () {
+    $session = new SessionRecord();
+    $session->id = 'session-mode-1';
+    $session->userId = 1;
+    $session->save();
+
+    $response = postUpdateToolMode([
+        'sessionId' => 'session-mode-1',
+        'mode' => 'readonly',
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('toolMode', 'readonly');
+
+    $reloaded = SessionRecord::findOne(['id' => 'session-mode-1']);
+    expect($reloaded->toolMode)->toBe('readonly');
+    expect($reloaded->enabledTools)->toBeNull();
+});
+
+it('rejects an unknown mode value', function () {
+    $session = new SessionRecord();
+    $session->id = 'session-mode-bogus';
+    $session->userId = 1;
+    $session->save();
+
+    $threw = false;
+    try {
+        postUpdateToolMode([
+            'sessionId' => 'session-mode-bogus',
+            'mode' => 'destroy-everything',
+        ]);
+    } catch (\yii\web\BadRequestHttpException) {
+        $threw = true;
+    }
+
+    expect($threw)->toBeTrue();
+});
+
+it('persists the custom allowlist and drops tools the user cannot run', function () {
+    $session = new SessionRecord();
+    $session->id = 'session-mode-custom';
+    $session->userId = 1;
+    $session->save();
+
+    $response = postUpdateToolMode([
+        'sessionId' => 'session-mode-custom',
+        'mode' => 'custom',
+        'enabledTools' => json_encode(['get_health', 'made_up_tool']),
+    ]);
+
+    $response->assertOk();
+    $response->assertJsonPath('toolMode', 'custom');
+
+    $reloaded = SessionRecord::findOne(['id' => 'session-mode-custom']);
+    $stored = json_decode($reloaded->enabledTools, true);
+    expect($stored)->toBe(['get_health']);
+});
+
+it('clears the enabledTools list when switching out of custom mode', function () {
+    $session = new SessionRecord();
+    $session->id = 'session-mode-clear';
+    $session->userId = 1;
+    $session->toolMode = 'custom';
+    $session->enabledTools = json_encode(['get_health']);
+    $session->save();
+
+    $response = postUpdateToolMode([
+        'sessionId' => 'session-mode-clear',
+        'mode' => 'full',
+    ]);
+
+    $response->assertOk();
+
+    $reloaded = SessionRecord::findOne(['id' => 'session-mode-clear']);
+    expect($reloaded->toolMode)->toBe('full');
+    expect($reloaded->enabledTools)->toBeNull();
+});
+
+it('returns the current tool mode and available tools list on GET', function () {
+    $session = new SessionRecord();
+    $session->id = 'session-mode-get';
+    $session->userId = 1;
+    $session->toolMode = 'draft';
+    $session->save();
+
+    $response = getToolMode('session-mode-get');
+
+    $response->assertOk();
+    $response->assertJsonPath('toolMode', 'draft');
+    $body = json_decode((string) $response->content, true);
+    expect($body['availableTools'])->toBeArray();
+    expect($body['availableTools'])->not->toBeEmpty();
+    expect($body['availableTools'][0])->toHaveKeys(['name', 'description', 'kind']);
+});
+
+it('refuses to read another user\'s tool mode', function () {
+    $suffix = bin2hex(random_bytes(4));
+    $elementsTable = Craft::$app->getDb()->getSchema()->getRawTableName('{{%elements}}');
+    Craft::$app->getDb()->createCommand()->insert($elementsTable, [
+        'type' => User::class,
+        'enabled' => true,
+        'archived' => false,
+        'dateCreated' => \craft\helpers\Db::prepareDateForDb(new \DateTime()),
+        'dateUpdated' => \craft\helpers\Db::prepareDateForDb(new \DateTime()),
+        'uid' => \craft\helpers\StringHelper::UUID(),
+    ])->execute();
+    $otherId = (int) Craft::$app->getDb()->getLastInsertID();
+    $usersTable = Craft::$app->getDb()->getSchema()->getRawTableName('{{%users}}');
+    Craft::$app->getDb()->createCommand()->insert($usersTable, [
+        'id' => $otherId,
+        'username' => 'other-tool-mode-'.$suffix,
+        'email' => 'other-tool-mode-'.$suffix.'@example.com',
+        'active' => true,
+        'pending' => false,
+        'locked' => false,
+        'suspended' => false,
+        'admin' => false,
+        'dateCreated' => \craft\helpers\Db::prepareDateForDb(new \DateTime()),
+        'dateUpdated' => \craft\helpers\Db::prepareDateForDb(new \DateTime()),
+    ])->execute();
+
+    $theirs = new SessionRecord();
+    $theirs->id = 'session-mode-theirs';
+    $theirs->userId = $otherId;
+    $theirs->save();
+
+    $threw = false;
+    try {
+        getToolMode('session-mode-theirs');
+    } catch (\yii\web\NotFoundHttpException) {
+        $threw = true;
+    }
+
+    expect($threw)->toBeTrue();
+});
+
 it('refuses to stop another user\'s session', function () {
     $suffix = bin2hex(random_bytes(4));
     $elementsTable = Craft::$app->getDb()->getSchema()->getRawTableName('{{%elements}}');

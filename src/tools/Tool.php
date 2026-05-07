@@ -31,6 +31,13 @@ abstract class Tool
     public const PHASE_BOUND = 'bound';
 
     /**
+     * What kinds of side effects this tool can produce. Subclasses override to
+     * declare a less restrictive kind; the conservative default means a tool
+     * that forgets to declare won't slip into Read-only or Draft mode.
+     */
+    public const KIND = ToolKind::LiveWrite;
+
+    /**
      * Validate the named arguments against the rules that apply to the given
      * phase. Returns a ToolOutput with isError=true to abort, or null to proceed.
      *

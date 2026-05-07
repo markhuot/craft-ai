@@ -23,6 +23,8 @@ function readBootstrap(): WidgetBootstrap | null {
       messagesUrl: String(obj.messagesUrl ?? ""),
       sendUrl: String(obj.sendUrl ?? ""),
       previewRespondUrl: String(obj.previewRespondUrl ?? ""),
+      toolModeUrl: String(obj.toolModeUrl ?? ""),
+      updateToolModeUrl: String(obj.updateToolModeUrl ?? ""),
       csrfTokenName: String(obj.csrfTokenName ?? "CRAFT_CSRF_TOKEN"),
       csrfTokenValue: String(obj.csrfTokenValue ?? ""),
       context: normalizeContext(obj.context),

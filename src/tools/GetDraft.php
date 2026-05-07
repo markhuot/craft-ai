@@ -17,6 +17,8 @@ use markhuot\craftai\validators\ExistingDraft;
  */
 class GetDraft extends Tool
 {
+    public const KIND = ToolKind::Read;
+
     /**
      * @return array<array-key, mixed>
      */

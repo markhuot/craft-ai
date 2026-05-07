@@ -21,6 +21,8 @@ use markhuot\craftai\attributes\Validate;
 ])]
 class DeleteDrafts extends Tool
 {
+    public const KIND = ToolKind::DraftWrite;
+
     /**
      * @param  list<int>  $ids
      * @return array<array-key, mixed>|ToolOutput

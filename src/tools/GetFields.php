@@ -21,6 +21,8 @@ use markhuot\craftai\validators\AvailableFieldType;
  */
 class GetFields extends Tool
 {
+    public const KIND = ToolKind::Read;
+
     /**
      * @return list<array<array-key, mixed>>
      */

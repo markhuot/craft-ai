@@ -9,6 +9,8 @@ use Craft;
  */
 class GetHealth extends Tool
 {
+    public const KIND = ToolKind::Read;
+
     public function __invoke(): string
     {
         $version = Craft::$app->getVersion();

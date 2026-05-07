@@ -5,6 +5,9 @@ use markhuot\craftai\attributes\Tool as ToolAttribute;
 use markhuot\craftai\tools\GetHealth;
 use markhuot\craftai\tools\Tool;
 use markhuot\craftai\tools\ToolDescriptor;
+use markhuot\craftai\tools\ToolKind;
+use markhuot\craftai\tools\UpsertDraft;
+use markhuot\craftai\tools\UpsertEntry;
 
 /** A tool with parameters for testing */
 class ToolDescriptorTestFixture extends Tool
@@ -27,6 +30,13 @@ class ToolDescriptorAttributeFixture extends Tool
         return 'ok';
     }
 }
+
+it('reflects the tool kind onto the descriptor', function () {
+    expect((new ToolDescriptor(GetHealth::class))->kind)->toBe(ToolKind::Read);
+    expect((new ToolDescriptor(UpsertDraft::class))->kind)->toBe(ToolKind::DraftWrite);
+    // UpsertEntry doesn't override KIND, so it inherits the safe default.
+    expect((new ToolDescriptor(UpsertEntry::class))->kind)->toBe(ToolKind::LiveWrite);
+});
 
 it('derives the tool name from the class name in snake_case', function () {
     $descriptor = new ToolDescriptor(GetHealth::class);

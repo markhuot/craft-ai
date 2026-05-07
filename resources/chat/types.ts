@@ -50,6 +50,10 @@ export interface ChatBootstrap {
    * CP-only — keeps the shared bootstrap shape stable.
    */
   previewRespondUrl: string;
+  /** GET — current per-session tool-mode payload (mode + enabled list + available tools). */
+  toolModeUrl: string;
+  /** POST — persist a new tool-mode selection. */
+  updateToolModeUrl: string;
   csrfTokenName: string;
   csrfTokenValue: string;
   initialMessages: ChatMessage[];
@@ -61,6 +65,23 @@ export interface ChatBootstrap {
    */
   context?: unknown;
   contextFingerprint?: string;
+}
+
+export type ToolMode = "full" | "draft" | "readonly" | "custom";
+
+export type ToolKind = "read" | "draftWrite" | "liveWrite";
+
+export interface AvailableTool {
+  name: string;
+  description: string;
+  kind: ToolKind;
+}
+
+export interface ToolModePayload {
+  toolMode: ToolMode;
+  /** Only populated when toolMode === "custom". */
+  enabledTools: string[] | null;
+  availableTools: AvailableTool[];
 }
 
 /**

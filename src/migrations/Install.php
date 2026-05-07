@@ -34,6 +34,9 @@ class Install extends Migration
             'stopRequested' => $this->boolean()->notNull()->defaultValue(false),
             'title' => $this->string()->null(),
             'userId' => $this->integer()->null(),
+            'toolMode' => $this->string(16)->notNull()->defaultValue('full'),
+            // JSON-encoded list<string> of tool names; only set when toolMode = 'custom'.
+            'enabledTools' => $this->text()->null(),
             'dateCreated' => $this->dateTime()->notNull(),
             'dateUpdated' => $this->dateTime()->notNull(),
             'uid' => $this->uid(),

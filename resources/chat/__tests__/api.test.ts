@@ -228,6 +228,135 @@ describe("ChatApi.sendMessage", () => {
   });
 });
 
+describe("ChatApi.fetchToolMode", () => {
+  test("appends sessionId to the URL and returns the parsed payload", async () => {
+    let capturedUrl = "";
+    const api = new ChatApi({
+      messagesUrl: "http://localhost/messages",
+      sendUrl: "http://localhost/send",
+      assetsInfoUrl: "http://localhost/assets/info",
+      toolModeUrl: "http://localhost/tool-mode",
+      sessionId: "abc-123",
+      csrfTokenName: "CRAFT_CSRF",
+      csrfTokenValue: "tok",
+      fetchImpl: async (input) => {
+        capturedUrl = String(input);
+        return new Response(
+          JSON.stringify({
+            toolMode: "draft",
+            enabledTools: null,
+            availableTools: [
+              { name: "get_health", description: "Health", kind: "read" },
+            ],
+          }),
+          { status: 200 },
+        );
+      },
+    });
+
+    const payload = await api.fetchToolMode();
+    expect(capturedUrl).toContain("sessionId=abc-123");
+    expect(payload.toolMode).toBe("draft");
+    expect(payload.availableTools).toHaveLength(1);
+    expect(payload.availableTools[0]?.kind).toBe("read");
+  });
+
+  test("falls back to defaults when the response shape is unexpected", async () => {
+    const api = new ChatApi({
+      messagesUrl: "http://localhost/messages",
+      sendUrl: "http://localhost/send",
+      assetsInfoUrl: "http://localhost/assets/info",
+      toolModeUrl: "http://localhost/tool-mode",
+      sessionId: "abc-123",
+      csrfTokenName: "CRAFT_CSRF",
+      csrfTokenValue: "tok",
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ unexpected: true }), { status: 200 }),
+    });
+
+    const payload = await api.fetchToolMode();
+    expect(payload.toolMode).toBe("full");
+    expect(payload.availableTools).toEqual([]);
+  });
+
+  test("throws when the URL is not configured", async () => {
+    const api = new ChatApi({
+      messagesUrl: "http://localhost/messages",
+      sendUrl: "http://localhost/send",
+      assetsInfoUrl: "http://localhost/assets/info",
+      sessionId: "abc-123",
+      csrfTokenName: "CRAFT_CSRF",
+      csrfTokenValue: "tok",
+      fetchImpl: async () => new Response("{}", { status: 200 }),
+    });
+
+    await expect(api.fetchToolMode()).rejects.toThrow(/not configured/);
+  });
+});
+
+describe("ChatApi.updateToolMode", () => {
+  test("posts mode + sessionId, omitting enabledTools for non-custom modes", async () => {
+    let captured: { url: string; init: RequestInit | undefined } = { url: "", init: undefined };
+    const api = new ChatApi({
+      messagesUrl: "http://localhost/messages",
+      sendUrl: "http://localhost/send",
+      assetsInfoUrl: "http://localhost/assets/info",
+      updateToolModeUrl: "http://localhost/update-tool-mode",
+      sessionId: "abc-123",
+      csrfTokenName: "CRAFT_CSRF",
+      csrfTokenValue: "tok",
+      fetchImpl: async (input, init) => {
+        captured = { url: String(input), init };
+        return new Response(
+          JSON.stringify({
+            toolMode: "readonly",
+            enabledTools: null,
+            availableTools: [],
+          }),
+          { status: 200 },
+        );
+      },
+    });
+
+    await api.updateToolMode("readonly", null);
+
+    const body = captured.init?.body as FormData;
+    expect(body.get("sessionId")).toBe("abc-123");
+    expect(body.get("mode")).toBe("readonly");
+    expect(body.get("enabledTools")).toBeNull();
+  });
+
+  test("encodes enabledTools as JSON when posting custom mode", async () => {
+    let captured: { url: string; init: RequestInit | undefined } = { url: "", init: undefined };
+    const api = new ChatApi({
+      messagesUrl: "http://localhost/messages",
+      sendUrl: "http://localhost/send",
+      assetsInfoUrl: "http://localhost/assets/info",
+      updateToolModeUrl: "http://localhost/update-tool-mode",
+      sessionId: "abc-123",
+      csrfTokenName: "CRAFT_CSRF",
+      csrfTokenValue: "tok",
+      fetchImpl: async (input, init) => {
+        captured = { url: String(input), init };
+        return new Response(
+          JSON.stringify({
+            toolMode: "custom",
+            enabledTools: ["get_health"],
+            availableTools: [],
+          }),
+          { status: 200 },
+        );
+      },
+    });
+
+    await api.updateToolMode("custom", ["get_health"]);
+
+    const body = captured.init?.body as FormData;
+    expect(body.get("mode")).toBe("custom");
+    expect(JSON.parse(body.get("enabledTools") as string)).toEqual(["get_health"]);
+  });
+});
+
 describe("ChatApi.fetchAssetInfo", () => {
   test("returns an empty array immediately when no ids are passed", async () => {
     let called = false;

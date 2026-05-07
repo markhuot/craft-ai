@@ -16,6 +16,8 @@ use markhuot\craftai\validators\ExistingSection;
  */
 class GetEntryTypes extends Tool
 {
+    public const KIND = ToolKind::Read;
+
     /**
      * @return list<array<array-key, mixed>>
      */

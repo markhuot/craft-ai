@@ -1,4 +1,11 @@
-import type { Attachment, ChatMessage, MessagesResponse, PreviewRequest } from "./types";
+import type {
+  Attachment,
+  ChatMessage,
+  MessagesResponse,
+  PreviewRequest,
+  ToolMode,
+  ToolModePayload,
+} from "./types";
 
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
@@ -8,6 +15,10 @@ export interface ChatApiOptions {
   assetsInfoUrl: string;
   /** Empty string disables preview-related calls (used by tests/widget). */
   previewRespondUrl?: string;
+  /** Empty string disables tool-mode calls (used by tests). */
+  toolModeUrl?: string;
+  /** Empty string disables tool-mode calls (used by tests). */
+  updateToolModeUrl?: string;
   sessionId: string;
   csrfTokenName: string;
   csrfTokenValue: string;
@@ -98,6 +109,49 @@ export class ChatApi {
     }
   }
 
+  async fetchToolMode(): Promise<ToolModePayload> {
+    if (!this.opts.toolModeUrl) {
+      throw new Error("Tool mode URL is not configured");
+    }
+    const url = new URL(this.opts.toolModeUrl, globalThis.location?.href ?? "http://localhost/");
+    url.searchParams.set("sessionId", this.opts.sessionId);
+    const res = await this.fetchImpl(url.toString(), {
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to fetch tool mode: ${res.status}`);
+    }
+    return parseToolModePayload(await res.json());
+  }
+
+  async updateToolMode(mode: ToolMode, enabledTools: string[] | null): Promise<ToolModePayload> {
+    if (!this.opts.updateToolModeUrl) {
+      throw new Error("Update tool mode URL is not configured");
+    }
+    const body = new FormData();
+    body.append("sessionId", this.opts.sessionId);
+    body.append("mode", mode);
+    if (mode === "custom") {
+      // Always send a JSON-encoded array — even an empty selection — so the
+      // backend can distinguish "user cleared all checkboxes" from "field
+      // missing". Other modes don't need this field at all.
+      body.append("enabledTools", JSON.stringify(enabledTools ?? []));
+    }
+    body.append(this.opts.csrfTokenName, this.opts.csrfTokenValue);
+
+    const res = await this.fetchImpl(this.opts.updateToolModeUrl, {
+      method: "POST",
+      body,
+      headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" },
+      credentials: "same-origin",
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to update tool mode: ${res.status}`);
+    }
+    return parseToolModePayload(await res.json());
+  }
+
   async fetchAssetInfo(ids: number[]): Promise<Attachment[]> {
     if (ids.length === 0) return [];
 
@@ -151,6 +205,46 @@ function parseMessagesResponse(data: unknown): MessagesResponse {
     previewRequest: parsePreviewRequest(obj.previewRequest),
     lastPreviewUrl,
   };
+}
+
+/**
+ * Defensively parse the tool-mode payload. The server is the source of truth
+ * for the available-tools list, so we trust its shape but sanity-check that
+ * the mode value is one we know — an unrecognized mode would otherwise leave
+ * the UI in an unrenderable state.
+ */
+function parseToolModePayload(data: unknown): ToolModePayload {
+  if (typeof data !== "object" || data === null) {
+    return { toolMode: "full", enabledTools: null, availableTools: [] };
+  }
+  const obj = data as Record<string, unknown>;
+  const mode = obj.toolMode;
+  const validModes = ["full", "draft", "readonly", "custom"] as const;
+  const toolMode: ToolMode = (validModes as readonly string[]).includes(mode as string)
+    ? (mode as ToolMode)
+    : "full";
+  const enabledTools =
+    Array.isArray(obj.enabledTools)
+      ? (obj.enabledTools as unknown[]).filter((t): t is string => typeof t === "string")
+      : null;
+  const availableTools = Array.isArray(obj.availableTools)
+    ? (obj.availableTools as unknown[])
+        .filter((t): t is { name: string; description: string; kind: string } =>
+          typeof t === "object" &&
+          t !== null &&
+          typeof (t as Record<string, unknown>).name === "string" &&
+          typeof (t as Record<string, unknown>).description === "string" &&
+          typeof (t as Record<string, unknown>).kind === "string",
+        )
+        .map((t) => ({
+          name: t.name,
+          description: t.description,
+          kind: (t.kind === "read" || t.kind === "draftWrite" || t.kind === "liveWrite"
+            ? t.kind
+            : "liveWrite") as "read" | "draftWrite" | "liveWrite",
+        }))
+    : [];
+  return { toolMode, enabledTools, availableTools };
 }
 
 function parsePreviewRequest(value: unknown): PreviewRequest | null {

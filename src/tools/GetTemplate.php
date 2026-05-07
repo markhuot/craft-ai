@@ -20,6 +20,8 @@ use markhuot\craftai\validators\ExistingTemplate;
  */
 class GetTemplate extends Tool
 {
+    public const KIND = ToolKind::Read;
+
     /**
      * @return array{path: string, absolutePath: string, contents: string}
      */

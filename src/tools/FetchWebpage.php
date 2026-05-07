@@ -18,6 +18,8 @@ use markhuot\craftai\attributes\Description;
  */
 class FetchWebpage extends Tool
 {
+    public const KIND = ToolKind::Read;
+
     public function __construct(
         private readonly ?Client $client = null,
     ) {}

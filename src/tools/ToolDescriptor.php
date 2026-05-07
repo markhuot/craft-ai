@@ -27,6 +27,13 @@ class ToolDescriptor
     public readonly array $annotations;
 
     /**
+     * Side-effect classification. Read by the session-scoped tool-mode filter
+     * (Full / Draft / Read-only) so each mode can include or exclude this tool
+     * without the filter knowing the tool's name.
+     */
+    public readonly ToolKind $kind;
+
+    /**
      * @param class-string<Tool> $toolClass
      */
     public function __construct(
@@ -43,6 +50,7 @@ class ToolDescriptor
             : ($attribute->description ?? self::extractDescription($reflection));
         $this->inputSchema = self::buildInputSchema($reflection);
         $this->annotations = $attribute === null ? [] : $attribute->annotations;
+        $this->kind = $toolClass::KIND;
     }
 
     /**

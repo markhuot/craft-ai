@@ -29,6 +29,8 @@ use markhuot\craftai\records\SessionRecord;
  */
 class GetPreview extends Tool
 {
+    public const KIND = ToolKind::Read;
+
     /**
      * Hard cap on bytes returned to the agent. CP edit pages can render
      * megabytes of HTML; piping all of that into the LLM context burns

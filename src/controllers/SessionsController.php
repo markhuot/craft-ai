@@ -7,10 +7,13 @@ use craft\helpers\StringHelper;
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use craft\db\Query;
+use markhuot\craftai\agent\ClientType;
 use markhuot\craftai\agent\PageContextSerializer;
+use markhuot\craftai\Plugin;
 use markhuot\craftai\queue\AgentJob;
 use markhuot\craftai\records\MessageRecord;
 use markhuot\craftai\records\SessionRecord;
+use markhuot\craftai\tools\ToolDescriptor;
 use yii\web\Response;
 
 class SessionsController extends Controller
@@ -254,6 +257,147 @@ class SessionsController extends Controller
         return $this->redirect(UrlHelper::cpUrl('ai/sessions'));
     }
 
+    /**
+     * Return the current tool-mode selection for a session, plus the list of
+     * tools the user has permission to use on this surface. The chat surface
+     * calls this on mount to populate its permission-mode menu and to
+     * re-hydrate the current selection after a page reload.
+     */
+    public function actionToolMode(): Response
+    {
+        $this->requireAcceptsJson();
+
+        // The CP test harness delivers GET params via body, not query string.
+        // Fall back to body params so production query-param requests and the
+        // test harness both reach the same handler — matching the same
+        // pattern AssetsController uses for its `ids` param.
+        $sessionId = $this->request->getQueryParam('sessionId');
+        if (! is_string($sessionId) || $sessionId === '') {
+            $sessionId = $this->request->getBodyParam('sessionId');
+        }
+        if (! is_string($sessionId) || $sessionId === '') {
+            throw new \yii\web\BadRequestHttpException('sessionId is required.');
+        }
+
+        $client = $this->resolveClientType();
+
+        $session = SessionRecord::findOne(['id' => $sessionId]);
+        if ($session !== null && $session->userId !== null && $session->userId !== $this->currentUserId()) {
+            throw new \yii\web\NotFoundHttpException('Session not found.');
+        }
+
+        return $this->asJson($this->toolModePayload($session, $client));
+    }
+
+    /**
+     * Persist a session's tool-mode selection. Mode must be one of:
+     *  - 'full'      — all allowed tools
+     *  - 'draft'     — Read + DraftWrite (no live-site mutations)
+     *  - 'readonly'  — Read tools only
+     *  - 'custom'    — explicit allowlist passed via `enabledTools`
+     *
+     * This is intentionally per-session, not per-user: each conversation can
+     * pick its own surface. Changes apply on the next actionSend (the running
+     * AgentLoop reads tools once at the top of its run).
+     */
+    public function actionUpdateToolMode(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAcceptsJson();
+
+        $sessionId = $this->request->getRequiredBodyParam('sessionId');
+        $mode = $this->request->getRequiredBodyParam('mode');
+
+        if (! is_string($sessionId) || $sessionId === '' || ! is_string($mode)) {
+            throw new \yii\web\BadRequestHttpException('sessionId and mode must be non-empty strings.');
+        }
+
+        $allowedModes = ['full', 'draft', 'readonly', 'custom'];
+        if (! in_array($mode, $allowedModes, true)) {
+            throw new \yii\web\BadRequestHttpException('mode must be one of: '.implode(', ', $allowedModes));
+        }
+
+        $session = SessionRecord::findOne(['id' => $sessionId]);
+        if ($session === null || ($session->userId !== null && $session->userId !== $this->currentUserId())) {
+            throw new \yii\web\NotFoundHttpException('Session not found.');
+        }
+
+        $enabledTools = null;
+        if ($mode === 'custom') {
+            $rawEnabled = $this->request->getBodyParam('enabledTools');
+            $enabledTools = $this->normalizeEnabledTools($rawEnabled);
+        }
+
+        $session->toolMode = $mode;
+        $session->enabledTools = $enabledTools === null ? null : json_encode($enabledTools, JSON_THROW_ON_ERROR);
+        $session->save();
+
+        return $this->asJson($this->toolModePayload($session, $this->resolveClientType()));
+    }
+
+    /**
+     * Build the JSON payload that powers the front-end permission-mode menu.
+     * Includes the persisted mode + the user's available tool list (post
+     * permission + post client-surface filter), so the UI never offers a
+     * tool the user can't actually run.
+     *
+     * @return array{toolMode: string, enabledTools: list<string>|null, availableTools: list<array{name: string, description: string, kind: string}>}
+     */
+    private function toolModePayload(?SessionRecord $session, ClientType $client): array
+    {
+        $registry = Plugin::getInstance()->getToolRegistry();
+
+        $descriptors = $registry->descriptors(
+            includeCpOnly: $client === ClientType::CP,
+            onlyAllowed: true,
+        );
+
+        $availableTools = array_map(
+            static fn (ToolDescriptor $d): array => [
+                'name' => $d->name,
+                'description' => $d->description,
+                'kind' => $d->kind->value,
+            ],
+            $descriptors,
+        );
+
+        $mode = $session?->toolMode ?? 'full';
+        $enabled = null;
+        if ($mode === 'custom' && $session?->enabledTools !== null && $session->enabledTools !== '') {
+            try {
+                /** @var mixed $decoded */
+                $decoded = json_decode($session->enabledTools, true, 8, JSON_THROW_ON_ERROR);
+                if (is_array($decoded)) {
+                    $enabled = array_values(array_filter($decoded, 'is_string'));
+                }
+            } catch (\JsonException) {
+                // leave as null — corrupt JSON shouldn't break the UI.
+            }
+        }
+
+        return [
+            'toolMode' => $mode,
+            'enabledTools' => $enabled,
+            'availableTools' => $availableTools,
+        ];
+    }
+
+    /**
+     * Identify which surface this request is coming from. The CP chat sees
+     * cpOnly tools (preview pane, fetch_webpage); the front-end widget does
+     * not. Tests and console requests fall through to WIDGET (the more
+     * conservative of the two), since they shouldn't be exposing CP-only
+     * tools to clients that don't have the preview pane mounted.
+     */
+    private function resolveClientType(): ClientType
+    {
+        if (! $this->request instanceof \craft\web\Request) {
+            return ClientType::WIDGET;
+        }
+
+        return $this->request->getIsCpRequest() ? ClientType::CP : ClientType::WIDGET;
+    }
+
     public function actionStop(): Response
     {
         $this->requirePostRequest();
@@ -329,6 +473,64 @@ class SessionsController extends Controller
         ]));
 
         return $this->asJson(['queued' => true]);
+    }
+
+    /**
+     * Accept the user's checkbox selection as either a JSON-encoded array of
+     * strings or a real array. Drops non-strings and tools the user can't
+     * actually use (per ToolRegistry's permission check), so the persisted
+     * allowlist is always meaningful — a checkbox the UI shouldn't have shown
+     * never sneaks through.
+     *
+     * @return list<string>
+     */
+    private function normalizeEnabledTools(mixed $value): array
+    {
+        if ($value === null || $value === '' || $value === []) {
+            return [];
+        }
+
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed === '') {
+                return [];
+            }
+            try {
+                /** @var mixed $decoded */
+                $decoded = json_decode($trimmed, true, 8, JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                return [];
+            }
+            if (! is_array($decoded)) {
+                return [];
+            }
+            $value = $decoded;
+        }
+
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $registry = Plugin::getInstance()->getToolRegistry();
+        $names = [];
+        foreach ($value as $entry) {
+            if (! is_string($entry) || $entry === '') {
+                continue;
+            }
+            // Unknown tools (typos, removed tools, attempts to allow tools
+            // the user shouldn't have access to) are silently dropped here.
+            // Checking describe() first avoids isAllowed() throwing on an
+            // unknown name.
+            if ($registry->describe($entry) === null) {
+                continue;
+            }
+            if (! $registry->isAllowed($entry)) {
+                continue;
+            }
+            $names[] = $entry;
+        }
+
+        return array_values(array_unique($names));
     }
 
     /**

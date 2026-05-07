@@ -53,6 +53,19 @@ class AgentLoop
         $messages = $this->ensureToolResults($this->loadMessages($sessionId));
         $tools = $this->registry->descriptors(onlyAllowed: true);
 
+        // Apply the session-scoped tool-mode filter (Full / Draft / Read-only
+        // / Custom). Read once at the top of run() — the loop's iterations
+        // re-use the same tool list rather than re-reading per turn, so a
+        // mode change mid-run won't take effect until the next actionSend.
+        $session = SessionRecord::findOne(['id' => $sessionId]);
+        if ($session !== null) {
+            $tools = $this->registry->filterByToolMode(
+                $tools,
+                (string) ($session->toolMode ?? 'full'),
+                $session->enabledTools,
+            );
+        }
+
         while (true) {
             if ($this->isStopRequested($sessionId)) {
                 $this->recordStopMarker($sessionId);

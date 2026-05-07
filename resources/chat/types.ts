@@ -1,8 +1,32 @@
+/**
+ * One block inside a tool_result `content` array. Text blocks render as
+ * monospace output; image blocks render the image inline. Mirrors Anthropic's
+ * tool_result content vocabulary so the persisted message and the API payload
+ * stay in lock-step.
+ */
+export type ToolResultContentBlock =
+  | { type: "text"; text: string }
+  | {
+      type: "image";
+      source:
+        | { type: "url"; url: string }
+        | { type: "base64"; media_type: string; data: string };
+    };
+
 export type ContentBlock =
   | { type: "text"; text: string }
   | { type: "thinking"; thinking: string }
   | { type: "tool_use"; id?: string; name: string; input: Record<string, unknown> }
-  | { type: "tool_result"; tool_use_id?: string; content: string; is_error?: boolean }
+  | {
+      type: "tool_result";
+      tool_use_id?: string;
+      /**
+       * Plain string for legacy/text-only tool results; an array of blocks
+       * when the tool returned mixed text + image content (e.g. generate_image).
+       */
+      content: string | ToolResultContentBlock[];
+      is_error?: boolean;
+    }
   | { type: "error"; text: string }
   | { type: string; [key: string]: unknown };
 

@@ -809,12 +809,18 @@ function RenderedBlock({ block }: { block: ContentBlock }) {
     );
   }
   if (block.type === "tool_result") {
-    const b = block as { content: string; is_error?: boolean };
+    const b = block as {
+      content: string | Array<{ type: string; [key: string]: unknown }>;
+      is_error?: boolean;
+    };
     return (
       <Tool defaultOpen={b.is_error}>
         <ToolHeader name="Tool result" status={b.is_error ? "error" : "complete"} />
         <ToolContent>
-          <ToolOutput output={b.content} isError={b.is_error} />
+          <ToolOutput
+            output={b.content as Parameters<typeof ToolOutput>[0]["output"]}
+            isError={b.is_error}
+          />
         </ToolContent>
       </Tool>
     );

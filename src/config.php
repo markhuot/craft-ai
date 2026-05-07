@@ -31,4 +31,40 @@ return [
     // OpenAI provider at OpenAI-compatible endpoints (Azure OpenAI, Groq, Together,
     // OpenRouter, Ollama, LM Studio, etc.). Example: 'https://api.groq.com/openai'
     'baseUrl' => null,
+
+    // Image generation providers. Each key registered here adds the matching
+    // tool to the agent's tool list — leave a key out to keep its tool hidden
+    // from the model entirely. Multiple providers may be enabled at once; the
+    // agent will choose between the registered tools based on the prompt.
+    //
+    // Tools registered:
+    //   'openai' => generate_image_gpt_image (gpt-image-1 / dall-e-3)
+    //   'gemini' => generate_image_nano_banana (gemini-2.5-flash-image)
+    'imageProviders' => [
+        // 'openai' => [
+        //     // OpenAI API key. Read from env in real projects:
+        //     // getenv('OPENAI_API_KEY').
+        //     'apiKey' => null,
+        //
+        //     // Optional base URL override. Most users leave this null and
+        //     // hit api.openai.com directly. Image generation is OpenAI-only;
+        //     // there is no equivalent on Azure / Groq / etc., so a baseUrl
+        //     // override here only makes sense for self-hosted compat shims.
+        //     'baseUrl' => null,
+        // ],
+
+        // 'gemini' => [
+        //     // Google AI Studio / Gemini API key. Read from env in real
+        //     // projects: getenv('GEMINI_API_KEY').
+        //     'apiKey' => null,
+        //
+        //     // Gemini image-capable model. 'gemini-2.5-flash-image' (the
+        //     // "Nano Banana" model) is the default and current GA model.
+        //     'model' => 'gemini-2.5-flash-image',
+        //
+        //     // Optional base URL override. Most users leave this null and
+        //     // hit generativelanguage.googleapis.com directly.
+        //     'baseUrl' => null,
+        // ],
+    ],
 ];

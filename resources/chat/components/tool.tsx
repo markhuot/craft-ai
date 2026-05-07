@@ -1,6 +1,7 @@
 import { type ReactNode, useState } from "react";
 import { ChevronRight, Wrench } from "lucide-react";
 import { cn } from "../lib/utils";
+import type { ToolResultContentBlock } from "../types";
 
 interface ToolProps {
   className?: string;
@@ -118,12 +119,28 @@ export function ToolInput({ input, className }: ToolInputProps) {
 }
 
 interface ToolOutputProps {
-  output: string;
+  /**
+   * Tool result body. New tools always emit a string (the agent renders
+   * any image inline in its own response from the asset url). The array
+   * branch is only kept so legacy persisted sessions — which had an array
+   * with text + image blocks — still display the text portion.
+   */
+  output: string | ToolResultContentBlock[];
   isError?: boolean;
   className?: string;
 }
 
+function flattenLegacyContent(content: string | ToolResultContentBlock[]): string {
+  if (typeof content === "string") return content;
+  return content
+    .filter((b): b is { type: "text"; text: string } => b.type === "text" && typeof b.text === "string")
+    .map((b) => b.text)
+    .join("\n\n");
+}
+
 export function ToolOutput({ output, isError, className }: ToolOutputProps) {
+  const text = flattenLegacyContent(output);
+
   return (
     <div data-slot="tool-output" className={cn("ai:mt-2 ai:space-y-1", className)}>
       <div className="ai:text-[10px] ai:font-medium ai:uppercase ai:tracking-wide ai:text-craftai-muted">
@@ -135,7 +152,7 @@ export function ToolOutput({ output, isError, className }: ToolOutputProps) {
           isError ? "ai:bg-craftai-error-bg" : "ai:bg-slate-50",
         )}
       >
-        {output}
+        {text}
       </pre>
     </div>
   );

@@ -4,6 +4,7 @@ namespace markhuot\craftai\agent\providers;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
+use GuzzleHttp\HandlerStack;
 use markhuot\craftai\tools\ToolDescriptor;
 
 class AnthropicProvider implements LlmProvider
@@ -15,7 +16,20 @@ class AnthropicProvider implements LlmProvider
         private readonly string $model = 'claude-sonnet-4-20250514',
         ?ClientInterface $http = null,
     ) {
-        $this->http = $http ?? new Client([
+        if ($http !== null) {
+            $this->http = $http;
+            return;
+        }
+
+        // Auto-created production client: attach retry middleware so transient
+        // 5xx and connection blips don't bubble up as failed agent turns.
+        // Tests that pass an explicit $http opt out (and can attach retry
+        // themselves via {@see RetryMiddleware::attach} when they want to
+        // exercise it).
+        $stack = HandlerStack::create();
+        RetryMiddleware::attach($stack);
+        $this->http = new Client([
+            'handler' => $stack,
             'base_uri' => 'https://api.anthropic.com/',
             'headers' => [
                 'x-api-key' => $apiKey,

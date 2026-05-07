@@ -190,3 +190,50 @@ it('emits OpenAI tool_calls and role=tool messages when given an Anthropic tool_
         'content' => 'all good',
     ]);
 });
+
+it('flattens an array tool_result to a text-only tool message and drops image content for cross-provider compatibility', function () {
+    // Strict OpenAI-compatible providers (DeepSeek via opencode.ai zen, etc.)
+    // reject array content on tool messages AND on user follow-ups. So once
+    // an image-bearing tool_result lands in history, the safe shape to
+    // forward is text-only on the tool message — the front-end still
+    // renders the image inline from the persisted Anthropic-shaped block,
+    // but the chat model gets a string.
+    $cap = new OpenAiCapture(json_encode([
+        'id' => 'cc_img_1',
+        'choices' => [[
+            'message' => ['role' => 'assistant', 'content' => 'thanks'],
+            'finish_reason' => 'stop',
+        ]],
+    ]));
+
+    $cap->provider->createMessage(messages: [
+        ['role' => 'user', 'content' => [['type' => 'text', 'text' => 'draw me one']]],
+        ['role' => 'assistant', 'content' => [
+            ['type' => 'tool_use', 'id' => 'tu_img', 'name' => 'generate_image_nano_banana', 'input' => []],
+        ]],
+        ['role' => 'user', 'content' => [
+            [
+                'type' => 'tool_result',
+                'tool_use_id' => 'tu_img',
+                'content' => [
+                    ['type' => 'text', 'text' => '{"images":[{"id":42,"url":"https://example.test/cat.png"}]}'],
+                    ['type' => 'image', 'source' => ['type' => 'url', 'url' => 'https://example.test/cat.png']],
+                ],
+            ],
+        ]],
+    ]);
+
+    $sent = json_decode((string) $cap->history[0]['request']->getBody(), true);
+
+    // The tool message is text-only — the JSON payload from the tool, no
+    // image_url part, no array content.
+    expect($sent['messages'][2])->toBe([
+        'role' => 'tool',
+        'tool_call_id' => 'tu_img',
+        'content' => '{"images":[{"id":42,"url":"https://example.test/cat.png"}]}',
+    ]);
+
+    // Crucially, we do NOT emit a follow-up user message with image_url
+    // parts — that's what was breaking DeepSeek's strict deserializer.
+    expect($sent['messages'])->toHaveCount(3);
+});

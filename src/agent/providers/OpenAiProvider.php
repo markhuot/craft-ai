@@ -4,6 +4,7 @@ namespace markhuot\craftai\agent\providers;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
+use GuzzleHttp\HandlerStack;
 use markhuot\craftai\tools\ToolDescriptor;
 
 /**
@@ -21,7 +22,15 @@ class OpenAiProvider implements LlmProvider
         ?ClientInterface $http = null,
         ?string $baseUrl = null,
     ) {
-        $this->http = $http ?? new Client([
+        if ($http !== null) {
+            $this->http = $http;
+            return;
+        }
+
+        $stack = HandlerStack::create();
+        RetryMiddleware::attach($stack);
+        $this->http = new Client([
+            'handler' => $stack,
             'base_uri' => rtrim($baseUrl ?? 'https://api.openai.com', '/').'/',
             'headers' => [
                 'Authorization' => 'Bearer '.$apiKey,
@@ -142,12 +151,19 @@ class OpenAiProvider implements LlmProvider
                     $blockText = $block['text'] ?? '';
                     $userText .= is_string($blockText) ? $blockText : '';
                 } elseif ($type === 'tool_result') {
+                    // Strip non-text blocks (e.g. image content from
+                    // generate_image tools) — strict OpenAI-compatible
+                    // providers like DeepSeek reject array content on tool
+                    // messages and reject array content on user follow-ups
+                    // too, so the safe cross-provider shape is text-only.
+                    // The image is still saved as a Craft asset and the
+                    // tool's text payload contains the asset id + url, so
+                    // the agent can refer back to the image even though
+                    // OpenAI-compat models can't visually re-inspect it.
                     $out[] = [
                         'role' => 'tool',
                         'tool_call_id' => $block['tool_use_id'] ?? '',
-                        'content' => is_string($block['content'] ?? null)
-                            ? $block['content']
-                            : json_encode($block['content'] ?? '', JSON_THROW_ON_ERROR),
+                        'content' => $this->toolResultText($block['content'] ?? ''),
                     ];
                 }
             }
@@ -157,6 +173,35 @@ class OpenAiProvider implements LlmProvider
         }
 
         return $out;
+    }
+
+    /**
+     * Render a tool_result `content` value as plain text. Strings pass
+     * through unchanged; an array of Anthropic-shaped blocks gets its text
+     * blocks concatenated and its non-text blocks (e.g. images) dropped —
+     * see {@see translateMessagesOut} for why.
+     */
+    private function toolResultText(mixed $content): string
+    {
+        if (is_string($content)) {
+            return $content;
+        }
+
+        if (! is_array($content)) {
+            return json_encode($content, JSON_THROW_ON_ERROR);
+        }
+
+        $parts = [];
+        foreach ($content as $block) {
+            if (! is_array($block)) {
+                continue;
+            }
+            if (($block['type'] ?? '') === 'text' && is_string($block['text'] ?? null)) {
+                $parts[] = $block['text'];
+            }
+        }
+
+        return implode("\n\n", $parts);
     }
 
     /**

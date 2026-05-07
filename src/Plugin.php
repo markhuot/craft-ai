@@ -18,7 +18,9 @@ use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\permissions\ToolPermissions;
 use markhuot\craftai\preview\PreviewService;
 use markhuot\craftai\agent\providers\AnthropicProvider;
+use markhuot\craftai\agent\providers\GeminiImageProvider;
 use markhuot\craftai\agent\providers\LlmProvider;
+use markhuot\craftai\agent\providers\OpenAiImageProvider;
 use markhuot\craftai\agent\providers\OpenAiProvider;
 use markhuot\craftai\tools\DeleteAssets;
 use markhuot\craftai\tools\DeleteDrafts;
@@ -27,6 +29,8 @@ use markhuot\craftai\tools\DeleteEntryTypes;
 use markhuot\craftai\tools\DeleteFields;
 use markhuot\craftai\tools\DeleteSections;
 use markhuot\craftai\tools\FetchWebpage;
+use markhuot\craftai\tools\GenerateImageGptImage;
+use markhuot\craftai\tools\GenerateImageNanoBanana;
 use markhuot\craftai\tools\GetAsset;
 use markhuot\craftai\tools\GetDraft;
 use markhuot\craftai\tools\GetPreview;
@@ -115,6 +119,8 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(FetchWebpage::class, cpOnly: true);
         $this->toolRegistry->register(OpenPreview::class, cpOnly: true);
         $this->toolRegistry->register(GetPreview::class, cpOnly: true);
+
+        $this->registerImageTools();
 
         $this->registerContainerBindings();
 
@@ -423,11 +429,11 @@ HTML;
     }
 
     /**
-     * @return array{provider: ?string, apiKey: ?string, model: ?string, smallModel: ?string, system: ?string, baseUrl: ?string, mcpSessionCache: \Closure|string|null}
+     * @return array{provider: ?string, apiKey: ?string, model: ?string, smallModel: ?string, system: ?string, baseUrl: ?string, imageProviders: array<string, array<string, mixed>>, mcpSessionCache: \Closure|string|null}
      */
     public function getSettingsArray(): array
     {
-        /** @var array{provider?: ?string, apiKey?: ?string, model?: ?string, smallModel?: ?string, system?: ?string, baseUrl?: ?string, mcpSessionCache?: \Closure|string|null} $config */
+        /** @var array{provider?: ?string, apiKey?: ?string, model?: ?string, smallModel?: ?string, system?: ?string, baseUrl?: ?string, imageProviders?: array<string, array<string, mixed>>, mcpSessionCache?: \Closure|string|null} $config */
         $config = Craft::$app->getConfig()->getConfigFromFile('craft-ai');
 
         return [
@@ -437,6 +443,7 @@ HTML;
             'smallModel' => $config['smallModel'] ?? null,
             'system' => $config['system'] ?? null,
             'baseUrl' => $config['baseUrl'] ?? null,
+            'imageProviders' => is_array($config['imageProviders'] ?? null) ? $config['imageProviders'] : [],
             'mcpSessionCache' => $config['mcpSessionCache'] ?? null,
         ];
     }
@@ -510,5 +517,97 @@ HTML;
             $this->toolRegistry,
             Craft::$container->get(ToolContext::class),
         ));
+
+        $this->bindImageProviders();
+    }
+
+    /**
+     * Read `imageProviders` from config and register the matching tool for
+     * each entry. Tools register only when their provider is configured —
+     * so a site that only sets `openai` won't expose `generate_image_nano_banana`
+     * to the agent at all (no opportunity for the model to call a tool that
+     * would fail on missing credentials).
+     */
+    private function registerImageTools(): void
+    {
+        $settings = $this->getSettingsArray();
+        $providers = $settings['imageProviders'];
+
+        if (isset($providers['openai'])) {
+            $this->toolRegistry->register(GenerateImageGptImage::class);
+        }
+        if (isset($providers['gemini'])) {
+            $this->toolRegistry->register(GenerateImageNanoBanana::class);
+        }
+    }
+
+    /**
+     * Bind the per-provider image clients. Each binding is conditional on the
+     * matching `imageProviders.<key>` entry being present and complete; a
+     * missing or incomplete entry throws when the container resolves the
+     * binding (which only happens if the corresponding tool is invoked,
+     * since {@see registerImageTools} also gates tool registration on the
+     * config presence).
+     */
+    private function bindImageProviders(): void
+    {
+        Craft::$container->setSingleton(OpenAiImageProvider::class, function (): OpenAiImageProvider {
+            $config = $this->imageProviderConfig('openai');
+
+            return new OpenAiImageProvider(
+                apiKey: $config['apiKey'],
+                baseUrl: $config['baseUrl'] ?? null,
+            );
+        });
+
+        Craft::$container->setSingleton(GeminiImageProvider::class, function (): GeminiImageProvider {
+            $config = $this->imageProviderConfig('gemini');
+
+            return new GeminiImageProvider(
+                apiKey: $config['apiKey'],
+                model: is_string($config['model'] ?? null) ? $config['model'] : 'gemini-2.5-flash-image',
+                baseUrl: $config['baseUrl'] ?? null,
+            );
+        });
+    }
+
+    /**
+     * Pull a single image provider's config out of `imageProviders.<key>`,
+     * raising a clear error when it's missing or incomplete. Tools won't be
+     * registered for missing providers, so this is mainly a guard against a
+     * partially-configured entry (the key exists but apiKey is empty).
+     *
+     * @return array{apiKey: string, model?: ?string, baseUrl?: ?string}
+     */
+    private function imageProviderConfig(string $key): array
+    {
+        $settings = $this->getSettingsArray();
+        $providers = $settings['imageProviders'];
+        $config = $providers[$key] ?? null;
+
+        if (! is_array($config)) {
+            throw new \RuntimeException(
+                "craft-ai: image provider \"{$key}\" is not configured. Add it under "
+                ."imageProviders in config/craft-ai.php.",
+            );
+        }
+
+        $apiKey = $config['apiKey'] ?? null;
+        if (! is_string($apiKey) || $apiKey === '') {
+            throw new \RuntimeException(
+                "craft-ai: image provider \"{$key}\" is missing an apiKey in "
+                ."config/craft-ai.php.",
+            );
+        }
+
+        $resolved = ['apiKey' => $apiKey];
+        if (isset($config['model']) && (is_string($config['model']) || $config['model'] === null)) {
+            $resolved['model'] = $config['model'];
+        }
+        if (isset($config['baseUrl']) && (is_string($config['baseUrl']) || $config['baseUrl'] === null)) {
+            $resolved['baseUrl'] = $config['baseUrl'];
+        }
+
+        return $resolved;
     }
 }

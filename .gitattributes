@@ -1,1 +1,1 @@
-branding/*.mov filter=lfs diff=lfs merge=lfs -text
+branding/*.mp4 filter=lfs diff=lfs merge=lfs -text

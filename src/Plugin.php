@@ -22,6 +22,7 @@ use markhuot\craftai\agent\providers\GeminiImageProvider;
 use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\agent\providers\OpenAiImageProvider;
 use markhuot\craftai\agent\providers\OpenAiProvider;
+use markhuot\craftai\tools\ApplyDraft;
 use markhuot\craftai\tools\DeleteAssets;
 use markhuot\craftai\tools\DeleteDrafts;
 use markhuot\craftai\tools\DeleteEntries;
@@ -98,6 +99,7 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(GetDraft::class);
         $this->toolRegistry->register(GetDrafts::class);
         $this->toolRegistry->register(UpsertDraft::class);
+        $this->toolRegistry->register(ApplyDraft::class);
         $this->toolRegistry->register(GetSections::class);
         $this->toolRegistry->register(UpsertSection::class);
         $this->toolRegistry->register(GetEntryTypes::class);

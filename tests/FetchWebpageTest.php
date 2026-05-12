@@ -145,6 +145,51 @@ it('scrubs stray invalid UTF-8 bytes so json_encode never fails', function () {
     expect(fn () => json_encode($output, JSON_THROW_ON_ERROR))->not->toThrow(\JsonException::class);
 });
 
+it('surfaces a UTF-8 substitution breadcrumb in _notes so the agent sees the recovery', function () {
+    $body = "<html><body><p>Hello \x80 World</p></body></html>";
+    $tool = fetchWebpageWithResponse(new Response(
+        200,
+        ['Content-Type' => 'text/html; charset=UTF-8'],
+        $body,
+    ));
+
+    $output = $tool('https://example.com');
+
+    expect($output)->toBeArray();
+    expect($output['_notes'])->toContain('invalid UTF-8');
+    expect($output['_notes'])->toContain('U+FFFD');
+});
+
+it('omits the UTF-8 breadcrumb when the page is clean', function () {
+    $body = '<html><body><p>All clean</p></body></html>';
+    $tool = fetchWebpageWithResponse(new Response(
+        200,
+        ['Content-Type' => 'text/html; charset=UTF-8'],
+        $body,
+    ));
+
+    $output = $tool('https://example.com');
+
+    expect($output)->toBeArray();
+    expect($output['_notes'])->not->toContain('invalid UTF-8');
+    expect($output['_notes'])->not->toContain('U+FFFD');
+});
+
+it('appends the UTF-8 breadcrumb to error output when the error page itself was malformed', function () {
+    $body = "<html><body><h1>Not Found \xFF\xFE</h1></body></html>";
+    $tool = fetchWebpageWithResponse(new Response(
+        404,
+        ['Content-Type' => 'text/html; charset=UTF-8'],
+        $body,
+    ));
+
+    $output = $tool('https://example.com/missing');
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('404');
+    expect($output->text)->toContain('invalid UTF-8');
+});
+
 it('truncates without splitting a multibyte UTF-8 character', function () {
     // Pad to push the multibyte char (€ = 0xE2 0x82 0xAC) across the 8000-byte
     // truncation boundary. With byte-based substr this would yield a dangling

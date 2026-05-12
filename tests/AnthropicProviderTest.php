@@ -6,6 +6,7 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
 use markhuot\craftai\agent\providers\AnthropicProvider;
+use markhuot\craftai\agent\providers\InvalidMessageEncodingException;
 use markhuot\craftai\tools\GetHealth;
 use markhuot\craftai\tools\ToolDescriptor;
 
@@ -79,6 +80,34 @@ it('parses the response into a ProviderResponse', function () {
     expect($response->id)->toBe('msg_3');
     expect($response->stopReason)->toBe('tool_use');
     expect($response->content[0]['type'])->toBe('tool_use');
+});
+
+it('throws InvalidMessageEncodingException before POSTing a body with invalid UTF-8', function () {
+    $cap = new AnthropicCapture('');
+
+    $invoke = fn () => $cap->provider->createMessage(messages: [
+        ['role' => 'user', 'content' => [
+            ['type' => 'tool_result', 'tool_use_id' => 'tu_anth', 'content' => "bad \x80 byte"],
+        ]],
+    ]);
+
+    expect($invoke)->toThrow(InvalidMessageEncodingException::class);
+    expect($cap->history)->toBeEmpty();
+});
+
+it('names the offending tool_use_id from an Anthropic-shaped tool_result', function () {
+    $cap = new AnthropicCapture('');
+
+    try {
+        $cap->provider->createMessage(messages: [
+            ['role' => 'user', 'content' => [
+                ['type' => 'tool_result', 'tool_use_id' => 'tu_anth_named', 'content' => "bad \xC3\x28 byte"],
+            ]],
+        ]);
+        expect(false)->toBeTrue('expected an exception');
+    } catch (InvalidMessageEncodingException $e) {
+        expect($e->toolUseId)->toBe('tu_anth_named');
+    }
 });
 
 it('defaults stopReason to end_turn when the response omits it', function () {

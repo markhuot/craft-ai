@@ -56,6 +56,8 @@ class OpenAiProvider implements LlmProvider
             );
         }
 
+        MessageEncodingValidator::assertValid($body);
+
         $response = $this->http->request('POST', 'v1/chat/completions', ['json' => $body]);
 
         /** @var array{id: string, choices: list<array{message: array<string, mixed>, finish_reason: string|null}>, usage?: array{prompt_tokens?: int, completion_tokens?: int}} $payload */

@@ -5,6 +5,7 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
+use markhuot\craftai\agent\providers\InvalidMessageEncodingException;
 use markhuot\craftai\agent\providers\OpenAiProvider;
 use markhuot\craftai\tools\GetHealth;
 use markhuot\craftai\tools\ToolDescriptor;
@@ -189,6 +190,44 @@ it('emits OpenAI tool_calls and role=tool messages when given an Anthropic tool_
         'tool_call_id' => 'tu_1',
         'content' => 'all good',
     ]);
+});
+
+it('throws InvalidMessageEncodingException before POSTing a body with invalid UTF-8 in a tool_result', function () {
+    // Empty body — we should never reach the HTTP call, so no response needed.
+    $cap = new OpenAiCapture('');
+
+    $invoke = fn () => $cap->provider->createMessage(messages: [
+        ['role' => 'user', 'content' => [['type' => 'text', 'text' => 'check']]],
+        ['role' => 'assistant', 'content' => [
+            ['type' => 'tool_use', 'id' => 'tu_bad', 'name' => 'fetch_webpage', 'input' => []],
+        ]],
+        ['role' => 'user', 'content' => [
+            ['type' => 'tool_result', 'tool_use_id' => 'tu_bad', 'content' => "page contents \x80 with bad byte"],
+        ]],
+    ]);
+
+    expect($invoke)->toThrow(InvalidMessageEncodingException::class);
+    expect($cap->history)->toBeEmpty();
+});
+
+it('names the offending tool_use_id in the InvalidMessageEncodingException', function () {
+    $cap = new OpenAiCapture('');
+
+    try {
+        $cap->provider->createMessage(messages: [
+            ['role' => 'user', 'content' => [['type' => 'text', 'text' => 'check']]],
+            ['role' => 'assistant', 'content' => [
+                ['type' => 'tool_use', 'id' => 'tu_named', 'name' => 'fetch_webpage', 'input' => []],
+            ]],
+            ['role' => 'user', 'content' => [
+                ['type' => 'tool_result', 'tool_use_id' => 'tu_named', 'content' => "bad \x80 byte"],
+            ]],
+        ]);
+        expect(false)->toBeTrue('expected an exception');
+    } catch (InvalidMessageEncodingException $e) {
+        expect($e->toolUseId)->toBe('tu_named');
+        expect($e->getMessage())->toContain('tu_named');
+    }
 });
 
 it('flattens an array tool_result to a text-only tool message and drops image content for cross-provider compatibility', function () {

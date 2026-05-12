@@ -204,7 +204,7 @@ class ToolRegistry
             return new ToolOutput($e->getMessage(), isError: true);
         }
 
-        return $this->coerce($result);
+        return $this->scrub($name, $this->coerce($result));
     }
 
     /**
@@ -264,6 +264,89 @@ class ToolRegistry
             return new ToolOutput('');
         }
 
-        return new ToolOutput(json_encode($result, JSON_THROW_ON_ERROR));
+        // JSON_INVALID_UTF8_SUBSTITUTE so a bad byte in a nested array doesn't
+        // throw before {@see scrub} ever sees it. The substituted output then
+        // flows through scrub() like any other text payload.
+        return new ToolOutput(json_encode(
+            $result,
+            JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE,
+        ));
+    }
+
+    /**
+     * Final UTF-8 hygiene pass on every tool output. Tools _should_ return
+     * valid UTF-8, but a stray byte from any external source (a fetched page,
+     * a shell command, a third-party SDK) would otherwise survive all the way
+     * to the provider's json_encode and abort the turn. mb_scrub replaces the
+     * bad bytes with U+FFFD so the loop keeps running; the warning log captures
+     * the tool name and byte count so the silent recovery is still observable.
+     *
+     * The image-block `data` field is base64 ASCII, so mb_scrub is a no-op
+     * there — no risk of corrupting binary content.
+     */
+    private function scrub(string $toolName, ToolOutput $output): ToolOutput
+    {
+        $replaced = 0;
+
+        $scrubbedText = self::scrubString($output->text, $replaced);
+
+        $scrubbedBlocks = null;
+        if ($output->blocks !== null) {
+            $scrubbedBlocks = [];
+            foreach ($output->blocks as $block) {
+                /** @var array<string, mixed> $scrubbedBlock */
+                $scrubbedBlock = self::scrubArray($block, $replaced);
+                $scrubbedBlocks[] = $scrubbedBlock;
+            }
+        }
+
+        if ($replaced > 0) {
+            Craft::warning(
+                "Tool {$toolName} returned {$replaced} invalid UTF-8 byte(s); replaced with U+FFFD.",
+                __METHOD__,
+            );
+        }
+
+        if ($replaced === 0) {
+            return $output;
+        }
+
+        return new ToolOutput(
+            text: $scrubbedText,
+            isError: $output->isError,
+            blocks: $scrubbedBlocks,
+        );
+    }
+
+    private static function scrubString(string $value, int &$replaced): string
+    {
+        if (mb_check_encoding($value, 'UTF-8')) {
+            return $value;
+        }
+
+        $scrubbed = mb_scrub($value, 'UTF-8');
+        // strlen() is byte-length here, which is what we want for "bad byte
+        // count" — substitution can change the byte length so this is a rough
+        // signal, not a precise diff. Good enough for an observability log.
+        $replaced += max(1, strlen($value) - strlen($scrubbed));
+
+        return $scrubbed;
+    }
+
+    /**
+     * @param array<array-key, mixed> $block
+     * @return array<array-key, mixed>
+     */
+    private static function scrubArray(array $block, int &$replaced): array
+    {
+        foreach ($block as $key => $value) {
+            if (is_string($value)) {
+                $block[$key] = self::scrubString($value, $replaced);
+            } elseif (is_array($value)) {
+                $block[$key] = self::scrubArray($value, $replaced);
+            }
+        }
+
+        return $block;
     }
 }

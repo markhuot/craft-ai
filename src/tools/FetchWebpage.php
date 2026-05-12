@@ -60,16 +60,28 @@ class FetchWebpage extends Tool
 
         $body = (string) $response->getBody();
         $contentType = $response->getHeaderLine('Content-Type');
-        $body = self::normalizeToUtf8($body, $contentType);
+        $normalized = self::normalizeToUtf8($body, $contentType);
+        $body = $normalized['body'];
         $status = $response->getStatusCode();
 
         $output = $fullHtml ? $body : self::extractText($body);
+
+        // Belt and suspenders: extractText runs regex/strip_tags on the
+        // scrubbed body, and a buggy entity decode could re-introduce a stray
+        // byte. Scrub the post-processed output too and roll its replacement
+        // count into the same breadcrumb.
+        $output = mb_scrub($output, 'UTF-8');
+
+        $encodingNote = self::encodingBreadcrumb($normalized['replacedBytes'], $normalized['sourceEncoding']);
 
         if ($status >= 400) {
             $message = "HTTP {$status} fetching {$url}";
             $snippet = self::truncate($output, 8000);
             if ($snippet !== '') {
                 $message .= "\n\n".$snippet;
+            }
+            if ($encodingNote !== '') {
+                $message .= "\n\n".$encodingNote;
             }
 
             return new ToolOutput($message, isError: true);
@@ -79,6 +91,9 @@ class FetchWebpage extends Tool
         $bytes = strlen($output);
         $contentTypeForNote = $contentType !== '' ? $contentType : 'unknown';
         $notes = "Fetched {$bytes} bytes of {$format} from {$url} (HTTP {$status}, Content-Type: {$contentTypeForNote}). Re-fetch with fullHtml=true to see raw markup including scripts/styles.";
+        if ($encodingNote !== '') {
+            $notes .= ' '.$encodingNote;
+        }
 
         return [
             '_notes' => $notes,
@@ -90,6 +105,19 @@ class FetchWebpage extends Tool
                 'content' => $output,
             ],
         ];
+    }
+
+    private static function encodingBreadcrumb(int $replacedBytes, string $sourceEncoding): string
+    {
+        if ($replacedBytes <= 0) {
+            return '';
+        }
+
+        $sourceClause = $sourceEncoding !== '' && strcasecmp($sourceEncoding, 'UTF-8') !== 0
+            ? " (page was declared as {$sourceEncoding})"
+            : '';
+
+        return "Note: {$replacedBytes} byte(s) of invalid UTF-8 from the source page were replaced with U+FFFD{$sourceClause}.";
     }
 
     private static function truncate(string $text, int $limit): string
@@ -106,8 +134,15 @@ class FetchWebpage extends Tool
      * output via json_encode(JSON_THROW_ON_ERROR) and Anthropic/OpenAI APIs
      * expect UTF-8, so a page served as Windows-1252 (or with stray invalid
      * bytes) would otherwise kill the entire turn.
+     *
+     * Returns the scrubbed body plus a count of bytes that needed substitution
+     * (after any source-encoding conversion). The caller renders that count
+     * into the tool's `_notes` so the agent sees a visible breadcrumb rather
+     * than silently mangled content.
+     *
+     * @return array{body: string, replacedBytes: int, sourceEncoding: string}
      */
-    private static function normalizeToUtf8(string $body, string $contentType): string
+    private static function normalizeToUtf8(string $body, string $contentType): array
     {
         $encoding = self::detectEncodingFromHeader($contentType)
             ?? self::detectEncodingFromHtml($body)
@@ -120,7 +155,24 @@ class FetchWebpage extends Tool
             }
         }
 
-        return mb_scrub($body, 'UTF-8');
+        $preLength = strlen($body);
+        $isValidBeforeScrub = mb_check_encoding($body, 'UTF-8');
+        $scrubbed = mb_scrub($body, 'UTF-8');
+
+        // mb_scrub replaces each bad byte with U+FFFD (3 bytes), so the byte
+        // count can grow. Use the symmetric difference, then clamp to >=1 when
+        // we know something was invalid — so a same-length substitution still
+        // surfaces in the breadcrumb.
+        $replacedBytes = abs($preLength - strlen($scrubbed));
+        if (! $isValidBeforeScrub && $replacedBytes === 0) {
+            $replacedBytes = 1;
+        }
+
+        return [
+            'body' => $scrubbed,
+            'replacedBytes' => $replacedBytes,
+            'sourceEncoding' => $encoding,
+        ];
     }
 
     private static function detectEncodingFromHeader(string $contentType): ?string

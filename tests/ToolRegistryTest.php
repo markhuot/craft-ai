@@ -32,6 +32,42 @@ class ToolRegistryThrowingFixture extends Tool
     }
 }
 
+/** Returns a string with a stray invalid UTF-8 byte. */
+class ToolRegistryBadBytesFixture extends Tool
+{
+    public function __invoke(): string
+    {
+        return "Hello \x80 World";
+    }
+}
+
+/** Returns a ToolOutput whose structured blocks contain invalid UTF-8 in a nested string. */
+class ToolRegistryBadBlocksFixture extends Tool
+{
+    public function __invoke(): ToolOutput
+    {
+        return new ToolOutput(
+            text: 'fallback',
+            blocks: [
+                ['type' => 'text', 'text' => "Bad \xC3\x28 byte"],
+                ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => 'image/png', 'data' => 'iVBORw0KGgo=']],
+            ],
+        );
+    }
+}
+
+/** Returns a nested array (not a ToolOutput) with bad bytes — exercises the coerce path. */
+class ToolRegistryBadArrayFixture extends Tool
+{
+    public function __invoke(): array
+    {
+        return [
+            '_notes' => 'ok',
+            'data' => ['content' => "before \x80 after"],
+        ];
+    }
+}
+
 it('registers a tool and lists its descriptor', function () {
     $registry = new ToolRegistry();
     $registry->register(GetHealth::class);
@@ -120,6 +156,103 @@ it('catches exceptions thrown by tools and returns an error ToolOutput', functio
 
     expect($output->isError)->toBeTrue();
     expect($output->text)->toBe('boom');
+});
+
+it('scrubs invalid UTF-8 from a tool that returns a string with bad bytes', function () {
+    $registry = new ToolRegistry();
+    $registry->register(ToolRegistryBadBytesFixture::class);
+
+    $output = $registry->execute('tool_registry_bad_bytes_fixture', []);
+
+    expect($output->isError)->toBeFalse();
+    expect(mb_check_encoding($output->text, 'UTF-8'))->toBeTrue();
+    expect(fn () => json_encode($output->text, JSON_THROW_ON_ERROR))->not->toThrow(\JsonException::class);
+});
+
+it('scrubs invalid UTF-8 inside nested blocks and preserves base64 image data', function () {
+    $registry = new ToolRegistry();
+    $registry->register(ToolRegistryBadBlocksFixture::class);
+
+    $output = $registry->execute('tool_registry_bad_blocks_fixture', []);
+
+    expect($output->blocks)->not->toBeNull();
+    expect(mb_check_encoding($output->blocks[0]['text'], 'UTF-8'))->toBeTrue();
+    // Base64 ASCII passes through unchanged — mb_scrub on ASCII is a no-op.
+    expect($output->blocks[1]['source']['data'])->toBe('iVBORw0KGgo=');
+    expect(fn () => json_encode($output->blocks, JSON_THROW_ON_ERROR))->not->toThrow(\JsonException::class);
+});
+
+it('scrubs invalid UTF-8 when a tool returns a plain array (coerced through json_encode)', function () {
+    $registry = new ToolRegistry();
+    $registry->register(ToolRegistryBadArrayFixture::class);
+
+    $output = $registry->execute('tool_registry_bad_array_fixture', []);
+
+    expect($output->isError)->toBeFalse();
+    expect(mb_check_encoding($output->text, 'UTF-8'))->toBeTrue();
+    // The coerced JSON should still be parseable and contain the placeholder
+    // where the bad byte was substituted.
+    $decoded = json_decode($output->text, true);
+    expect($decoded['data']['content'])->toContain("\u{FFFD}");
+});
+
+it('emits a Craft warning that names the tool when scrubbing fires', function () {
+    $registry = new ToolRegistry();
+    $registry->register(ToolRegistryBadBytesFixture::class);
+
+    // Hold the logger buffer so messages don't auto-flush to targets and
+    // disappear before we can inspect them. flushInterval=10000 is well above
+    // anything a single test will produce.
+    $logger = Craft::getLogger();
+    $previousInterval = $logger->flushInterval;
+    $logger->flushInterval = 10000;
+    $logger->messages = [];
+
+    try {
+        $registry->execute('tool_registry_bad_bytes_fixture', []);
+
+        $messages = $logger->messages;
+        $hasWarning = false;
+        foreach ($messages as $entry) {
+            // Yii log entries are [text, level, category, timestamp, traces, memory].
+            if (is_string($entry[0])
+                && str_contains($entry[0], 'tool_registry_bad_bytes_fixture')
+                && str_contains($entry[0], 'invalid UTF-8')) {
+                $hasWarning = true;
+                break;
+            }
+        }
+
+        expect($hasWarning)->toBeTrue();
+    } finally {
+        $logger->flushInterval = $previousInterval;
+    }
+});
+
+it('does not warn when the tool output is already clean UTF-8', function () {
+    $registry = new ToolRegistry();
+    $registry->register(ToolRegistryEchoFixture::class);
+
+    $logger = Craft::getLogger();
+    $previousInterval = $logger->flushInterval;
+    $logger->flushInterval = 10000;
+    $logger->messages = [];
+
+    try {
+        $registry->execute('tool_registry_echo_fixture', ['message' => 'hi', 'repeat' => 1]);
+
+        $hadUtfWarning = false;
+        foreach ($logger->messages as $entry) {
+            if (is_string($entry[0]) && str_contains($entry[0], 'invalid UTF-8')) {
+                $hadUtfWarning = true;
+                break;
+            }
+        }
+
+        expect($hadUtfWarning)->toBeFalse();
+    } finally {
+        $logger->flushInterval = $previousInterval;
+    }
 });
 
 function descriptorsForToolModeTest(): array

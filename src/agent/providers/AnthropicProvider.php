@@ -59,6 +59,8 @@ class AnthropicProvider implements LlmProvider
             $body['system'] = $system;
         }
 
+        MessageEncodingValidator::assertValid($body);
+
         $response = $this->http->request('POST', 'v1/messages', ['json' => $body]);
 
         /** @var array{id: string, content: list<array<string, mixed>>, stop_reason: string|null, usage?: array{input_tokens?: int, output_tokens?: int}} $payload */

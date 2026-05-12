@@ -134,6 +134,52 @@ it('emits the MCP-shaped tool definition with inputSchema (camelCase)', function
     expect($tool['name'])->toBe('get_health');
 });
 
+it('schemas associative array params as JSON object based on @param shape', function () {
+    // `array<string, mixed>` in the docblock means a string-keyed map, so the
+    // JSON Schema type must be `object` — strict MCP validators reject `array`
+    // when callers send `{...}`.
+    $fixture = new class extends Tool {
+        /**
+         * @param  array<string, mixed>|null  $settings
+         * @param  list<int>|null  $ids
+         * @param  array|null  $loose
+         */
+        public function __invoke(
+            ?array $settings = null,
+            ?array $ids = null,
+            ?array $loose = null,
+        ): string {
+            return 'ok';
+        }
+    };
+
+    $props = (new ToolDescriptor($fixture::class))->inputSchema['properties'];
+
+    expect($props['settings']['type'])->toBe('object');
+    expect($props['ids']['type'])->toBe('array');
+    expect($props['loose']['type'])->toBe('array');
+});
+
+it('schemas list-shaped params as JSON array even when the PHP type is array', function () {
+    $fixture = new class extends Tool {
+        /**
+         * @param  list<string>  $tags
+         * @param  array<int, string>  $names
+         */
+        public function __invoke(
+            array $tags = [],
+            array $names = [],
+        ): string {
+            return 'ok';
+        }
+    };
+
+    $props = (new ToolDescriptor($fixture::class))->inputSchema['properties'];
+
+    expect($props['tags']['type'])->toBe('array');
+    expect($props['names']['type'])->toBe('array');
+});
+
 it('serializes empty MCP tool properties as a JSON object, not an array', function () {
     // The MCP spec requires inputSchema.properties to be an object map. Claude
     // Code's Zod validator rejects `properties: []` with "expected record,

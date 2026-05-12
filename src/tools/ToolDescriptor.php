@@ -111,8 +111,10 @@ class ToolDescriptor
         /** @var list<string> $required */
         $required = [];
 
+        $docParamTypes = self::extractDocblockParamTypes($method);
+
         foreach ($method->getParameters() as $param) {
-            $schema = self::parameterToJsonSchema($param);
+            $schema = self::parameterToJsonSchema($param, $docParamTypes[$param->getName()] ?? null);
             if ($schema === null) {
                 continue;
             }
@@ -134,7 +136,7 @@ class ToolDescriptor
     /**
      * @return array<string, mixed>|null
      */
-    private static function parameterToJsonSchema(ReflectionParameter $param): ?array
+    private static function parameterToJsonSchema(ReflectionParameter $param, ?string $docParamType = null): ?array
     {
         $type = $param->getType();
 
@@ -147,8 +149,8 @@ class ToolDescriptor
                 if ($unionType->getName() === 'null') {
                     continue;
                 }
-                $variant = self::namedTypeToSchema($unionType);
-                if ($variant['type'] === 'object') {
+                $variant = self::namedTypeToSchema($unionType, $docParamType);
+                if ($variant['type'] === 'object' && $unionType->getName() !== 'array') {
                     continue;
                 }
                 $variants[] = $variant;
@@ -160,8 +162,8 @@ class ToolDescriptor
 
             $schema = count($variants) === 1 ? $variants[0] : ['oneOf' => $variants];
         } elseif ($type instanceof ReflectionNamedType) {
-            $schema = self::namedTypeToSchema($type);
-            if ($schema['type'] === 'object') {
+            $schema = self::namedTypeToSchema($type, $docParamType);
+            if ($schema['type'] === 'object' && $type->getName() !== 'array') {
                 return null;
             }
         } else {
@@ -186,16 +188,85 @@ class ToolDescriptor
     /**
      * @return array{type: string}
      */
-    private static function namedTypeToSchema(ReflectionNamedType $type): array
+    private static function namedTypeToSchema(ReflectionNamedType $type, ?string $docParamType = null): array
     {
         return match ($type->getName()) {
             'string' => ['type' => 'string'],
             'int' => ['type' => 'integer'],
             'float' => ['type' => 'number'],
             'bool' => ['type' => 'boolean'],
-            'array' => ['type' => 'array'],
+            'array' => ['type' => self::resolveArrayShape($docParamType)],
             default => ['type' => 'object'],
         };
+    }
+
+    /**
+     * PHP `array` is overloaded — it covers both JSON arrays (numeric keys) and
+     * JSON objects (string keys). Strict MCP schema validators reject the wrong
+     * shape, so we disambiguate from the `@param` docblock: `array<string, …>`
+     * is an object, `list<…>` and `array<int, …>` are arrays. Plain `array`
+     * with no shape hint stays a JSON array to preserve historical behavior.
+     */
+    private static function resolveArrayShape(?string $docParamType): string
+    {
+        if ($docParamType === null) {
+            return 'array';
+        }
+
+        $normalized = trim($docParamType);
+        // Strip leading nullable marker so we look at the inner shape.
+        $normalized = ltrim($normalized, '?');
+
+        foreach (preg_split('/\s*\|\s*/', $normalized) ?: [$normalized] as $variant) {
+            $variant = trim($variant);
+            if ($variant === '' || $variant === 'null') {
+                continue;
+            }
+            if (preg_match('/^array<\s*string\b/i', $variant) === 1) {
+                return 'object';
+            }
+        }
+
+        return 'array';
+    }
+
+    /**
+     * Parse the method's docblock into a map of `param-name => raw-type-string`.
+     * Returns an empty map when the docblock is absent or malformed — the
+     * caller falls back to PHP type info in that case.
+     *
+     * @return array<string, string>
+     */
+    private static function extractDocblockParamTypes(\ReflectionMethod $method): array
+    {
+        $docComment = $method->getDocComment();
+        if ($docComment === false) {
+            return [];
+        }
+
+        try {
+            $docBlock = DocBlockFactory::createInstance()->create($docComment);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $types = [];
+        foreach ($docBlock->getTagsByName('param') as $tag) {
+            if (! method_exists($tag, 'getVariableName') || ! method_exists($tag, 'getType')) {
+                continue;
+            }
+            $name = $tag->getVariableName();
+            if (! is_string($name) || $name === '') {
+                continue;
+            }
+            $type = $tag->getType();
+            if ($type === null) {
+                continue;
+            }
+            $types[$name] = (string) $type;
+        }
+
+        return $types;
     }
 
     /**

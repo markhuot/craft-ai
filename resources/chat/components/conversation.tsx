@@ -10,7 +10,7 @@ export function Conversation({ className, children, ...rest }: ConversationProps
   return (
     <div
       data-slot="conversation"
-      className={cn("ai:relative ai:flex ai:h-full ai:max-h-[70vh] ai:flex-1 ai:flex-col ai:overflow-hidden", className)}
+      className={cn("ai:relative ai:flex ai:h-full ai:min-h-0 ai:flex-1 ai:flex-col ai:overflow-hidden", className)}
       {...rest}
     >
       {children}

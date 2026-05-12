@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { Chat } from "./Chat";
 import type { ChatBootstrap, SessionListItem } from "./types";
@@ -25,6 +25,29 @@ export function Shell({ bootstrap, pollIntervalMs = 10000 }: ShellProps) {
 
   const expandDesktopSidebar = useCallback(() => setDesktopSidebarCollapsed(false), []);
   const collapseDesktopSidebar = useCallback(() => setDesktopSidebarCollapsed(true), []);
+
+  // Pin the shell's height to the viewport from wherever it lands in the CP
+  // page. We measure the rendered top edge once on mount instead of guessing
+  // at Craft's chrome height — CP header rows, contextual notices, and tabs
+  // all shift the chat's top and a hardcoded offset would mis-fit at least
+  // one of them.
+  //
+  // The measurement is intentionally one-shot. The CP body is taller than
+  // the viewport (Craft renders a global footer below #content), so any
+  // listener watching for layout changes — ResizeObserver on body, scroll
+  // handlers, even window resize — risks re-reading `top` after the page
+  // has scrolled, which yields a negative value and a wildly wrong height.
+  // A reload picks up genuine viewport changes; that's a fair trade for
+  // never seeing the chat jitter as the user scrolls.
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const el = shellRef.current;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    // 16px of bottom breathing room so the prompt input doesn't kiss the
+    // viewport edge on shorter screens.
+    el.style.setProperty("--craftai-shell-height", `calc(100dvh - ${top}px - 16px)`);
+  }, []);
 
   const fetchSessions = useCallback(async () => {
     try {
@@ -74,7 +97,10 @@ export function Shell({ bootstrap, pollIntervalMs = 10000 }: ShellProps) {
   }
 
   return (
-    <div className="ai:flex ai:gap-4 ai:items-stretch">
+    <div
+      ref={shellRef}
+      className="craftai-shell ai:flex ai:gap-4 ai:items-stretch ai:overflow-hidden"
+    >
       <div
         data-testid="sidebar-backdrop"
         aria-hidden="true"
@@ -100,7 +126,7 @@ export function Shell({ bootstrap, pollIntervalMs = 10000 }: ShellProps) {
         onDesktopCollapse={collapseDesktopSidebar}
       />
 
-      <main className="ai:flex-1 ai:min-w-0 ai:flex ai:flex-col ai:gap-3">
+      <main className="ai:flex-1 ai:min-w-0 ai:min-h-0 ai:flex ai:flex-col ai:gap-3">
         <button
           type="button"
           data-testid="sidebar-toggle"
@@ -195,15 +221,17 @@ export function SessionsSidebar({
         data-desktop-collapsed={desktopCollapsed ? "true" : "false"}
         aria-label="Sessions"
         className={
-          "ai:flex ai:flex-col ai:gap-3 ai:bg-craftai-bg ai:transition-transform " +
+          "ai:flex ai:min-h-0 ai:flex-col ai:gap-3 ai:bg-craftai-bg ai:transition-transform " +
           // Mobile: fixed-position drawer that slides in from the left. The
           // mobile drawer ignores desktopCollapsed — that's a desktop-only
           // concern. On mobile we want the drawer behavior unchanged.
-          "ai:fixed ai:inset-y-0 ai:left-0 ai:z-50 ai:w-64 ai:p-4 ai:border-r ai:border-craftai-border ai:overflow-y-auto " +
+          "ai:fixed ai:inset-y-0 ai:left-0 ai:z-50 ai:w-64 ai:p-4 ai:border-r ai:border-craftai-border " +
           (isOpen ? "ai:translate-x-0" : "ai:-translate-x-full") +
           // Desktop: inline column, unless collapsed in which case we hand
-          // off to the thin strip below.
-          " ai:md:static ai:md:translate-x-0 ai:md:p-0 ai:md:border-0 ai:md:overflow-visible ai:md:shrink-0" +
+          // off to the thin strip below. The session list inside scrolls;
+          // the aside itself stays clipped so the New Session button and
+          // collapse toggle stay pinned at the top.
+          " ai:md:static ai:md:translate-x-0 ai:md:p-0 ai:md:border-0 ai:md:shrink-0" +
           (desktopCollapsed ? " ai:md:hidden" : "")
         }
       >
@@ -247,7 +275,10 @@ export function SessionsSidebar({
         {sessions.length === 0 ? (
           <p className="ai:text-xs ai:text-craftai-muted">No sessions yet.</p>
         ) : (
-          <ul className="ai:flex ai:flex-col ai:gap-1 ai:list-none ai:p-0 ai:m-0">
+          <ul
+            data-testid="sessions-list"
+            className="ai:flex ai:flex-1 ai:min-h-0 ai:flex-col ai:gap-1 ai:list-none ai:overflow-y-auto ai:p-0 ai:m-0"
+          >
             {sessions.map((s) => (
               <SessionRow
                 key={s.sessionId}

@@ -34,13 +34,13 @@
 }
 
 /*
- * In the expanded preview overlay the chat column owns the full viewport
- * height. The default 70vh cap on the conversation is right for the in-page
- * chat (where the page is naturally taller than the chat), but inside the
- * fixed-position overlay it leaves a gap below the prompt input. Lifting
- * the cap here lets the conversation grow flex-1 and pins the prompt to
- * the bottom of the column.
+ * Pin the in-page chat shell to the viewport so the sessions sidebar and
+ * transcript share one frame instead of growing the CP page taller and
+ * taller as sessions accumulate. The inline `height` is computed at mount
+ * from the shell's measured top edge — `--craftai-shell-height` is just the
+ * fallback for the first paint before that runs.
  */
-[data-preview-mode="expanded"] [data-slot="conversation"] {
-  max-height: none;
+.craftai-shell {
+  height: var(--craftai-shell-height, calc(100dvh - 200px));
+  min-height: 320px;
 }

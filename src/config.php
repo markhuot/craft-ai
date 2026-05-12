@@ -79,4 +79,53 @@ return [
         //     'baseUrl' => null,
         // ],
     ],
+
+    // Web search providers powering the `search_the_web` tool. Both backends
+    // are keyless HTML scrapers, so the tool is registered by default with
+    // `brave` as the primary backend and `duckduckgo` available as a fallback
+    // the agent can pick via the tool's `provider` argument.
+    //
+    // (Note: Google and Bing both moved to JS-only rendering in 2025 and can
+    //  no longer be scraped without a headless browser. Brave Search runs its
+    //  own independent index and is the highest-quality keyless option that
+    //  still serves server-rendered HTML.)
+    //
+    //   'brave'      => parses search.brave.com. Independent index, high-
+    //                   quality results, server-rendered HTML. Brave also
+    //                   offers a paid JSON API (api.search.brave.com) if you
+    //                   need more reliability than scraping provides.
+    //   'duckduckgo' => parses html.duckduckgo.com. Stable, lower-quality
+    //                   results. A good fallback.
+    //
+    // The block below is documented for completeness; you only need it if
+    // you want to change the default backend, override a baseUrl, or turn
+    // the tool off entirely.
+    //
+    // To disable the tool entirely (so the agent can't call it), set
+    // `searchProviders` to null:
+    //
+    //   'searchProviders' => null,
+    //
+    // Or, equivalently, set the default to null inside the block:
+    //
+    //   'searchProviders' => ['default' => null],
+    //
+    // 'searchProviders' => [
+    //     // Which provider answers a `search_the_web` call that omits the
+    //     // `provider` argument. Defaults to 'brave'.
+    //     'default' => 'brave',
+    //
+    //     // Per-provider config blocks are optional. Provide them only when
+    //     // you want to override a default (e.g. point at a different
+    //     // Brave Search region/locale or self-hosted shim).
+    //     'brave' => [
+    //         // Optional base URL override (defaults to https://search.brave.com).
+    //         'baseUrl' => null,
+    //     ],
+    //     'duckduckgo' => [
+    //         // Optional base URL override for testing / self-hosted shims
+    //         // that emulate the same HTML response shape.
+    //         'baseUrl' => null,
+    //     ],
+    // ],
 ];

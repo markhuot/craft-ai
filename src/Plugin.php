@@ -18,10 +18,14 @@ use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\permissions\ToolPermissions;
 use markhuot\craftai\preview\PreviewService;
 use markhuot\craftai\agent\providers\AnthropicProvider;
+use markhuot\craftai\agent\providers\BraveSearchProvider;
+use markhuot\craftai\agent\providers\DuckDuckGoSearchProvider;
 use markhuot\craftai\agent\providers\GeminiImageProvider;
 use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\agent\providers\OpenAiImageProvider;
 use markhuot\craftai\agent\providers\OpenAiProvider;
+use markhuot\craftai\agent\providers\SearchProvider;
+use markhuot\craftai\agent\providers\SearchProviderRegistry;
 use markhuot\craftai\tools\ApplyDraft;
 use markhuot\craftai\tools\DeleteAssets;
 use markhuot\craftai\tools\DeleteDrafts;
@@ -48,6 +52,7 @@ use markhuot\craftai\tools\GetTemplate;
 use markhuot\craftai\tools\GetTemplates;
 use markhuot\craftai\tools\GetVolumes;
 use markhuot\craftai\tools\OpenPreview;
+use markhuot\craftai\tools\SearchTheWeb;
 use markhuot\craftai\tools\ToolRegistry;
 use markhuot\craftai\tools\UpsertAsset;
 use markhuot\craftai\tools\UpsertDraft;
@@ -127,6 +132,7 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(GetPreview::class, cpOnly: true);
 
         $this->registerImageTools();
+        $this->registerSearchTools();
 
         $this->registerContainerBindings();
 
@@ -579,6 +585,7 @@ HTML;
         ));
 
         $this->bindImageProviders();
+        $this->bindSearchProviders();
     }
 
     /**
@@ -669,5 +676,180 @@ HTML;
         }
 
         return $resolved;
+    }
+
+    /**
+     * Register the `search_the_web` tool unless the user has explicitly
+     * opted out. Both backing providers are keyless scrapers, so there's no
+     * credential check that would otherwise gate registration — the tool
+     * just works by default.
+     *
+     * Opt-out shapes recognized by {@see resolveSearchProvidersConfig}:
+     *   'searchProviders' => null               // disable entirely
+     *   'searchProviders' => ['default' => null] // same, more explicit
+     */
+    private function registerSearchTools(): void
+    {
+        if (self::resolveSearchProvidersConfig($this->rawConfig()) === null) {
+            return;
+        }
+
+        $this->toolRegistry->register(SearchTheWeb::class);
+    }
+
+    /**
+     * Build the {@see SearchProviderRegistry} singleton. Both keyless
+     * providers register unconditionally; per-provider config (e.g.
+     * `baseUrl` override) is optional. The `default` key picks which
+     * provider answers a `search_the_web` call that omits `provider:`.
+     */
+    private function bindSearchProviders(): void
+    {
+        if (self::resolveSearchProvidersConfig($this->rawConfig()) === null) {
+            return;
+        }
+
+        Craft::$container->setSingleton(SearchProviderRegistry::class, function (): SearchProviderRegistry {
+            $resolved = self::resolveSearchProvidersConfig($this->rawConfig());
+            // The registerSearchTools check guarantees this is non-null, but
+            // re-asserting keeps PHPStan happy and the binding self-contained.
+            if ($resolved === null) {
+                throw new \RuntimeException('craft-ai: search providers are disabled.');
+            }
+
+            $braveConfig = is_array($resolved['brave'] ?? null) ? $resolved['brave'] : [];
+            $ddgConfig = is_array($resolved['duckduckgo'] ?? null) ? $resolved['duckduckgo'] : [];
+
+            /** @var list<SearchProvider> $instances */
+            $instances = [
+                $this->makeBraveSearchProvider($braveConfig),
+                $this->makeDuckDuckGoSearchProvider($ddgConfig),
+            ];
+
+            return new SearchProviderRegistry($instances, $resolved['default']);
+        });
+    }
+
+    /**
+     * Read the raw `craft-ai` config file. Direct access (rather than going
+     * through {@see getSettingsArray}) is what lets the search-provider
+     * resolver distinguish `searchProviders => null` (explicit disable) from
+     * the key being absent (use defaults) — the settings array would collapse
+     * both into the same value.
+     *
+     * @return array<string, mixed>
+     */
+    private function rawConfig(): array
+    {
+        /** @var array<string, mixed> $config */
+        $config = Craft::$app->getConfig()->getConfigFromFile('craft-ai');
+
+        return $config;
+    }
+
+    /**
+     * Resolve the `searchProviders` config block into a normalized shape.
+     * Returns null to signal "tool disabled, don't register"; otherwise
+     * returns the resolved settings with `default` filled in and any unknown
+     * keys rejected.
+     *
+     * Recognized shapes:
+     *   - key absent or non-array      -> use defaults (default = 'google')
+     *   - `null`                       -> disabled
+     *   - array with `default => null` -> disabled
+     *   - array                        -> use as-is with `default => 'google'` default
+     *
+     * @param  array<string, mixed>  $rawConfig  Raw `craft-ai` config file contents.
+     * @return array{default: string, brave?: array<string, mixed>, duckduckgo?: array<string, mixed>}|null
+     */
+    public static function resolveSearchProvidersConfig(array $rawConfig): ?array
+    {
+        $supported = ['brave', 'duckduckgo'];
+
+        // Key absent → use defaults. (We check `array_key_exists` so the
+        // explicit-null case below stays distinguishable.)
+        if (! array_key_exists('searchProviders', $rawConfig)) {
+            return ['default' => 'brave'];
+        }
+
+        $raw = $rawConfig['searchProviders'];
+
+        if ($raw === null) {
+            return null;
+        }
+
+        if (! is_array($raw)) {
+            // Garbage value — be forgiving and treat as defaults rather than
+            // bricking the plugin boot. The example config documents the
+            // valid shapes so this is mostly a typo guard.
+            return ['default' => 'brave'];
+        }
+
+        // Explicit "default => null" is the verbose way to disable, mirroring
+        // the top-level `null`. Useful when the user wants to leave the
+        // `searchProviders` block in place but turn the tool off.
+        if (array_key_exists('default', $raw) && $raw['default'] === null) {
+            return null;
+        }
+
+        $default = $raw['default'] ?? null;
+        if (! is_string($default) || $default === '') {
+            $default = 'brave';
+        }
+
+        if (! in_array($default, $supported, true)) {
+            throw new \RuntimeException(
+                "craft-ai: unknown default search provider \"{$default}\" in "
+                ."config/craft-ai.php. Supported: ".implode(', ', $supported).'.',
+            );
+        }
+
+        // Reject typos in provider keys so a misnamed config block doesn't
+        // silently lose its overrides.
+        $allowedKeys = array_merge(['default'], $supported);
+        foreach (array_keys($raw) as $key) {
+            if (! in_array($key, $allowedKeys, true)) {
+                throw new \RuntimeException(
+                    "craft-ai: unknown search provider \"{$key}\" in "
+                    ."config/craft-ai.php. Supported: ".implode(', ', $supported).'.',
+                );
+            }
+        }
+
+        /** @var array{default: string, brave?: array<string, mixed>, duckduckgo?: array<string, mixed>} $resolved */
+        $resolved = ['default' => $default];
+        foreach ($supported as $name) {
+            if (isset($raw[$name]) && is_array($raw[$name])) {
+                /** @var array<string, mixed> $providerConfig */
+                $providerConfig = $raw[$name];
+                $resolved[$name] = $providerConfig;
+            }
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $config
+     */
+    private function makeBraveSearchProvider(array $config): BraveSearchProvider
+    {
+        $baseUrl = $config['baseUrl'] ?? null;
+
+        return new BraveSearchProvider(
+            baseUrl: is_string($baseUrl) && $baseUrl !== '' ? $baseUrl : null,
+        );
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $config
+     */
+    private function makeDuckDuckGoSearchProvider(array $config): DuckDuckGoSearchProvider
+    {
+        $baseUrl = $config['baseUrl'] ?? null;
+
+        return new DuckDuckGoSearchProvider(
+            baseUrl: is_string($baseUrl) ? $baseUrl : null,
+        );
     }
 }

@@ -22,7 +22,7 @@ use markhuot\craftai\validators\ExistingEntryType;
 class UpsertEntryType extends Tool
 {
     /**
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array<array-key, mixed>}|ToolOutput
      */
     public function __invoke(
         #[Description('Existing entry type ID or handle to update. Omit to create a new entry type.')]
@@ -130,6 +130,16 @@ class UpsertEntryType extends Tool
             );
         }
 
-        return $entryType->toArray();
+        $notes = sprintf(
+            '%s entry type id=%d (handle="%s"). Attach it to a section via upsert_section, and edit its field layout with upsert_field_layout_element.',
+            $isUpdate ? 'Updated' : 'Created',
+            $entryType->id,
+            $entryType->handle,
+        );
+
+        return [
+            '_notes' => $notes,
+            'data' => $entryType->toArray(),
+        ];
     }
 }

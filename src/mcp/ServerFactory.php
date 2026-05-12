@@ -3,6 +3,7 @@
 namespace markhuot\craftai\mcp;
 
 use Mcp\Capability\Registry\ReferenceHandler;
+use Mcp\Schema\ToolAnnotations;
 use Mcp\Server;
 use Mcp\Server\Session\Psr16SessionStore;
 use markhuot\craftai\agent\ToolContext;
@@ -46,11 +47,19 @@ class ServerFactory
         // mcp/sdk reflects __invoke on the class string and instantiates via
         // its container. Our tools extend the same Tool base class the agent
         // loop uses, so the same class powers both surfaces.
+        //
+        // toMcpTool() is the single source of truth for the MCP wire shape —
+        // it handles the empty-properties → object coercion that strict
+        // clients (Claude Code's Zod validator) require, and surfaces tool
+        // annotations like destructiveHint/idempotentHint.
+        $mcp = $descriptor->toMcpTool();
+
         $builder->addTool(
             handler: $descriptor->toolClass,
-            name: $descriptor->name,
-            description: $descriptor->description,
-            inputSchema: $descriptor->inputSchema,
+            name: $mcp['name'],
+            description: $mcp['description'],
+            annotations: isset($mcp['annotations']) ? ToolAnnotations::fromArray($mcp['annotations']) : null,
+            inputSchema: $mcp['inputSchema'],
         );
     }
 }

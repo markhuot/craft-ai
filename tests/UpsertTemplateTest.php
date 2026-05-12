@@ -42,9 +42,10 @@ it('creates a new template at the given path', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload['path'])->toBe('index.twig');
-    expect($payload['size'])->toBe(11);
-    expect($payload['created'])->toBeTrue();
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    expect($payload['data']['path'])->toBe('index.twig');
+    expect($payload['data']['size'])->toBe(11);
+    expect($payload['data']['created'])->toBeTrue();
     expect(file_get_contents($this->tempTemplatesPath.'/index.twig'))->toBe('<h1>Hi</h1>');
 });
 
@@ -58,7 +59,7 @@ it('overwrites an existing template', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload['created'])->toBeFalse();
+    expect($payload['data']['created'])->toBeFalse();
     expect(file_get_contents($this->tempTemplatesPath.'/index.twig'))->toBe('new');
 });
 
@@ -149,7 +150,7 @@ it('writes empty contents when explicitly given', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload['size'])->toBe(0);
+    expect($payload['data']['size'])->toBe(0);
     expect(file_get_contents($this->tempTemplatesPath.'/empty.twig'))->toBe('');
 });
 
@@ -215,6 +216,6 @@ it('returns the resolved absolutePath inside the templates root', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload['absolutePath'])->toStartWith($this->tempTemplatesPath.DIRECTORY_SEPARATOR);
-    expect(realpath($payload['absolutePath']))->toBe($payload['absolutePath']);
+    expect($payload['data']['absolutePath'])->toStartWith($this->tempTemplatesPath.DIRECTORY_SEPARATOR);
+    expect(realpath($payload['data']['absolutePath']))->toBe($payload['data']['absolutePath']);
 });

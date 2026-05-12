@@ -24,12 +24,15 @@ class FetchWebpage extends Tool
         private readonly ?Client $client = null,
     ) {}
 
+    /**
+     * @return array{_notes: string, data: array{url: string, status: int, contentType: string, format: string, content: string}}|ToolOutput
+     */
     public function __invoke(
         #[Description('Absolute URL to fetch (http:// or https://).')]
         string $url,
         #[Description('Return raw HTML instead of extracted plain text.')]
         bool $fullHtml = false,
-    ): ToolOutput {
+    ): array|ToolOutput {
         if (! preg_match('#^https?://#i', $url)) {
             return new ToolOutput('Validation failed: url must start with http:// or https://', isError: true);
         }
@@ -56,6 +59,8 @@ class FetchWebpage extends Tool
         }
 
         $body = (string) $response->getBody();
+        $contentType = $response->getHeaderLine('Content-Type');
+        $body = self::normalizeToUtf8($body, $contentType);
         $status = $response->getStatusCode();
 
         $output = $fullHtml ? $body : self::extractText($body);
@@ -70,7 +75,21 @@ class FetchWebpage extends Tool
             return new ToolOutput($message, isError: true);
         }
 
-        return new ToolOutput($output);
+        $format = $fullHtml ? 'html' : 'text';
+        $bytes = strlen($output);
+        $contentTypeForNote = $contentType !== '' ? $contentType : 'unknown';
+        $notes = "Fetched {$bytes} bytes of {$format} from {$url} (HTTP {$status}, Content-Type: {$contentTypeForNote}). Re-fetch with fullHtml=true to see raw markup including scripts/styles.";
+
+        return [
+            '_notes' => $notes,
+            'data' => [
+                'url' => $url,
+                'status' => $status,
+                'contentType' => $contentType,
+                'format' => $format,
+                'content' => $output,
+            ],
+        ];
     }
 
     private static function truncate(string $text, int $limit): string
@@ -79,7 +98,68 @@ class FetchWebpage extends Tool
             return $text;
         }
 
-        return substr($text, 0, $limit)."\n\n[truncated]";
+        return mb_strcut($text, 0, $limit, 'UTF-8')."\n\n[truncated]";
+    }
+
+    /**
+     * Coerce the response body to valid UTF-8. The agent loop persists tool
+     * output via json_encode(JSON_THROW_ON_ERROR) and Anthropic/OpenAI APIs
+     * expect UTF-8, so a page served as Windows-1252 (or with stray invalid
+     * bytes) would otherwise kill the entire turn.
+     */
+    private static function normalizeToUtf8(string $body, string $contentType): string
+    {
+        $encoding = self::detectEncodingFromHeader($contentType)
+            ?? self::detectEncodingFromHtml($body)
+            ?? 'UTF-8';
+
+        if (strcasecmp($encoding, 'UTF-8') !== 0) {
+            $converted = @mb_convert_encoding($body, 'UTF-8', $encoding);
+            if (is_string($converted)) {
+                $body = $converted;
+            }
+        }
+
+        return mb_scrub($body, 'UTF-8');
+    }
+
+    private static function detectEncodingFromHeader(string $contentType): ?string
+    {
+        if (preg_match('/charset\s*=\s*"?([^";\s]+)/i', $contentType, $m) === 1) {
+            return self::canonicalEncoding($m[1]);
+        }
+
+        return null;
+    }
+
+    private static function detectEncodingFromHtml(string $body): ?string
+    {
+        // Meta tags live in <head>; cap the scan so a giant body doesn't
+        // waste cycles in a regex that won't match anything after the head.
+        $head = substr($body, 0, 4096);
+
+        if (preg_match('/<meta[^>]+charset\s*=\s*"?([^"\'\s>]+)/i', $head, $m) === 1) {
+            return self::canonicalEncoding($m[1]);
+        }
+
+        if (preg_match('/<meta[^>]+http-equiv\s*=\s*"?content-type"?[^>]+content\s*=\s*"[^"]*charset=([^"\s;]+)/i', $head, $m) === 1) {
+            return self::canonicalEncoding($m[1]);
+        }
+
+        return null;
+    }
+
+    private static function canonicalEncoding(string $name): string
+    {
+        $name = strtoupper(trim($name, " \t\n\r\0\x0B\"'"));
+
+        // Per the WHATWG Encoding standard, pages labeled ISO-8859-1 / Latin-1
+        // are actually decoded as Windows-1252 by browsers; do the same so a
+        // curly quote at 0x93 doesn't get mangled into a control character.
+        return match ($name) {
+            'LATIN-1', 'LATIN1', 'ISO-8859-1' => 'Windows-1252',
+            default => $name,
+        };
     }
 
     private static function isSameHostAsRequest(string $url): bool

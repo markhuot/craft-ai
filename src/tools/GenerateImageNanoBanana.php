@@ -36,7 +36,7 @@ class GenerateImageNanoBanana extends Tool
     ) {}
 
     /**
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array{images: list<array<string, mixed>>}}|ToolOutput
      */
     public function __invoke(
         #[Description('Text prompt describing the image to generate. Nano Banana works well with conversational, descriptive prompts.')]
@@ -84,7 +84,7 @@ class GenerateImageNanoBanana extends Tool
             return new ToolOutput($e->getMessage(), isError: true);
         }
 
-        return ImageAssetWriter::save(
+        $saved = ImageAssetWriter::save(
             generated: $generated,
             prompt: $prompt,
             volume: $volume,
@@ -93,5 +93,19 @@ class GenerateImageNanoBanana extends Tool
             title: $title,
             alt: $alt,
         );
+
+        if ($saved->isError) {
+            return $saved;
+        }
+
+        /** @var array{images: list<array{id: int, url: ?string, filename: string, mimeType: string, width: int|null, height: int|null, revisedPrompt?: string}>} $payload */
+        $payload = json_decode($saved->text, true, flags: JSON_THROW_ON_ERROR);
+        $image = $payload['images'][0];
+        $assetId = $image['id'];
+        $filename = $image['filename'];
+        $ratioLabel = $aspectRatio ?? 'default (1:1)';
+        $notes = "Generated image saved as asset id={$assetId} ({$filename}) via Nano Banana at aspect ratio {$ratioLabel}. The asset is now in volume \"{$volume->handle}\" — attach it to an entry field via upsert_entry, or call get_asset with id={$assetId} to inspect its metadata.";
+
+        return ['_notes' => $notes, 'data' => $payload];
     }
 }

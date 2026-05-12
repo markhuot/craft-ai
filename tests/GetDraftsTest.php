@@ -20,7 +20,7 @@ function makeEntry(ToolRegistry $registry, string $title = 'Canonical'): array
 {
     return decode($registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => $title,
-    ]))['entry'];
+    ]))['data']['entry'];
 }
 
 it('returns an empty list when an entry has no drafts', function () {
@@ -29,7 +29,10 @@ it('returns an empty list when an entry has no drafts', function () {
     $output = $this->registry->execute('get_drafts', ['entry' => $entry['id']]);
 
     expect($output->isError)->toBeFalse();
-    expect(decode($output))->toBe([]);
+    $payload = decode($output);
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    expect($payload['data'])->toBe([]);
+    expect($payload['_notes'])->toBeString()->not->toBe('');
 });
 
 it('lists drafts created for an entry', function () {
@@ -38,7 +41,9 @@ it('lists drafts created for an entry', function () {
     $this->registry->execute('upsert_draft', ['entry' => $entry['id'], 'title' => 'Draft One']);
     $this->registry->execute('upsert_draft', ['entry' => $entry['id'], 'title' => 'Draft Two']);
 
-    $result = decode($this->registry->execute('get_drafts', ['entry' => $entry['id']]));
+    $payload = decode($this->registry->execute('get_drafts', ['entry' => $entry['id']]));
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    $result = $payload['data'];
 
     expect($result)->toHaveCount(2);
     $titles = array_column($result, 'title');

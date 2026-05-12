@@ -92,7 +92,7 @@ it('inserts a custom field before an existing element using element UID', functi
         'entryType' => 'article',
         'type' => 'customField',
         'field' => $body->uid,
-    ])->text, true);
+    ])->text, true)['data'];
 
     $bodyUid = $bodyResult['tabs'][0]['elements'][0]['uid'];
 
@@ -121,7 +121,7 @@ it('inserts a custom field after an existing element using element UID', functio
         'entryType' => 'article',
         'type' => 'customField',
         'field' => $intro->uid,
-    ])->text, true);
+    ])->text, true)['data'];
 
     $introUid = $introResult['tabs'][0]['elements'][0]['uid'];
 
@@ -402,7 +402,9 @@ it('returns element UIDs in the response so callers can update or remove them', 
         'field' => $body->uid,
     ]);
 
-    $result = json_decode($output->text, true);
+    $payload = json_decode($output->text, true);
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    $result = $payload['data'];
     $element = $result['tabs'][0]['elements'][0];
 
     expect($element['uid'])->toBeString();
@@ -418,7 +420,7 @@ it('updates a custom field element label and required flag without moving it', f
         'entryType' => 'article',
         'type' => 'customField',
         'field' => $body->uid,
-    ])->text, true);
+    ])->text, true)['data'];
 
     $bodyUid = $insert['tabs'][0]['elements'][0]['uid'];
 
@@ -448,14 +450,14 @@ it('moves an existing element when position is provided on update', function () 
         'entryType' => 'article',
         'type' => 'customField',
         'field' => $intro->uid,
-    ])->text, true);
+    ])->text, true)['data'];
     $introUid = $introInsert['tabs'][0]['elements'][0]['uid'];
 
     $bodyInsert = json_decode($this->registry->execute('upsert_field_layout_element', [
         'entryType' => 'article',
         'type' => 'customField',
         'field' => $body->uid,
-    ])->text, true);
+    ])->text, true)['data'];
     $bodyUid = $bodyInsert['tabs'][0]['elements'][1]['uid'];
 
     $output = $this->registry->execute('upsert_field_layout_element', [
@@ -480,7 +482,7 @@ it('updates heading text on an existing heading', function () {
         'entryType' => 'article',
         'type' => 'heading',
         'headingText' => 'Original',
-    ])->text, true);
+    ])->text, true)['data'];
     $headingUid = $insert['tabs'][0]['elements'][0]['uid'];
 
     $output = $this->registry->execute('upsert_field_layout_element', [
@@ -505,7 +507,7 @@ it('errors when type provided on update does not match existing element', functi
         'entryType' => 'article',
         'type' => 'customField',
         'field' => $body->uid,
-    ])->text, true);
+    ])->text, true)['data'];
     $bodyUid = $insert['tabs'][0]['elements'][0]['uid'];
 
     $output = $this->registry->execute('upsert_field_layout_element', [

@@ -24,7 +24,7 @@ class GetFields extends Tool
     public const KIND = ToolKind::Read;
 
     /**
-     * @return list<array<array-key, mixed>>
+     * @return array{_notes: string, data: list<array<array-key, mixed>>}
      */
     public function __invoke(
         #[Description('Fully-qualified field type class name to filter by (e.g. "craft\\fields\\PlainText"). Omit to return all fields.')]
@@ -35,9 +35,20 @@ class GetFields extends Tool
             ? Craft::$app->fields->getFieldsByType($type)
             : Craft::$app->fields->getAllFields();
 
-        return array_values(array_map(
+        $data = array_values(array_map(
             static fn (FieldInterface $field): array => UpsertField::summarize($field),
             $fields,
         ));
+
+        $notes = $data === []
+            ? ($type !== null
+                ? "No fields of type \"{$type}\" exist. Use upsert_field with that type to create one."
+                : 'No global fields are defined. Use upsert_field to create one.')
+            : 'Returned '.count($data).' field(s). Reference these handles in upsert_entry/upsert_draft, or call upsert_field with an id to modify a field. For Matrix fields, `settings.entryTypes[].handle` is the block type handle used when authoring blocks.';
+
+        return [
+            '_notes' => $notes,
+            'data' => $data,
+        ];
     }
 }

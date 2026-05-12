@@ -26,7 +26,7 @@ class GetTemplates extends Tool
     public const KIND = ToolKind::Read;
 
     /**
-     * @return list<array{path: string, absolutePath: string, size: int}>
+     * @return array{_notes: string, data: list<array{path: string, absolutePath: string, size: int}>}
      */
     public function __invoke(
         #[Description('Filter by template path prefix (e.g. "blog/" to only return templates under blog/). Matches against the path returned in each result.')]
@@ -90,7 +90,15 @@ class GetTemplates extends Tool
 
         usort($results, static fn (array $a, array $b): int => strcmp($a['path'], $b['path']));
 
-        return $results;
+        $scope = $prefix !== null ? " under prefix \"{$prefix}\"" : '';
+        $notes = $results === []
+            ? "No templates found{$scope}. Use upsert_template to create one."
+            : 'Listed '.count($results)." template(s){$scope}. Use get_template with a `path` to read contents, or upsert_template with a `path` to create/modify.";
+
+        return [
+            '_notes' => $notes,
+            'data' => $results,
+        ];
     }
 
     /**

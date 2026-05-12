@@ -2,12 +2,18 @@
 
 use markhuot\craftai\tools\GetHealth;
 
-it('returns a healthy status sentence including the Craft version', function () {
+it('returns a wrapped payload describing the Craft version and status', function () {
     $tool = new GetHealth();
 
-    $text = $tool();
+    $payload = $tool();
 
-    expect($text)->toContain('Craft CMS');
-    expect($text)->toContain('operational');
-    expect($text)->toContain(Craft::$app->getVersion());
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    expect($payload['_notes'])->toContain('Craft CMS');
+    expect($payload['_notes'])->toContain('operational');
+    expect($payload['_notes'])->toContain(Craft::$app->getVersion());
+
+    expect($payload['data']['craftVersion'])->toBe(Craft::$app->getVersion());
+    expect($payload['data']['status'])->toBe('ok');
+    expect($payload['data']['message'])->toContain('Craft CMS');
+    expect($payload['data']['message'])->toContain('operational');
 });

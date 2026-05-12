@@ -11,10 +11,20 @@ class GetHealth extends Tool
 {
     public const KIND = ToolKind::Read;
 
-    public function __invoke(): string
+    /**
+     * @return array{_notes: string, data: array{craftVersion: string, status: string, message: string}}
+     */
+    public function __invoke(): array
     {
         $version = Craft::$app->getVersion();
 
-        return "Craft CMS {$version} is running and all systems are operational.";
+        return [
+            '_notes' => "Craft CMS {$version} is running and all systems are operational.",
+            'data' => [
+                'craftVersion' => $version,
+                'status' => 'ok',
+                'message' => "Craft CMS {$version} is running and all systems are operational.",
+            ],
+        ];
     }
 }

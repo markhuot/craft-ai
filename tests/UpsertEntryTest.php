@@ -18,7 +18,7 @@ it('creates an entry with a title', function () {
     $output = $this->registry->execute('upsert_entry', ['section' => 'posts', 'title' => 'Hello World']);
 
     expect($output->isError)->toBeFalse();
-    $result = decode($output)['entry'];
+    $result = decode($output)['data']['entry'];
     expect($result['title'])->toBe('Hello World');
 
     $entry = Entry::find()->id($result['id'])->status(null)->one();
@@ -30,7 +30,7 @@ it('creates an entry with a custom slug', function () {
         'section' => 'posts', 'title' => 'My Article', 'slug' => 'my-custom-slug',
     ]);
 
-    expect(decode($output)['entry']['slug'])->toBe('my-custom-slug');
+    expect(decode($output)['data']['entry']['slug'])->toBe('my-custom-slug');
 });
 
 it('creates a disabled entry when enabled is false', function () {
@@ -38,7 +38,7 @@ it('creates a disabled entry when enabled is false', function () {
         'section' => 'posts', 'title' => 'Draft Post', 'enabled' => false,
     ]);
 
-    $entry = Entry::find()->id(decode($output)['entry']['id'])->status(null)->one();
+    $entry = Entry::find()->id(decode($output)['data']['entry']['id'])->status(null)->one();
     expect($entry->enabled)->toBeFalse();
 });
 
@@ -66,7 +66,7 @@ it('creates an entry with a specific entry type handle', function () {
         'section' => 'posts', 'title' => 'Typed', 'type' => $entryType->handle,
     ]);
 
-    $result = decode($output)['entry'];
+    $result = decode($output)['data']['entry'];
     expect($result['title'])->toBe('Typed');
     expect($result['typeId'])->toBe($entryType->id);
 });
@@ -76,7 +76,7 @@ it('creates an entry with a postDate', function () {
         'section' => 'posts', 'title' => 'Dated', 'postDate' => '2024-01-15 10:30:00',
     ]);
 
-    $entry = Entry::find()->id(decode($output)['entry']['id'])->status(null)->one();
+    $entry = Entry::find()->id(decode($output)['data']['entry']['id'])->status(null)->one();
     expect($entry->postDate->format('Y-m-d H:i:s'))->toBe('2024-01-15 10:30:00');
 });
 
@@ -109,14 +109,14 @@ it('exposes section and type as string-or-integer in the JSON schema', function 
 it('updates an existing entry by id', function () {
     $created = decode($this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'Original',
-    ]))['entry'];
+    ]))['data']['entry'];
 
     $output = $this->registry->execute('upsert_entry', [
         'id' => $created['id'], 'title' => 'Updated',
     ]);
 
     expect($output->isError)->toBeFalse();
-    expect(decode($output)['entry']['id'])->toBe($created['id']);
+    expect(decode($output)['data']['entry']['id'])->toBe($created['id']);
 
     $entry = Entry::find()->id($created['id'])->status(null)->one();
     expect($entry->title)->toBe('Updated');
@@ -125,7 +125,7 @@ it('updates an existing entry by id', function () {
 it('leaves untouched fields alone on update', function () {
     $created = decode($this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'Keep Slug', 'slug' => 'keep-slug',
-    ]))['entry'];
+    ]))['data']['entry'];
 
     $this->registry->execute('upsert_entry', [
         'id' => $created['id'], 'title' => 'New Title',
@@ -160,7 +160,7 @@ it('collects missing section and title into a single error response', function (
 it('skips create-only required rules when updating', function () {
     $created = decode($this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'Original',
-    ]))['entry'];
+    ]))['data']['entry'];
 
     $output = $this->registry->execute('upsert_entry', ['id' => $created['id']]);
 
@@ -176,13 +176,16 @@ it('binds a section by numeric ID', function () {
     ]);
 
     expect($output->isError)->toBeFalse();
-    expect(decode($output)['entry']['title'])->toBe('By ID');
+    expect(decode($output)['data']['entry']['title'])->toBe('By ID');
 });
 
 it('wraps the response with a notes prompt to call open_preview when the entry has a URL', function () {
-    $output = decode($this->registry->execute('upsert_entry', [
+    $payload = decode($this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'Previewable',
     ]));
+
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    $output = $payload['data'];
 
     expect($output)->toHaveKeys(['notes', 'entry']);
     expect($output['notes'])->toContain('open_preview');
@@ -192,9 +195,12 @@ it('wraps the response with a notes prompt to call open_preview when the entry h
 it('returns the entry without a notes wrapper when the section has no front-end URLs', function () {
     Section::factory()->name('Hidden')->handle('hidden')->hasUrls(false)->create();
 
-    $output = decode($this->registry->execute('upsert_entry', [
+    $payload = decode($this->registry->execute('upsert_entry', [
         'section' => 'hidden', 'title' => 'Invisible',
     ]));
+
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    $output = $payload['data'];
 
     expect($output)->not->toHaveKey('notes');
     expect($output)->not->toHaveKey('entry');
@@ -207,9 +213,12 @@ it('emits a generic Entry saved. note for MCP clients without referencing open_p
     $context = Craft::$container->get(ToolContext::class);
     $context->begin(null, null, ClientType::MCP);
 
-    $output = decode($this->registry->execute('upsert_entry', [
+    $payload = decode($this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'For MCP',
     ]));
+
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    $output = $payload['data'];
 
     expect($output)->toHaveKeys(['notes', 'entry']);
     expect($output['notes'])->toBe('Entry saved.');

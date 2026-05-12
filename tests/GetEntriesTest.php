@@ -13,7 +13,11 @@ it('returns all live entries when no filters are given', function () {
     Entry::factory()->section('posts')->title('Second')->create();
 
     $tool = new GetEntries();
-    $result = $tool(section: 'posts');
+    $payload = $tool(section: 'posts');
+
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    expect($payload['_notes'])->toBeString()->not->toBe('');
+    $result = $payload['data'];
 
     expect($result)->toHaveCount(2);
     expect(array_column($result, 'title'))->toContain('First', 'Second');
@@ -25,7 +29,7 @@ it('filters entries by section handle', function () {
     Entry::factory()->section('pages')->title('About Us')->create();
 
     $tool = new GetEntries();
-    $result = $tool(section: 'pages');
+    $result = $tool(section: 'pages')['data'];
 
     expect($result)->toHaveCount(1);
     expect($result[0]['title'])->toBe('About Us');
@@ -40,10 +44,10 @@ it('filters entries by author ID', function () {
 
     $tool = new GetEntries();
 
-    $all = $tool(section: 'posts');
+    $all = $tool(section: 'posts')['data'];
     expect($all)->toHaveCount(1);
 
-    $filtered = $tool(section: 'posts', authorId: 999999);
+    $filtered = $tool(section: 'posts', authorId: 999999)['data'];
     expect($filtered)->toBe([]);
 });
 
@@ -52,9 +56,9 @@ it('filters entries by status', function () {
     Entry::factory()->section('posts')->title('Disabled Post')->enabled(false)->create();
 
     $tool = new GetEntries();
-    $liveOnly = $tool(section: 'posts', status: 'live');
-    $disabledOnly = $tool(section: 'posts', status: 'disabled');
-    $any = $tool(section: 'posts', status: 'any');
+    $liveOnly = $tool(section: 'posts', status: 'live')['data'];
+    $disabledOnly = $tool(section: 'posts', status: 'disabled')['data'];
+    $any = $tool(section: 'posts', status: 'any')['data'];
 
     expect($liveOnly)->toHaveCount(1);
     expect($liveOnly[0]['title'])->toBe('Live Post');
@@ -70,7 +74,7 @@ it('filters entries by title', function () {
     Entry::factory()->section('posts')->title('Beta Post')->create();
 
     $tool = new GetEntries();
-    $result = $tool(section: 'posts', title: 'Alpha Post');
+    $result = $tool(section: 'posts', title: 'Alpha Post')['data'];
 
     expect($result)->toHaveCount(1);
     expect($result[0]['title'])->toBe('Alpha Post');
@@ -81,7 +85,7 @@ it('filters entries by slug', function () {
     Entry::factory()->section('posts')->title('Other Article')->slug('other-article')->create();
 
     $tool = new GetEntries();
-    $result = $tool(section: 'posts', slug: 'my-article');
+    $result = $tool(section: 'posts', slug: 'my-article')['data'];
 
     expect($result)->toHaveCount(1);
     expect($result[0]['slug'])->toBe('my-article');
@@ -94,7 +98,7 @@ it('filters entries by entry type handle', function () {
     Entry::factory()->section('posts')->title('Typed Post')->create();
 
     $tool = new GetEntries();
-    $result = $tool(section: 'posts', type: $entryType->handle);
+    $result = $tool(section: 'posts', type: $entryType->handle)['data'];
 
     expect($result)->toHaveCount(1);
     expect($result[0]['title'])->toBe('Typed Post');
@@ -117,7 +121,7 @@ it('filters entries posted before a date', function () {
     Entry::factory()->section('posts')->title('New Post')->postDate('2025-06-01 00:00:00')->create();
 
     $tool = new GetEntries();
-    $result = $tool(section: 'posts', before: '2024-01-01');
+    $result = $tool(section: 'posts', before: '2024-01-01')['data'];
 
     expect($result)->toHaveCount(1);
     expect($result[0]['title'])->toBe('Old Post');
@@ -128,7 +132,7 @@ it('filters entries posted after a date', function () {
     Entry::factory()->section('posts')->title('New Post')->postDate('2025-06-01 00:00:00')->create();
 
     $tool = new GetEntries();
-    $result = $tool(section: 'posts', after: '2024-01-01');
+    $result = $tool(section: 'posts', after: '2024-01-01')['data'];
 
     expect($result)->toHaveCount(1);
     expect($result[0]['title'])->toBe('New Post');
@@ -139,7 +143,7 @@ it('sorts results by orderBy', function () {
     Entry::factory()->section('posts')->title('Apple')->create();
 
     $tool = new GetEntries();
-    $result = $tool(section: 'posts', orderBy: 'title ASC');
+    $result = $tool(section: 'posts', orderBy: 'title ASC')['data'];
 
     expect($result[0]['title'])->toBe('Apple');
     expect($result[1]['title'])->toBe('Zebra');
@@ -149,7 +153,7 @@ it('respects the limit parameter', function () {
     Entry::factory()->section('posts')->count(10)->create();
 
     $tool = new GetEntries();
-    $result = $tool(section: 'posts', limit: 3);
+    $result = $tool(section: 'posts', limit: 3)['data'];
 
     expect($result)->toHaveCount(3);
 });
@@ -160,7 +164,7 @@ it('respects the offset parameter', function () {
     Entry::factory()->section('posts')->title('C')->create();
 
     $tool = new GetEntries();
-    $result = $tool(section: 'posts', orderBy: 'title ASC', limit: 2, offset: 1);
+    $result = $tool(section: 'posts', orderBy: 'title ASC', limit: 2, offset: 1)['data'];
 
     expect($result)->toHaveCount(2);
     expect($result[0]['title'])->toBe('B');
@@ -171,14 +175,16 @@ it('defaults limit to 25', function () {
     Entry::factory()->section('posts')->count(30)->create();
 
     $tool = new GetEntries();
-    $result = $tool(section: 'posts');
+    $result = $tool(section: 'posts')['data'];
 
     expect($result)->toHaveCount(25);
 });
 
 it('returns an empty array when no entries match', function () {
     $tool = new GetEntries();
-    $result = $tool(section: 'posts');
+    $payload = $tool(section: 'posts');
 
-    expect($result)->toBe([]);
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    expect($payload['data'])->toBe([]);
+    expect($payload['_notes'])->toBeString()->not->toBe('');
 });

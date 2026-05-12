@@ -46,9 +46,9 @@ it('exposes matrix block types and their sub-fields via get_fields', function ()
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload)->toHaveCount(1);
+    expect($payload['data'])->toHaveCount(1);
 
-    $entryTypes = $payload[0]['settings']['entryTypes'];
+    $entryTypes = $payload['data'][0]['settings']['entryTypes'];
     expect($entryTypes)->toHaveCount(2);
 
     $byHandle = collect($entryTypes)->keyBy('handle');
@@ -79,7 +79,7 @@ it('exposes matrix block-type schema via upsert_field on update', function () {
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
 
-    $entryTypes = $payload['settings']['entryTypes'];
+    $entryTypes = $payload['data']['settings']['entryTypes'];
     expect($entryTypes)->toHaveCount(2);
 
     $byHandle = collect($entryTypes)->keyBy('handle');

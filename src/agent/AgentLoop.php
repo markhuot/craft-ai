@@ -163,16 +163,25 @@ class AgentLoop
      */
     private function saveMessage(string $sessionId, string $role, array $content, ?array $rawResponse = null, array $assetIds = []): void
     {
+        // INVALID_UTF8_SUBSTITUTE is defense-in-depth: tools should return
+        // valid UTF-8, but a single stray byte from any external source (a
+        // fetched page, a tool that shells out, a provider's raw payload)
+        // would otherwise abort the turn and leave the conversation with an
+        // unanswered tool_use that the next provider call rejects. Replacing
+        // bad bytes with U+FFFD keeps the loop moving; THROW_ON_ERROR still
+        // catches the structural failures (recursion, NaN/INF) we care about.
+        $flags = JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE;
+
         $record = new MessageRecord();
         $record->sessionId = $sessionId;
         $record->role = $role;
-        $record->content = json_encode($content, JSON_THROW_ON_ERROR);
+        $record->content = json_encode($content, $flags);
         $record->rawResponse = $rawResponse === null
             ? null
-            : json_encode($rawResponse, JSON_THROW_ON_ERROR);
+            : json_encode($rawResponse, $flags);
         $record->assetIds = $assetIds === []
             ? null
-            : json_encode(array_map('intval', $assetIds), JSON_THROW_ON_ERROR);
+            : json_encode(array_map('intval', $assetIds), $flags);
         $record->save();
     }
 

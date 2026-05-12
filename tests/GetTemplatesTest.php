@@ -35,8 +35,10 @@ it('lists templates in the site templates directory', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    expect($payload['_notes'])->toBeString()->not->toBe('');
 
-    $paths = array_column($payload, 'path');
+    $paths = array_column($payload['data'], 'path');
     expect($paths)->toContain('index.twig');
     expect($paths)->toContain('blog/post.twig');
     expect($paths)->toContain('blog/index.html');
@@ -49,11 +51,11 @@ it('returns each template with absolutePath and size', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload)->toHaveCount(1);
-    expect($payload[0])->toHaveKeys(['path', 'absolutePath', 'size']);
-    expect($payload[0]['path'])->toBe('index.twig');
-    expect($payload[0]['size'])->toBe(5);
-    expect($payload[0]['absolutePath'])->toEndWith('index.twig');
+    expect($payload['data'])->toHaveCount(1);
+    expect($payload['data'][0])->toHaveKeys(['path', 'absolutePath', 'size']);
+    expect($payload['data'][0]['path'])->toBe('index.twig');
+    expect($payload['data'][0]['size'])->toBe(5);
+    expect($payload['data'][0]['absolutePath'])->toEndWith('index.twig');
 });
 
 it('skips files with non-template extensions', function () {
@@ -63,7 +65,7 @@ it('skips files with non-template extensions', function () {
 
     $output = $this->registry->execute('get_templates', []);
 
-    $paths = array_column(json_decode($output->text, true), 'path');
+    $paths = array_column(json_decode($output->text, true)['data'], 'path');
     expect($paths)->toBe(['index.twig']);
 });
 
@@ -74,7 +76,7 @@ it('skips hidden files and node_modules', function () {
 
     $output = $this->registry->execute('get_templates', []);
 
-    $paths = array_column(json_decode($output->text, true), 'path');
+    $paths = array_column(json_decode($output->text, true)['data'], 'path');
     expect($paths)->toBe(['index.twig']);
 });
 
@@ -86,7 +88,7 @@ it('filters by path prefix', function () {
 
     $output = $this->registry->execute('get_templates', ['prefix' => 'blog/']);
 
-    $paths = array_column(json_decode($output->text, true), 'path');
+    $paths = array_column(json_decode($output->text, true)['data'], 'path');
     sort($paths);
     expect($paths)->toBe(['blog/index.twig', 'blog/post.twig']);
 });
@@ -95,7 +97,9 @@ it('returns an empty array when the templates directory is empty', function () {
     $output = $this->registry->execute('get_templates', []);
 
     expect($output->isError)->toBeFalse($output->text);
-    expect(json_decode($output->text, true))->toBe([]);
+    $payload = json_decode($output->text, true);
+    expect($payload['data'])->toBe([]);
+    expect($payload['_notes'])->toBeString()->not->toBe('');
 });
 
 it('returns results sorted by path', function () {
@@ -105,6 +109,6 @@ it('returns results sorted by path', function () {
 
     $output = $this->registry->execute('get_templates', []);
 
-    $paths = array_column(json_decode($output->text, true), 'path');
+    $paths = array_column(json_decode($output->text, true)['data'], 'path');
     expect($paths)->toBe(['alpha.twig', 'mango/fruit.twig', 'zebra.twig']);
 });

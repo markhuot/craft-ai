@@ -31,7 +31,7 @@ it('creates an asset from a local source path', function () {
     ]);
 
     expect($output->isError)->toBeFalse($output->text);
-    $result = decode($output);
+    $result = decode($output)['data'];
     expect($result['filename'])->toBe('hello.jpg');
 
     $asset = Asset::find()->id($result['id'])->status(null)->one();
@@ -48,7 +48,7 @@ it('creates an asset with a title and alt', function () {
     ]);
 
     expect($output->isError)->toBeFalse($output->text);
-    $asset = Asset::find()->id(decode($output)['id'])->status(null)->one();
+    $asset = Asset::find()->id(decode($output)['data']['id'])->status(null)->one();
     expect($asset->title)->toBe('My Photo');
     expect($asset->alt)->toBe('A gray square');
 });
@@ -106,7 +106,7 @@ it('updates an existing asset by id', function () {
         'filename' => 'original.jpg',
         'sourcePath' => $this->sourceFile,
         'title' => 'Original',
-    ]));
+    ]))['data'];
 
     $output = $this->registry->execute('upsert_asset', [
         'id' => $created['id'],
@@ -130,7 +130,7 @@ it('binds a volume by numeric ID', function () {
     ]);
 
     expect($output->isError)->toBeFalse($output->text);
-    expect(decode($output)['filename'])->toBe('by-id.jpg');
+    expect(decode($output)['data']['filename'])->toBe('by-id.jpg');
 });
 
 it('wraps the response with a notes prompt to call open_preview when the asset has a URL', function () {
@@ -146,7 +146,9 @@ it('wraps the response with a notes prompt to call open_preview when the asset h
         'sourcePath' => $this->sourceFile,
     ]);
     expect($raw->isError)->toBeFalse($raw->text);
-    $output = decode($raw);
+    $payload = decode($raw);
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    $output = $payload['data'];
 
     expect($output)->toHaveKeys(['notes', 'asset']);
     expect($output['notes'])->toContain('open_preview');
@@ -159,12 +161,14 @@ it('emits a generic Asset saved. note for MCP clients without referencing open_p
     $context = Craft::$container->get(ToolContext::class);
     $context->begin(null, null, ClientType::MCP);
 
-    $output = decode($this->registry->execute('upsert_asset', [
+    $payload = decode($this->registry->execute('upsert_asset', [
         'volume' => 'uploads',
         'filename' => 'mcp-'.uniqid().'.jpg',
         'sourcePath' => $this->sourceFile,
     ]));
 
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    $output = $payload['data'];
     expect($output)->toHaveKeys(['notes', 'asset']);
     expect($output['notes'])->toBe('Asset saved.');
     expect($output['notes'])->not->toContain('open_preview');

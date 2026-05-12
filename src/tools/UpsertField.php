@@ -54,7 +54,7 @@ class UpsertField extends Tool
 {
     /**
      * @param  array<string, mixed>|null  $settings  Field-type-specific settings keyed by setting name
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array<array-key, mixed>}|ToolOutput
      */
     public function __invoke(
         #[Description('Existing field ID, handle, or UID to update. Omit to create a new field.')]
@@ -146,7 +146,18 @@ class UpsertField extends Tool
             );
         }
 
-        return self::summarize($field);
+        $notes = sprintf(
+            '%s field id=%d (handle="%s"). Attach it to an entry type\'s field layout via upsert_field_layout_element (pass field=%s as the field UID).',
+            $isUpdate ? 'Updated' : 'Created',
+            $field->id,
+            $field->handle,
+            $field->uid,
+        );
+
+        return [
+            '_notes' => $notes,
+            'data' => self::summarize($field),
+        ];
     }
 
     /**

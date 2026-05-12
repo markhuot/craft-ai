@@ -234,14 +234,19 @@ class ToolDescriptor
     }
 
     /**
-     * @return array{name: string, description: string, inputSchema: array{type: string, properties: array<string, array<string, mixed>>, required: list<string>}, annotations?: array<string, mixed>}
+     * @return array{name: string, description: string, inputSchema: array{type: string, properties: array<string, array<string, mixed>>|\stdClass, required: list<string>}, annotations?: array<string, mixed>}
      */
     public function toMcpTool(): array
     {
+        $inputSchema = $this->inputSchema;
+        if ($inputSchema['properties'] === []) {
+            $inputSchema['properties'] = new \stdClass();
+        }
+
         $tool = [
             'name' => $this->name,
             'description' => $this->description,
-            'inputSchema' => $this->inputSchema,
+            'inputSchema' => $inputSchema,
         ];
 
         if ($this->annotations !== []) {

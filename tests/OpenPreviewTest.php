@@ -70,9 +70,12 @@ it('returns success when the front-end completes the request', function () {
 
     $output = $tool('https://example.com');
 
-    expect($output)->toBeInstanceOf(ToolOutput::class);
-    expect($output->isError)->toBeFalse();
-    expect($output->text)->toContain('https://example.com/final');
+    expect($output)->toBeArray();
+    expect($output)->toHaveKey('_notes');
+    expect($output)->toHaveKey('data');
+    expect($output['_notes'])->toContain('https://example.com/final');
+    expect($output['data']['requestedUrl'])->toBe('https://example.com');
+    expect($output['data']['finalUrl'])->toBe('https://example.com/final');
     expect($service->lastSession)->toBe('session-open-1');
     expect($service->lastToolUseId)->toBe('tu-1');
     expect($service->lastType)->toBe('open');
@@ -123,7 +126,8 @@ it('accepts CP-relative paths starting with "/"', function () {
 
     $output = $tool('/admin/entries/blog/42');
 
-    expect($output->isError)->toBeFalse();
+    expect($output)->toBeArray();
+    expect($output['data']['finalUrl'])->toBe('/admin/entries/blog/42');
     expect($service->lastInput['url'])->toBe('/admin/entries/blog/42');
 });
 

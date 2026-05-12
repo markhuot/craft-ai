@@ -21,7 +21,7 @@ use markhuot\craftai\attributes\Description;
 class UpsertTemplate extends Tool
 {
     /**
-     * @return array{path: string, absolutePath: string, size: int, created: bool}|ToolOutput
+     * @return array{_notes: string, data: array{path: string, absolutePath: string, size: int, created: bool}}|ToolOutput
      */
     public function __invoke(
         #[Description('Template path relative to the site templates directory (e.g. "blog/post.twig"). Must end in an allowed template extension. Cannot be absolute or contain ".." segments that escape the root.')]
@@ -90,11 +90,25 @@ class UpsertTemplate extends Tool
             );
         }
 
+        $relativePath = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
+
+        $notes = sprintf(
+            'Template "%s" %s (%d bytes). Use get_template path="%s" to re-read it, or reference it from a section via upsert_section template="%s".',
+            $relativePath,
+            $created ? 'created' : 'overwritten',
+            strlen($contents),
+            $relativePath,
+            preg_replace('/\.[^.]+$/', '', $relativePath),
+        );
+
         return [
-            'path' => str_replace(DIRECTORY_SEPARATOR, '/', $relative),
-            'absolutePath' => $resolvedTarget,
-            'size' => strlen($contents),
-            'created' => $created,
+            '_notes' => $notes,
+            'data' => [
+                'path' => $relativePath,
+                'absolutePath' => $resolvedTarget,
+                'size' => strlen($contents),
+                'created' => $created,
+            ],
         ];
     }
 

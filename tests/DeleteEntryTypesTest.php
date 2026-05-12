@@ -13,13 +13,13 @@ beforeEach(function () {
 it('deletes entry types by ID', function () {
     $created = json_decode($this->registry->execute('upsert_entry_type', [
         'name' => 'Article', 'handle' => 'article',
-    ])->text, true);
+    ])->text, true)['data'];
 
     $output = $this->registry->execute('delete_entry_types', ['ids' => [$created['id']]]);
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload['results'][(string) $created['id']]['deleted'])->toBeTrue();
+    expect($payload['data']['results'][(string) $created['id']]['deleted'])->toBeTrue();
 
     expect(Craft::$app->entries->getEntryTypeByHandle('article'))->toBeNull();
 });
@@ -29,5 +29,5 @@ it('reports unknown entry type IDs', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload['results']['999999']['deleted'])->toBeFalse();
+    expect($payload['data']['results']['999999']['deleted'])->toBeFalse();
 });

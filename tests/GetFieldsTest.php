@@ -19,8 +19,10 @@ it('returns all fields when no type filter is given', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    expect($payload['_notes'])->toBeString()->not->toBe('');
 
-    $handles = array_column($payload, 'handle');
+    $handles = array_column($payload['data'], 'handle');
     expect($handles)->toContain('body');
     expect($handles)->toContain('score');
 });
@@ -34,7 +36,7 @@ it('filters fields by type FQCN', function () {
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
 
-    $handles = array_column($payload, 'handle');
+    $handles = array_column($payload['data'], 'handle');
     expect($handles)->toContain('body');
     expect($handles)->not->toContain('score');
 });
@@ -45,7 +47,9 @@ it('returns an empty array when no fields match the type', function () {
     $output = $this->registry->execute('get_fields', ['type' => Number::class]);
 
     expect($output->isError)->toBeFalse($output->text);
-    expect(json_decode($output->text, true))->toBe([]);
+    $payload = json_decode($output->text, true);
+    expect($payload['data'])->toBe([]);
+    expect($payload['_notes'])->toBeString()->not->toBe('');
 });
 
 it('rejects an unknown field type', function () {
@@ -61,9 +65,9 @@ it('exposes the upsert-shaped payload for each field', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload)->toHaveCount(1);
+    expect($payload['data'])->toHaveCount(1);
 
-    expect($payload[0])->toHaveKeys([
+    expect($payload['data'][0])->toHaveKeys([
         'id',
         'uid',
         'name',
@@ -75,6 +79,6 @@ it('exposes the upsert-shaped payload for each field', function () {
         'translationKeyFormat',
         'settings',
     ]);
-    expect($payload[0]['type'])->toBe(PlainText::class);
-    expect($payload[0]['handle'])->toBe('body');
+    expect($payload['data'][0]['type'])->toBe(PlainText::class);
+    expect($payload['data'][0]['handle'])->toBe('body');
 });

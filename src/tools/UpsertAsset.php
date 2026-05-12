@@ -30,7 +30,7 @@ class UpsertAsset extends Tool
 
     /**
      * @param  array<string, mixed>|null  $fields  Custom field values keyed by field handle
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array<array-key, mixed>}|ToolOutput
      */
     public function __invoke(
         #[Description('Existing asset ID to update. Omit to create a new asset.')]
@@ -141,7 +141,16 @@ class UpsertAsset extends Tool
         $data = $asset->toArray();
         $data['url'] = $url;
 
-        return PreviewSuggestion::wrap($data, $url, 'asset', $this->context);
+        $notes = sprintf(
+            '%s asset id=%d. Use get_asset to fetch the saved record, or upsert_field_layout_element to attach a new asset field to an entry type.',
+            $isUpdate ? 'Updated' : 'Created',
+            $asset->id,
+        );
+
+        return [
+            '_notes' => $notes,
+            'data' => PreviewSuggestion::wrap($data, $url, 'asset', $this->context),
+        ];
     }
 
     private function resolveFolder(Volume $volume, ?string $path): ?VolumeFolder

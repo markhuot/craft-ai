@@ -46,7 +46,7 @@ beforeEach(function () {
 
     $this->lastInsertedUid = function (array $args): string {
         $result = ($this->insert)($args);
-        $tabs = $result['tabs'];
+        $tabs = $result['data']['tabs'];
         $elements = $tabs[count($tabs) - 1]['elements'];
 
         return $elements[count($elements) - 1]['uid'];
@@ -183,9 +183,11 @@ it('returns the removed element details and the resulting layout', function () {
 
     $result = json_decode($output->text, true);
 
-    expect($result)->toHaveKey('removedElement');
-    expect($result['removedElement']['uid'])->toBe($bodyUid);
-    expect($result['removedElement']['type'])->toBe('customField');
-    expect($result)->toHaveKey('layout');
-    expect($result['layout']['tabs'][0]['elements'])->toBeEmpty();
+    expect($result)->toHaveKey('_notes');
+    expect($result)->toHaveKey('data');
+    expect($result['data'])->toHaveKey('removedElement');
+    expect($result['data']['removedElement']['uid'])->toBe($bodyUid);
+    expect($result['data']['removedElement']['type'])->toBe('customField');
+    expect($result['data'])->toHaveKey('layout');
+    expect($result['data']['layout']['tabs'][0]['elements'])->toBeEmpty();
 });

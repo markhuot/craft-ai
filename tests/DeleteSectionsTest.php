@@ -17,8 +17,8 @@ it('deletes sections by ID', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload['results'][(string) $a->id]['deleted'])->toBeTrue();
-    expect($payload['results'][(string) $b->id]['deleted'])->toBeTrue();
+    expect($payload['data']['results'][(string) $a->id]['deleted'])->toBeTrue();
+    expect($payload['data']['results'][(string) $b->id]['deleted'])->toBeTrue();
 
     expect(Craft::$app->entries->getSectionById($a->id))->toBeNull();
     expect(Craft::$app->entries->getSectionById($b->id))->toBeNull();
@@ -29,8 +29,8 @@ it('reports unknown section IDs', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload['results']['999999']['deleted'])->toBeFalse();
-    expect($payload['results']['999999']['error'])->toContain('999999');
+    expect($payload['data']['results']['999999']['deleted'])->toBeFalse();
+    expect($payload['data']['results']['999999']['error'])->toContain('999999');
 });
 
 it('exposes a destructive annotation on the MCP descriptor', function () {

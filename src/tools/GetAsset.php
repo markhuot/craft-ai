@@ -22,7 +22,7 @@ class GetAsset extends Tool
     public const KIND = ToolKind::Read;
 
     /**
-     * @return array<array-key, mixed>
+     * @return array{_notes: string, data: array<array-key, mixed>}
      */
     public function __invoke(
         #[Description('The asset ID to look up.')]
@@ -38,6 +38,9 @@ class GetAsset extends Tool
         $data['mimeType'] = $id->getMimeType();
         $data['url'] = $id->getUrl();
 
-        return $data;
+        return [
+            '_notes' => "Asset #{$id->id} (\"{$id->filename}\") loaded. Use the `url` to fetch the file, or call upsert_asset with this id to modify it.",
+            'data' => $data,
+        ];
     }
 }

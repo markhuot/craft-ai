@@ -70,7 +70,7 @@ class UpsertFieldLayoutElement extends Tool
     ];
 
     /**
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array<array-key, mixed>}|ToolOutput
      */
     public function __invoke(
         #[Description('Entry type handle, UID, or ID whose field layout should be updated.')]
@@ -260,8 +260,20 @@ class UpsertFieldLayoutElement extends Tool
         }
 
         $reloaded = Craft::$app->entries->getEntryTypeById($entryType->id);
+        $target = $reloaded ?? $entryType;
+        $elementUidStored = $element->uid ?? null;
 
-        return self::summarizeLayout($reloaded ?? $entryType);
+        $notes = sprintf(
+            '%s field-layout element%s in entry type "%s". Use get_entry_types to inspect the full layout, or remove_field_layout_element with this UID to drop it.',
+            $isUpdate ? 'Updated' : 'Inserted',
+            $elementUidStored !== null ? " uid={$elementUidStored}" : '',
+            $target->handle,
+        );
+
+        return [
+            '_notes' => $notes,
+            'data' => self::summarizeLayout($target),
+        ];
     }
 
     private function createElement(string $type, ?FieldInterface $field): \craft\base\FieldLayoutElement

@@ -24,7 +24,7 @@ class UpsertSection extends Tool
 {
     /**
      * @param  list<EntryType>|null  $entryTypes  Existing entry types to assign (resolved by binder)
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array<array-key, mixed>}|ToolOutput
      */
     public function __invoke(
         #[Description('Existing section ID or handle to update. Omit to create a new section.')]
@@ -145,6 +145,18 @@ class UpsertSection extends Tool
             );
         }
 
-        return $section->toArray();
+        $notes = sprintf(
+            '%s section id=%d (handle="%s", type="%s"). Create entries with upsert_entry section="%s", or attach additional entry types via upsert_entry_type then re-call upsert_section.',
+            $isUpdate ? 'Updated' : 'Created',
+            $section->id,
+            $section->handle,
+            $section->type,
+            $section->handle,
+        );
+
+        return [
+            '_notes' => $notes,
+            'data' => $section->toArray(),
+        ];
     }
 }

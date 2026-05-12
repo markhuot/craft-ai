@@ -20,7 +20,7 @@ class GetDraft extends Tool
     public const KIND = ToolKind::Read;
 
     /**
-     * @return array<array-key, mixed>
+     * @return array{_notes: string, data: array<array-key, mixed>}
      */
     public function __invoke(
         #[Description('The draftId to look up (the value Craft returns as `draftId`, not the entry `id`).')]
@@ -35,6 +35,15 @@ class GetDraft extends Tool
         $data = $draftId->toArray();
         $data['url'] = DraftPreview::urlFor($draftId);
 
-        return $data;
+        $draftIdValue = $data['draftId'] ?? null;
+        $canonicalId = $data['canonicalId'] ?? null;
+        $notes = $canonicalId !== null && $canonicalId !== $data['id']
+            ? "Draft #{$draftIdValue} of canonical entry #{$canonicalId}. Use upsert_draft with draftId={$draftIdValue} to edit, or upsert_entry with id={$canonicalId} to publish changes directly."
+            : "Fresh draft #{$draftIdValue} (no canonical entry yet). Use upsert_draft with this draftId to edit, or upsert_entry referencing this draft to publish it.";
+
+        return [
+            '_notes' => $notes,
+            'data' => $data,
+        ];
     }
 }

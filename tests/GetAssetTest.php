@@ -29,16 +29,23 @@ it('returns metadata + url for an existing asset', function () {
         'sourcePath' => $this->sourceFile,
     ]);
     expect($created->isError)->toBeFalse($created->text);
-    $id = (int) json_decode($created->text, true)['id'];
+    // upsert_asset returns {_notes, data: <PreviewSuggestion-wrapped asset>}.
+    // PreviewSuggestion::wrap returns either ['notes' => ..., 'asset' => $data]
+    // (off-CP and on-CP-with-url) or $data directly (on-CP-without-url).
+    $createdData = json_decode($created->text, true)['data'];
+    $assetData = $createdData['asset'] ?? $createdData;
+    $id = (int) $assetData['id'];
 
     $output = $this->registry->execute('get_asset', ['id' => $id]);
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload['id'])->toBe($id);
-    expect($payload['filename'])->toBe('lookup.jpg');
-    expect($payload)->toHaveKey('mimeType');
-    expect($payload)->toHaveKey('url');
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    expect($payload['_notes'])->toBeString()->not->toBe('');
+    expect($payload['data']['id'])->toBe($id);
+    expect($payload['data']['filename'])->toBe('lookup.jpg');
+    expect($payload['data'])->toHaveKey('mimeType');
+    expect($payload['data'])->toHaveKey('url');
 });
 
 it('returns an error for an unknown asset id', function () {

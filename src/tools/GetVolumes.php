@@ -15,13 +15,22 @@ class GetVolumes extends Tool
     public const KIND = ToolKind::Read;
 
     /**
-     * @return list<array<array-key, mixed>>
+     * @return array{_notes: string, data: list<array<array-key, mixed>>}
      */
     public function __invoke(): array
     {
-        return array_values(array_map(
+        $data = array_values(array_map(
             static fn (Volume $volume): array => $volume->toArray(),
             Craft::$app->volumes->getAllVolumes(),
         ));
+
+        $notes = $data === []
+            ? 'No asset volumes are configured. Create one in CP Settings -> Assets before calling upsert_asset.'
+            : 'Returned '.count($data).' volume(s). Pass a volume `handle` to upsert_asset when uploading new files.';
+
+        return [
+            '_notes' => $notes,
+            'data' => $data,
+        ];
     }
 }

@@ -45,12 +45,15 @@ class GetPreview extends Tool
         private readonly ToolContext $context = new ToolContext(),
     ) {}
 
+    /**
+     * @return array{_notes: string, data: array{content: string, mode: string, truncated: bool}}|ToolOutput
+     */
     public function __invoke(
         #[Description('Return the iframe\'s raw outerHTML instead of extracted plain text.')]
         bool $fullHtml = false,
         #[Description('Maximum seconds to wait for the front-end to read the iframe. Clamped to [5, 60]. Defaults to 10.')]
         int $timeoutSeconds = 10,
-    ): ToolOutput {
+    ): array|ToolOutput {
         if ($this->context->getClient() !== ClientType::CP) {
             return new ToolOutput(
                 'get_preview is only available in the CP chat surface — the calling client has no preview pane.',
@@ -83,13 +86,29 @@ class GetPreview extends Tool
 
         $payload = $this->preview->decodeResult($resolved);
         $content = is_string($payload['content'] ?? null) ? $payload['content'] : '';
+        $mode = $fullHtml ? 'full' : 'text';
+        $truncated = false;
 
         if (strlen($content) > self::MAX_OUTPUT_BYTES) {
             $content = substr($content, 0, self::MAX_OUTPUT_BYTES)
                 ."\n\n[Truncated: preview content exceeded ".self::MAX_OUTPUT_BYTES." bytes. Use fetch_webpage with a specific URL or call get_preview again with fullHtml: false for plain text.]";
+            $truncated = true;
         }
 
-        return new ToolOutput($content);
+        $notes = $truncated
+            ? 'Preview content captured but exceeded '.self::MAX_OUTPUT_BYTES.' bytes and was truncated. Drill into a specific URL via fetch_webpage if you need the full content.'
+            : ($fullHtml
+                ? 'Returned the preview iframe\'s raw outerHTML. Re-run with fullHtml: false for plain text only.'
+                : 'Returned the preview iframe\'s extracted text. Re-run with fullHtml: true for raw HTML.');
+
+        return [
+            '_notes' => $notes,
+            'data' => [
+                'content' => $content,
+                'mode' => $mode,
+                'truncated' => $truncated,
+            ],
+        ];
     }
 
     private static function sessionStopRequested(string $sessionId): bool

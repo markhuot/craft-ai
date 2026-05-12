@@ -17,9 +17,11 @@ it('returns all entry types when no section filter is given', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload)->toBeArray();
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    expect($payload['_notes'])->toBeString()->not->toBe('');
+    expect($payload['data'])->toBeArray();
 
-    $handles = array_column($payload, 'handle');
+    $handles = array_column($payload['data'], 'handle');
     expect($handles)->toContain('posts');
     expect($handles)->toContain('pages');
 });
@@ -33,7 +35,7 @@ it('filters entry types by section handle', function () {
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
 
-    $handles = array_column($payload, 'handle');
+    $handles = array_column($payload['data'], 'handle');
     expect($handles)->toContain('posts');
     expect($handles)->not->toContain('pages');
 });
@@ -47,7 +49,7 @@ it('filters entry types by section ID', function () {
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
 
-    $handles = array_column($payload, 'handle');
+    $handles = array_column($payload['data'], 'handle');
     expect($handles)->toContain('posts');
     expect($handles)->not->toContain('pages');
 });
@@ -59,9 +61,9 @@ it('includes a field layout summary in each entry type result', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload)->toHaveCount(1);
+    expect($payload['data'])->toHaveCount(1);
 
-    $row = $payload[0];
+    $row = $payload['data'][0];
     expect($row)->toHaveKeys(['id', 'handle', 'name', 'fieldLayoutId', 'tabs']);
     expect($row['tabs'])->toBeArray();
 });

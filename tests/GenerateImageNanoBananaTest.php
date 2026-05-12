@@ -91,16 +91,18 @@ it('saves the returned bytes as a Craft asset and reports the images array', fun
         'volume' => 'uploads',
     ]);
 
-    /** @var array{images: list<array{id: int, url: ?string, filename: string}>} $payload */
+    /** @var array{_notes: string, data: array{images: list<array{id: int, url: ?string, filename: string}>}} $payload */
     $payload = json_decode($output->text, true);
-    expect($payload)->toHaveKey('images');
-    expect($payload['images'])->toHaveCount(1);
-    expect($payload['images'][0]['filename'])->toEndWith('.png');
+    expect($payload)->toHaveKey('_notes');
+    expect($payload)->toHaveKey('data');
+    expect($payload['data'])->toHaveKey('images');
+    expect($payload['data']['images'])->toHaveCount(1);
+    expect($payload['data']['images'][0]['filename'])->toEndWith('.png');
     // No legacy open_preview/PreviewSuggestion wrapper — the front-end shows
     // the image inline from the tool_result block, no agent instruction needed.
     expect($output->text)->not->toContain('open_preview');
 
-    $asset = Asset::find()->id($payload['images'][0]['id'])->status(null)->one();
+    $asset = Asset::find()->id($payload['data']['images'][0]['id'])->status(null)->one();
     expect($asset)->not->toBeNull();
     expect($asset->title)->toBe('a friendly cat');
 });

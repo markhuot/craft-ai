@@ -34,14 +34,14 @@ class OpenPreview extends Tool
     ) {}
 
     /**
-     * @return ToolOutput
+     * @return array{_notes: string, data: array{requestedUrl: string, finalUrl: string}}|ToolOutput
      */
     public function __invoke(
         #[Description('Absolute URL to load in the preview pane (http:// or https://). May also be a CP-relative path like "/admin/entries/blog/123".')]
         string $url,
         #[Description('Maximum seconds to wait for the iframe to load before failing the tool. Clamped to [5, 120]. Defaults to 30.')]
         int $timeoutSeconds = 30,
-    ): ToolOutput {
+    ): array|ToolOutput {
         if (! self::looksLikeUrl($url)) {
             return new ToolOutput(
                 'Validation failed: url must start with http://, https://, or "/" (a CP path).',
@@ -80,7 +80,18 @@ class OpenPreview extends Tool
         $payload = $this->preview->decodeResult($resolved);
         $finalUrl = is_string($payload['finalUrl'] ?? null) ? $payload['finalUrl'] : $url;
 
-        return new ToolOutput("Preview opened at {$finalUrl}.");
+        $redirectNote = $finalUrl !== $url
+            ? " The iframe was redirected from {$url} to {$finalUrl}."
+            : '';
+        $notes = "Preview iframe loaded at {$finalUrl}.{$redirectNote} The browser's onload signal does not distinguish HTTP errors from success — call get_preview to verify the rendered content, or fetch_webpage if you need the raw HTML.";
+
+        return [
+            '_notes' => $notes,
+            'data' => [
+                'requestedUrl' => $url,
+                'finalUrl' => $finalUrl,
+            ],
+        ];
     }
 
     private static function looksLikeUrl(string $url): bool

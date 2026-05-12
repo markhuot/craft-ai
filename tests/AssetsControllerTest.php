@@ -39,7 +39,7 @@ function createTestAsset(string $filename, $registry, $sourceFile): int
 
     expect($output->isError)->toBeFalse($output->text);
 
-    return (int) json_decode($output->text, true)['id'];
+    return (int) json_decode($output->text, true)['data']['id'];
 }
 
 it('returns metadata + thumbUrl for the requested asset ids', function () {

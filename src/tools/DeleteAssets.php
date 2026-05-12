@@ -24,7 +24,7 @@ class DeleteAssets extends Tool
 {
     /**
      * @param  list<int>  $ids
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array{results: array<string, array{deleted: bool, error?: string}>}}|ToolOutput
      */
     public function __invoke(
         #[Description('Asset IDs to delete.')]
@@ -59,6 +59,11 @@ class DeleteAssets extends Tool
             }
         }
 
-        return ['results' => $results];
+        $successCount = count(array_filter($results, static fn ($r) => ($r['deleted'] ?? false) === true));
+        $total = count($results);
+        $mode = ($hardDelete ?? false) ? 'hard-deleted' : 'soft-deleted (recoverable from the trash)';
+        $notes = "{$mode} {$successCount} of {$total} assets. Underlying files on the volume are removed only on hard delete; soft-deleted assets keep their source file until the trash is emptied. Per-ID outcomes are in data.results.";
+
+        return ['_notes' => $notes, 'data' => ['results' => $results]];
     }
 }

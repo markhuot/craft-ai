@@ -19,7 +19,7 @@ class GetEntryTypes extends Tool
     public const KIND = ToolKind::Read;
 
     /**
-     * @return list<array<array-key, mixed>>
+     * @return array{_notes: string, data: list<array<array-key, mixed>>}
      */
     public function __invoke(
         #[Description('Section handle or ID to filter entry types by')]
@@ -35,7 +35,7 @@ class GetEntryTypes extends Tool
             $entryTypes = Craft::$app->entries->getAllEntryTypes();
         }
 
-        return array_values(array_map(
+        $data = array_values(array_map(
             static function (EntryType $entryType): array {
                 $row = $entryType->toArray();
                 $layout = UpsertFieldLayoutElement::summarizeLayout($entryType);
@@ -46,5 +46,17 @@ class GetEntryTypes extends Tool
             },
             $entryTypes,
         ));
+
+        $scope = $section instanceof \craft\models\Section
+            ? " in section \"{$section->handle}\""
+            : '';
+        $notes = $data === []
+            ? "No entry types found{$scope}. Use upsert_entry_type to define one."
+            : 'Returned '.count($data)." entry type(s){$scope}. Each row includes `tabs` describing the field layout — use those field handles when creating entries with upsert_entry. Call upsert_entry_type with an id to modify a type.";
+
+        return [
+            '_notes' => $notes,
+            'data' => $data,
+        ];
     }
 }

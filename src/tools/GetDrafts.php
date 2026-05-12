@@ -21,7 +21,7 @@ class GetDrafts extends Tool
     public const KIND = ToolKind::Read;
 
     /**
-     * @return list<array<array-key, mixed>>
+     * @return array{_notes: string, data: list<array<array-key, mixed>>}
      */
     public function __invoke(
         #[Description('Canonical entry ID whose drafts should be listed. This must be the `id` of a published canonical entry — not a `draftId`, and not the `id` of a fresh draft (which has no canonical). For fetching a single draft, use `get_draft` instead.')]
@@ -56,9 +56,18 @@ class GetDrafts extends Tool
             $query->offset($offset);
         }
 
-        return array_values(array_map(
+        $data = array_values(array_map(
             static fn (Entry $draft): array => $draft->toArray(),
             $query->all(),
         ));
+
+        $notes = $data === []
+            ? "Canonical entry #{$entry->id} has no drafts. Use upsert_draft with entry={$entry->id} to create one."
+            : 'Returned '.count($data)." draft(s) of canonical entry #{$entry->id}. Use get_draft with a draftId for full details, or upsert_draft to edit.";
+
+        return [
+            '_notes' => $notes,
+            'data' => $data,
+        ];
     }
 }

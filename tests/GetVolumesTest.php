@@ -17,8 +17,10 @@ it('returns all volumes', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    expect($payload['_notes'])->toBeString()->not->toBe('');
 
-    $handles = array_column($payload, 'handle');
+    $handles = array_column($payload['data'], 'handle');
     expect($handles)->toContain('uploads');
     expect($handles)->toContain('images');
 });
@@ -31,7 +33,7 @@ it('exposes id, uid, name, and handle for each volume', function () {
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
 
-    $row = collect($payload)->firstWhere('handle', 'uploads');
+    $row = collect($payload['data'])->firstWhere('handle', 'uploads');
     expect($row)->not->toBeNull();
     expect($row)->toHaveKeys(['id', 'uid', 'name', 'handle']);
     expect($row['name'])->toBe('Uploads');

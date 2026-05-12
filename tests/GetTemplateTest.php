@@ -33,9 +33,11 @@ it('returns the contents of a template by full path', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload['contents'])->toBe('<article>{{ entry.title }}</article>');
-    expect($payload['path'])->toBe('blog/post.twig');
-    expect($payload['absolutePath'])->toEndWith('blog/post.twig');
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    expect($payload['_notes'])->toBeString()->not->toBe('');
+    expect($payload['data']['contents'])->toBe('<article>{{ entry.title }}</article>');
+    expect($payload['data']['path'])->toBe('blog/post.twig');
+    expect($payload['data']['absolutePath'])->toEndWith('blog/post.twig');
 });
 
 it('resolves a bare template name without an extension', function () {
@@ -45,8 +47,8 @@ it('resolves a bare template name without an extension', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload['contents'])->toBe('POST CONTENT');
-    expect($payload['absolutePath'])->toEndWith('blog/post.twig');
+    expect($payload['data']['contents'])->toBe('POST CONTENT');
+    expect($payload['data']['absolutePath'])->toEndWith('blog/post.twig');
 });
 
 it('resolves a directory name to its index template', function () {
@@ -56,8 +58,8 @@ it('resolves a directory name to its index template', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload['contents'])->toBe('INDEX CONTENT');
-    expect($payload['absolutePath'])->toEndWith('blog/index.twig');
+    expect($payload['data']['contents'])->toBe('INDEX CONTENT');
+    expect($payload['data']['absolutePath'])->toEndWith('blog/index.twig');
 });
 
 it('returns an error for a missing template', function () {

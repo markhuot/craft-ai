@@ -55,7 +55,7 @@ class UpsertEntry extends Tool
 
     /**
      * @param  array<string, mixed>|null  $fields  Custom field values keyed by field handle
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array<array-key, mixed>}|ToolOutput
      */
     public function __invoke(
         #[Description('Existing entry ID to update. Omit to create a new entry.')]
@@ -166,6 +166,15 @@ class UpsertEntry extends Tool
         $data = $entry->toArray();
         $data['url'] = $url;
 
-        return PreviewSuggestion::wrap($data, $url, 'entry', $this->context);
+        $notes = sprintf(
+            '%s entry id=%d. Use get_entry to fetch the current state, or upsert_draft to make further changes without publishing.',
+            $isUpdate ? 'Updated' : 'Created',
+            $entry->id,
+        );
+
+        return [
+            '_notes' => $notes,
+            'data' => PreviewSuggestion::wrap($data, $url, 'entry', $this->context),
+        ];
     }
 }

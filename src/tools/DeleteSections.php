@@ -22,7 +22,7 @@ class DeleteSections extends Tool
 {
     /**
      * @param  list<int>  $ids
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array{results: array<string, array{deleted: bool, error?: string}>}}|ToolOutput
      */
     public function __invoke(
         #[Description('Section IDs to delete. All matching entries will also be removed.')]
@@ -55,6 +55,10 @@ class DeleteSections extends Tool
             }
         }
 
-        return ['results' => $results];
+        $successCount = count(array_filter($results, static fn ($r) => ($r['deleted'] ?? false) === true));
+        $total = count($results);
+        $notes = "Deleted {$successCount} of {$total} sections. Every entry inside a deleted section is permanently removed along with it — this is destructive and not recoverable through the trash. Per-ID outcomes are in data.results.";
+
+        return ['_notes' => $notes, 'data' => ['results' => $results]];
     }
 }

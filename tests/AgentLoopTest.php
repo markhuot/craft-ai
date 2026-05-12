@@ -6,8 +6,27 @@ use markhuot\craftai\agent\providers\ProviderResponse;
 use markhuot\craftai\records\MessageRecord;
 use markhuot\craftai\records\SessionRecord;
 use markhuot\craftai\tools\GetHealth;
+use markhuot\craftai\tools\Tool;
 use markhuot\craftai\tools\ToolDescriptor;
+use markhuot\craftai\tools\ToolKind;
+use markhuot\craftai\tools\ToolOutput;
 use markhuot\craftai\tools\ToolRegistry;
+
+/**
+ * Reproduces the failure mode where an external tool (e.g. fetch_webpage)
+ * returns bytes that aren't valid UTF-8 — historically this killed the
+ * saveMessage()'s json_encode(JSON_THROW_ON_ERROR) and left the conversation
+ * stuck with an unanswered tool_use.
+ */
+class BadUtf8Tool extends Tool
+{
+    public const KIND = ToolKind::Read;
+
+    public function __invoke(): ToolOutput
+    {
+        return new ToolOutput("hello \x80 world \xC3\x28 end");
+    }
+}
 
 class FakeProvider implements LlmProvider
 {
@@ -255,7 +274,7 @@ it('annotates the user message with attached asset details when sending to the p
         'sourcePath' => $sourceFile,
     ]);
     expect($assetCreated->isError)->toBeFalse($assetCreated->text);
-    $assetId = json_decode($assetCreated->text, true)['id'];
+    $assetId = json_decode($assetCreated->text, true)['data']['id'];
 
     $provider = new FakeProvider([
         new ProviderResponse('msg_1', [['type' => 'text', 'text' => 'thanks']], 'end_turn'),
@@ -534,4 +553,54 @@ it('fabricates stopped tool_results and exits when stop is requested mid tool_us
 
     // Provider should have been called exactly once — we must not loop again.
     expect($provider->calls)->toHaveCount(1);
+});
+
+it('persists a tool_result even when the tool returns invalid UTF-8 bytes', function () {
+    // Regression: a tool that returned non-UTF-8 bytes (e.g. fetch_webpage on
+    // a Windows-1252 page) used to abort the entire turn at json_encode and
+    // leave the conversation with an unanswered tool_use that the next
+    // provider call would reject. Now we scrub invalid bytes to U+FFFD so the
+    // loop survives.
+    $registry = new ToolRegistry();
+    $registry->register(BadUtf8Tool::class);
+
+    $provider = new FakeProvider([
+        new ProviderResponse(
+            'msg_1',
+            [['type' => 'tool_use', 'id' => 'tu_bad', 'name' => 'bad_utf8_tool', 'input' => []]],
+            'tool_use',
+        ),
+        new ProviderResponse('msg_2', [['type' => 'text', 'text' => 'recovered.']], 'end_turn'),
+    ]);
+
+    $loop = new AgentLoop($provider, $registry);
+    $loop->appendUserMessage('session-badutf', 'do the thing');
+    $loop->run('session-badutf');
+
+    $records = MessageRecord::find()
+        ->where(['sessionId' => 'session-badutf'])
+        ->orderBy(['id' => SORT_ASC])
+        ->all();
+
+    // user prompt, assistant tool_use, user tool_result, assistant final text.
+    expect($records)->toHaveCount(4);
+    expect($records[2]->role)->toBe('user');
+
+    // The stored content must be valid UTF-8 so subsequent json_decode (and
+    // provider calls) succeed.
+    expect(mb_check_encoding($records[2]->content, 'UTF-8'))->toBeTrue();
+
+    $toolResult = json_decode($records[2]->content, true)[0];
+    expect($toolResult['type'])->toBe('tool_result');
+    expect($toolResult['tool_use_id'])->toBe('tu_bad');
+    // Bad bytes are replaced with U+FFFD; the surrounding ASCII survives.
+    expect($toolResult['content'])->toContain('hello');
+    expect($toolResult['content'])->toContain('world');
+    expect($toolResult['content'])->toContain('end');
+    expect(mb_check_encoding($toolResult['content'], 'UTF-8'))->toBeTrue();
+
+    // The loop must have continued past the bad tool_result.
+    expect($records[3]->role)->toBe('assistant');
+    $final = json_decode($records[3]->content, true)[0];
+    expect($final['text'])->toBe('recovered.');
 });

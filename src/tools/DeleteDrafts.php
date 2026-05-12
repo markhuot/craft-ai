@@ -25,7 +25,7 @@ class DeleteDrafts extends Tool
 
     /**
      * @param  list<int>  $ids
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array{results: array<string, array{deleted: bool, error?: string}>}}|ToolOutput
      */
     public function __invoke(
         #[Description('Draft IDs to delete (the value Craft assigns to draftId, not the canonical entry ID).')]
@@ -58,6 +58,10 @@ class DeleteDrafts extends Tool
             }
         }
 
-        return ['results' => $results];
+        $successCount = count(array_filter($results, static fn ($r) => ($r['deleted'] ?? false) === true));
+        $total = count($results);
+        $notes = "Hard-deleted {$successCount} of {$total} drafts. The canonical (published) entry each draft was derived from is left untouched — only the unpublished draft revisions are removed. Failures (unknown draftId, wrong ID supplied, etc.) are listed in data.results.";
+
+        return ['_notes' => $notes, 'data' => ['results' => $results]];
     }
 }

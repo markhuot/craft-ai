@@ -24,7 +24,7 @@ class DeleteEntries extends Tool
 {
     /**
      * @param  list<int>  $ids
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array{results: array<string, array{deleted: bool, error?: string}>}}|ToolOutput
      */
     public function __invoke(
         #[Description('Entry IDs to delete.')]
@@ -59,6 +59,11 @@ class DeleteEntries extends Tool
             }
         }
 
-        return ['results' => $results];
+        $successCount = count(array_filter($results, static fn ($r) => ($r['deleted'] ?? false) === true));
+        $total = count($results);
+        $mode = ($hardDelete ?? false) ? 'hard-deleted' : 'soft-deleted (recoverable from the trash)';
+        $notes = "{$mode} {$successCount} of {$total} entries. Per-ID outcomes are in data.results — common failure causes are unknown IDs, the ID belonging to a different element type, or insufficient permission. Soft-deleted entries can be restored from Craft's trash until purged.";
+
+        return ['_notes' => $notes, 'data' => ['results' => $results]];
     }
 }

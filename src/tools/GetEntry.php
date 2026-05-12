@@ -21,7 +21,7 @@ class GetEntry extends Tool
     public const KIND = ToolKind::Read;
 
     /**
-     * @return array<array-key, mixed>
+     * @return array{_notes: string, data: array<array-key, mixed>}
      */
     public function __invoke(
         #[Description('The canonical entry ID to look up. To fetch a draft, use `get_draft` with the `draftId` instead.')]
@@ -33,6 +33,9 @@ class GetEntry extends Tool
             throw new \LogicException('Entry was not bound before invocation.');
         }
 
-        return $id->toArray();
+        return [
+            '_notes' => "Canonical entry #{$id->id} loaded. Use upsert_entry with id={$id->id} to publish edits, upsert_draft with entry={$id->id} to start an editorial draft, or get_drafts with entry={$id->id} to list its drafts.",
+            'data' => $id->toArray(),
+        ];
     }
 }

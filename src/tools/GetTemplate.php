@@ -23,7 +23,7 @@ class GetTemplate extends Tool
     public const KIND = ToolKind::Read;
 
     /**
-     * @return array{path: string, absolutePath: string, contents: string}
+     * @return array{_notes: string, data: array{path: string, absolutePath: string, contents: string}}
      */
     public function __invoke(
         #[Description('Template path or name (e.g. "blog/post.twig" or "blog/post"). Resolved against the site templates directory and any plugin-registered template roots.')]
@@ -42,10 +42,15 @@ class GetTemplate extends Tool
             throw new \RuntimeException("Failed to read template at \"{$resolved}\".");
         }
 
+        $bytes = strlen($contents);
+
         return [
-            'path' => $path,
-            'absolutePath' => $resolved,
-            'contents' => $contents,
+            '_notes' => "Loaded template \"{$path}\" ({$bytes} bytes) from {$resolved}. Use upsert_template with the same path to write changes back.",
+            'data' => [
+                'path' => $path,
+                'absolutePath' => $resolved,
+                'contents' => $contents,
+            ],
         ];
     }
 }

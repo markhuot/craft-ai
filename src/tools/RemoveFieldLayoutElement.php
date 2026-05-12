@@ -27,7 +27,7 @@ use markhuot\craftai\validators\ExistingEntryType;
 class RemoveFieldLayoutElement extends Tool
 {
     /**
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array{removedElement: array<string, mixed>, layout: array<string, mixed>}}|ToolOutput
      */
     public function __invoke(
         #[Description('Entry type handle, UID, or ID whose field layout the element belongs to.')]
@@ -63,8 +63,10 @@ class RemoveFieldLayoutElement extends Tool
             );
         }
 
+        $titleFieldFlipped = false;
         if ($removed instanceof EntryTitleField) {
             $entryType->hasTitleField = false;
+            $titleFieldFlipped = true;
         }
 
         if (! Craft::$app->entries->saveEntryType($entryType)) {
@@ -77,10 +79,24 @@ class RemoveFieldLayoutElement extends Tool
         }
 
         $reloaded = Craft::$app->entries->getEntryTypeById($entryType->id);
+        $removedSummary = UpsertFieldLayoutElement::summarizeElement($removed);
+        $layoutSummary = UpsertFieldLayoutElement::summarizeLayout($reloaded ?? $entryType);
+
+        $elementType = is_string($removedSummary['type'] ?? null) ? $removedSummary['type'] : 'element';
+        $titleNote = $titleFieldFlipped
+            ? ' Because this was the title field, hasTitleField was also flipped to false — set titleFormat (or re-add the title field via upsert_field_layout_element) before saving entries.'
+            : '';
+        $customFieldNote = $elementType === 'customField'
+            ? ' The underlying custom field still exists — call delete_fields to remove the field globally, or upsert_field_layout_element to re-attach it to another entry type.'
+            : '';
+        $notes = "Removed {$elementType} element {$elementUid} from entry type \"{$entryType->handle}\".{$titleNote}{$customFieldNote}";
 
         return [
-            'removedElement' => UpsertFieldLayoutElement::summarizeElement($removed),
-            'layout' => UpsertFieldLayoutElement::summarizeLayout($reloaded ?? $entryType),
+            '_notes' => $notes,
+            'data' => [
+                'removedElement' => $removedSummary,
+                'layout' => $layoutSummary,
+            ],
         ];
     }
 }

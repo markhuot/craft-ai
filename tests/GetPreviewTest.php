@@ -58,8 +58,12 @@ it('returns the iframe content the front-end produced', function () {
 
     $output = $tool();
 
-    expect($output->isError)->toBeFalse();
-    expect($output->text)->toBe('Hello from the page');
+    expect($output)->toBeArray();
+    expect($output)->toHaveKeys(['_notes', 'data']);
+    expect($output['_notes'])->toBeString()->not->toBe('');
+    expect($output['data']['content'])->toBe('Hello from the page');
+    expect($output['data']['mode'])->toBe('text');
+    expect($output['data']['truncated'])->toBeFalse();
     expect($service->lastType)->toBe('get');
     expect($service->lastInput)->toBe(['fullHtml' => false]);
 });
@@ -77,7 +81,9 @@ it('forwards the fullHtml flag when requested', function () {
 
     $output = $tool(fullHtml: true);
 
-    expect($output->text)->toContain('<html>');
+    expect($output)->toBeArray();
+    expect($output['data']['content'])->toContain('<html>');
+    expect($output['data']['mode'])->toBe('full');
     expect($service->lastInput)->toBe(['fullHtml' => true]);
 });
 
@@ -149,7 +155,9 @@ it('truncates oversized content with a clear marker so the LLM context stays bou
 
     $output = $tool(fullHtml: true);
 
-    expect($output->isError)->toBeFalse();
-    expect(strlen($output->text))->toBeLessThanOrEqual(GetPreview::MAX_OUTPUT_BYTES + 500);
-    expect($output->text)->toContain('[Truncated:');
+    expect($output)->toBeArray();
+    expect($output['data']['truncated'])->toBeTrue();
+    expect(strlen($output['data']['content']))->toBeLessThanOrEqual(GetPreview::MAX_OUTPUT_BYTES + 500);
+    expect($output['data']['content'])->toContain('[Truncated:');
+    expect($output['_notes'])->toContain('truncated');
 });

@@ -133,3 +133,14 @@ it('emits the MCP-shaped tool definition with inputSchema (camelCase)', function
     expect($tool)->toHaveKeys(['name', 'description', 'inputSchema']);
     expect($tool['name'])->toBe('get_health');
 });
+
+it('serializes empty MCP tool properties as a JSON object, not an array', function () {
+    // The MCP spec requires inputSchema.properties to be an object map. Claude
+    // Code's Zod validator rejects `properties: []` with "expected record,
+    // received array", which poisons the entire tools/list response.
+    $tool = (new ToolDescriptor(GetHealth::class))->toMcpTool();
+    $json = json_encode($tool);
+
+    expect($json)->toContain('"properties":{}');
+    expect($json)->not->toContain('"properties":[]');
+});

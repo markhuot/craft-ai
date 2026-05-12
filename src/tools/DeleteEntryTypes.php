@@ -21,7 +21,7 @@ class DeleteEntryTypes extends Tool
 {
     /**
      * @param  list<int>  $ids
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array{results: array<string, array{deleted: bool, error?: string}>}}|ToolOutput
      */
     public function __invoke(
         #[Description('Entry type IDs to delete.')]
@@ -54,6 +54,10 @@ class DeleteEntryTypes extends Tool
             }
         }
 
-        return ['results' => $results];
+        $successCount = count(array_filter($results, static fn ($r) => ($r['deleted'] ?? false) === true));
+        $total = count($results);
+        $notes = "Deleted {$successCount} of {$total} entry types. Every entry that used this entry type is also removed, and the type is detached from any sections that referenced it — re-run get_sections afterward if you need a fresh section/entry-type mapping. Failures are in data.results.";
+
+        return ['_notes' => $notes, 'data' => ['results' => $results]];
     }
 }

@@ -68,10 +68,14 @@ class AgentJob extends BaseJob implements RetryableJobInterface
             $record = new MessageRecord();
             $record->sessionId = $this->sessionId;
             $record->role = 'assistant';
+            // SUBSTITUTE on bad UTF-8: PDO error messages can echo back the
+            // failed SQL, which may include the same invalid bytes that
+            // triggered the original failure. Without this, the error-saving
+            // path would re-throw and leave the conversation with no record.
             $record->content = json_encode([[
                 'type' => 'error',
                 'text' => $message,
-            ]], JSON_THROW_ON_ERROR);
+            ]], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
             $record->save();
 
             throw $e;

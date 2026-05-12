@@ -62,7 +62,7 @@ class UpsertDraft extends Tool
 
     /**
      * @param  array<string, mixed>|null  $fields  Custom field values keyed by field handle
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array<array-key, mixed>}|ToolOutput
      */
     public function __invoke(
         #[Description('Existing draft ID to update. Omit to create a new draft.')]
@@ -164,7 +164,13 @@ class UpsertDraft extends Tool
             $data = $draft->toArray();
             $data['url'] = $url;
 
-            return PreviewSuggestion::wrap($data, $url, 'draft', $this->context);
+            return [
+                '_notes' => sprintf(
+                    'Fresh draft created with draftId=%d (no canonical entry yet). Use get_draft with draftId to re-fetch, or call upsert_draft again with this draftId to keep iterating before publishing.',
+                    $draft->draftId,
+                ),
+                'data' => PreviewSuggestion::wrap($data, $url, 'draft', $this->context),
+            ];
         } else {
             return new ToolOutput(
                 'Could not save draft: pass `draftId` to update, `entry` to draft an existing entry, or `section` to create a fresh draft.',
@@ -205,6 +211,20 @@ class UpsertDraft extends Tool
         $data = $draft->toArray();
         $data['url'] = $url;
 
-        return PreviewSuggestion::wrap($data, $url, 'draft', $this->context);
+        $notes = $isUpdate
+            ? sprintf(
+                'Updated draft draftId=%d. Use get_draft to re-fetch the saved state, or upsert_entry on the canonical entry once you are ready to publish.',
+                $draft->draftId,
+            )
+            : sprintf(
+                'Created draft draftId=%d from canonical entry id=%d. Use get_draft with draftId to re-fetch — get_entry will not find drafts.',
+                $draft->draftId,
+                $draft->canonicalId ?? 0,
+            );
+
+        return [
+            '_notes' => $notes,
+            'data' => PreviewSuggestion::wrap($data, $url, 'draft', $this->context),
+        ];
     }
 }

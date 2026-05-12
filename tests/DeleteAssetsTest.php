@@ -25,11 +25,17 @@ afterEach(function () {
 
 function createAsset(ToolRegistry $registry, string $filename, string $sourceFile): array
 {
-    return json_decode($registry->execute('upsert_asset', [
+    $payload = json_decode($registry->execute('upsert_asset', [
         'volume' => 'uploads',
         'filename' => $filename,
         'sourcePath' => $sourceFile,
     ])->text, true);
+
+    // UpsertAsset wraps via PreviewSuggestion: outer {_notes, data: {notes, asset}}
+    // when client is not CP, data is {notes, asset}; the asset record carries the id.
+    $data = $payload['data'] ?? [];
+
+    return $data['asset'] ?? $data;
 }
 
 it('deletes a list of assets', function () {
@@ -40,8 +46,8 @@ it('deletes a list of assets', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload['results'][(string) $a['id']]['deleted'])->toBeTrue();
-    expect($payload['results'][(string) $b['id']]['deleted'])->toBeTrue();
+    expect($payload['data']['results'][(string) $a['id']]['deleted'])->toBeTrue();
+    expect($payload['data']['results'][(string) $b['id']]['deleted'])->toBeTrue();
 
     expect(Asset::find()->id($a['id'])->status(null)->exists())->toBeFalse();
     expect(Asset::find()->id($b['id'])->status(null)->exists())->toBeFalse();
@@ -54,9 +60,9 @@ it('reports an error for unknown ids without aborting the batch', function () {
 
     expect($output->isError)->toBeFalse($output->text);
     $payload = json_decode($output->text, true);
-    expect($payload['results'][(string) $a['id']]['deleted'])->toBeTrue();
-    expect($payload['results']['999999']['deleted'])->toBeFalse();
-    expect($payload['results']['999999']['error'])->toContain('999999');
+    expect($payload['data']['results'][(string) $a['id']]['deleted'])->toBeTrue();
+    expect($payload['data']['results']['999999']['deleted'])->toBeFalse();
+    expect($payload['data']['results']['999999']['error'])->toContain('999999');
 });
 
 it('hard-deletes when hardDelete is true', function () {

@@ -108,13 +108,15 @@ it('saves the returned bytes as a Craft asset with title from the prompt', funct
     ]);
 
     expect($output->isError)->toBeFalse($output->text);
-    /** @var array{images: list<array{id: int, url: ?string, filename: string, mimeType: string}>} $payload */
+    /** @var array{_notes: string, data: array{images: list<array{id: int, url: ?string, filename: string, mimeType: string}>}} $payload */
     $payload = json_decode($output->text, true);
-    expect($payload)->toHaveKey('images');
-    expect($payload['images'])->toHaveCount(1);
-    expect($payload['images'][0]['filename'])->toEndWith('.png');
+    expect($payload)->toHaveKey('_notes');
+    expect($payload)->toHaveKey('data');
+    expect($payload['data'])->toHaveKey('images');
+    expect($payload['data']['images'])->toHaveCount(1);
+    expect($payload['data']['images'][0]['filename'])->toEndWith('.png');
 
-    $asset = Asset::find()->id($payload['images'][0]['id'])->status(null)->one();
+    $asset = Asset::find()->id($payload['data']['images'][0]['id'])->status(null)->one();
     expect($asset)->not->toBeNull();
     expect($asset->title)->toBe('a friendly cat');
 });
@@ -129,17 +131,16 @@ it('returns the agent a clean images array with id, url, filename, mimeType, wid
         'volume' => 'uploads',
     ]);
 
-    /** @var array{images: list<array<string, mixed>>} $payload */
+    /** @var array{_notes: string, data: array{images: list<array<string, mixed>>}} $payload */
     $payload = json_decode($output->text, true);
-    expect($payload['images'][0])->toHaveKeys(['id', 'url', 'filename', 'mimeType', 'width', 'height']);
-    expect($payload['images'][0]['mimeType'])->toBe('image/png');
+    expect($payload['data']['images'][0])->toHaveKeys(['id', 'url', 'filename', 'mimeType', 'width', 'height']);
+    expect($payload['data']['images'][0]['mimeType'])->toBe('image/png');
     // Width/height come from getimagesize() on the saved bytes — our 1x1
     // PNG fixture means both should be 1.
-    expect($payload['images'][0]['width'])->toBe(1);
-    expect($payload['images'][0]['height'])->toBe(1);
+    expect($payload['data']['images'][0]['width'])->toBe(1);
+    expect($payload['data']['images'][0]['height'])->toBe(1);
     // No leftover open_preview instruction or PreviewSuggestion wrapper.
     expect($output->text)->not->toContain('open_preview');
-    expect($output->text)->not->toContain('notes');
 });
 
 it('reports moderation errors back to the agent without throwing', function () {

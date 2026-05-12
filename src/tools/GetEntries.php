@@ -21,7 +21,7 @@ class GetEntries extends Tool
     public const KIND = ToolKind::Read;
 
     /**
-     * @return list<array<array-key, mixed>>
+     * @return array{_notes: string, data: list<array<array-key, mixed>>}
      */
     public function __invoke(
         #[Description('Full-text search query (e.g. "pricing page")')]
@@ -123,9 +123,22 @@ class GetEntries extends Tool
             $query->offset($offset);
         }
 
-        return array_values(array_map(
+        $data = array_values(array_map(
             static fn (Entry $entry): array => $entry->toArray(),
             $query->all(),
         ));
+
+        $appliedLimit = $limit ?? 25;
+        $hitLimit = count($data) === $appliedLimit;
+        $notes = $data === []
+            ? 'No entries matched the given filters. Loosen filters (e.g. status: "any") or call get_sections to see what sections exist.'
+            : 'Returned '.count($data).' entry(ies)'
+                .($hitLimit ? " (limit={$appliedLimit} reached; pass offset to paginate)" : '')
+                .'. Use get_entry with an id for full details, or upsert_entry/upsert_draft with an id to modify.';
+
+        return [
+            '_notes' => $notes,
+            'data' => $data,
+        ];
     }
 }

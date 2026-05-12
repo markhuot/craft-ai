@@ -23,7 +23,7 @@ class DeleteFields extends Tool
 {
     /**
      * @param  list<int>  $ids
-     * @return array<array-key, mixed>|ToolOutput
+     * @return array{_notes: string, data: array{results: array<string, array{deleted: bool, error?: string}>}}|ToolOutput
      */
     public function __invoke(
         #[Description('Field IDs to delete. Stored values for these fields will be removed from all elements.')]
@@ -56,6 +56,10 @@ class DeleteFields extends Tool
             }
         }
 
-        return ['results' => $results];
+        $successCount = count(array_filter($results, static fn ($r) => ($r['deleted'] ?? false) === true));
+        $total = count($results);
+        $notes = "Deleted {$successCount} of {$total} fields. Each removed field is detached from every field layout that referenced it and its stored values are dropped from all elements — this is not recoverable. Per-ID outcomes are in data.results.";
+
+        return ['_notes' => $notes, 'data' => ['results' => $results]];
     }
 }

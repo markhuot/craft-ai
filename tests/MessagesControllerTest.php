@@ -104,7 +104,7 @@ it('includes resolved attachments on user messages in the messages JSON', functi
     @unlink($sourceFile);
 
     expect($assetCreated->isError)->toBeFalse($assetCreated->text);
-    $assetId = json_decode($assetCreated->text, true)['id'];
+    $assetId = json_decode($assetCreated->text, true)['data']['id'];
 
     $record = new MessageRecord();
     $record->sessionId = 'mc-attachments';

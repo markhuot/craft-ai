@@ -28,6 +28,11 @@ export interface WidgetBootstrap {
    * what "the same context" means. Cached per-session in localStorage.
    */
   contextFingerprint: string;
+  /**
+   * Max prompt tokens for the configured model — drives the chat UI's
+   * context-window gauge. Null when the host hasn't configured one.
+   */
+  contextWindow?: number | null;
 }
 
 export interface PageContext {

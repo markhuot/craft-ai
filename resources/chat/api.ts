@@ -3,6 +3,7 @@ import type {
   ChatMessage,
   MessagesResponse,
   PreviewRequest,
+  SlashCommand,
   ToolMode,
   ToolModePayload,
 } from "./types";
@@ -185,26 +186,62 @@ export class ChatApi {
  */
 function parseMessagesResponse(data: unknown): MessagesResponse {
   if (Array.isArray(data)) {
-    return { messages: data as ChatMessage[], previewRequest: null, lastPreviewUrl: null };
+    return {
+      messages: data as ChatMessage[],
+      previewRequest: null,
+      lastPreviewUrl: null,
+      contextWindow: null,
+      slashCommands: undefined,
+    };
   }
   if (typeof data !== "object" || data === null) {
-    return { messages: [], previewRequest: null, lastPreviewUrl: null };
+    return {
+      messages: [],
+      previewRequest: null,
+      lastPreviewUrl: null,
+      contextWindow: null,
+      slashCommands: undefined,
+    };
   }
   const obj = data as {
     messages?: unknown;
     previewRequest?: unknown;
     lastPreviewUrl?: unknown;
+    contextWindow?: unknown;
+    slashCommands?: unknown;
   };
   const messages = Array.isArray(obj.messages) ? (obj.messages as ChatMessage[]) : [];
   const lastPreviewUrl =
     typeof obj.lastPreviewUrl === "string" && obj.lastPreviewUrl !== ""
       ? obj.lastPreviewUrl
       : null;
+  const contextWindow =
+    typeof obj.contextWindow === "number" && obj.contextWindow > 0
+      ? obj.contextWindow
+      : null;
   return {
     messages,
     previewRequest: parsePreviewRequest(obj.previewRequest),
     lastPreviewUrl,
+    contextWindow,
+    slashCommands: parseSlashCommands(obj.slashCommands),
   };
+}
+
+function parseSlashCommands(value: unknown): SlashCommand[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: SlashCommand[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const obj = entry as Record<string, unknown>;
+    if (typeof obj.name !== "string" || obj.name === "") continue;
+    out.push({
+      name: obj.name,
+      description: typeof obj.description === "string" ? obj.description : "",
+      takesArgs: obj.takesArgs === true,
+    });
+  }
+  return out;
 }
 
 /**

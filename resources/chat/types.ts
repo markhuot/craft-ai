@@ -30,7 +30,7 @@ export type ContentBlock =
   | { type: "error"; text: string }
   | { type: string; [key: string]: unknown };
 
-export type Role = "user" | "assistant" | "system";
+export type Role = "user" | "assistant" | "system" | "summary";
 
 export interface Attachment {
   id: number;
@@ -47,6 +47,15 @@ export interface ChatMessage {
   content: ContentBlock[];
   attachments?: Attachment[];
   dateCreated?: string;
+  /**
+   * Prompt tokens reported by the provider for the request that produced
+   * this assistant message. Drives the chat's context-window progress gauge.
+   * Null/undefined on user/system/summary turns and on assistant turns from
+   * providers that don't report usage.
+   */
+  inputTokens?: number | null;
+  /** Completion tokens for this assistant turn — paired with `inputTokens`. */
+  outputTokens?: number | null;
 }
 
 export interface SessionListItem {
@@ -89,6 +98,13 @@ export interface ChatBootstrap {
    */
   context?: unknown;
   contextFingerprint?: string;
+  /**
+   * Maximum tokens the configured model accepts. Drives the chat UI's
+   * context-window gauge. Null/undefined when the host hasn't configured
+   * one and the per-model defaults can't resolve a value — the gauge
+   * silently hides itself in that case.
+   */
+  contextWindow?: number | null;
 }
 
 export type ToolMode = "full" | "draft" | "readonly" | "custom";
@@ -131,4 +147,28 @@ export interface MessagesResponse {
    * affordance even after the in-memory iframe state is wiped.
    */
   lastPreviewUrl: string | null;
+  /**
+   * Maximum tokens the configured model accepts. Same value as
+   * `ChatBootstrap.contextWindow` — re-emitted on every poll so the gauge
+   * picks up live config changes without a page reload.
+   */
+  contextWindow?: number | null;
+  /**
+   * Built-in slash commands the user can invoke from the prompt input.
+   * Server is the source of truth — the autocomplete menu renders whatever
+   * the latest poll returned. Falls back to a single hardcoded `/compact`
+   * entry when the server payload is missing (older deployments).
+   */
+  slashCommands?: SlashCommand[];
+}
+
+export interface SlashCommand {
+  name: string;
+  description: string;
+  /**
+   * When true, the autocomplete picker fills the prompt with `/name ` and
+   * waits for the user to type arguments. When false (the default), it
+   * fills the prompt with `/name` exactly and submits immediately.
+   */
+  takesArgs: boolean;
 }

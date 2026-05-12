@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Globe } from "lucide-react";
 import { ChatApi } from "./api";
+import { ContextProgress } from "./components/context-progress";
 import { Conversation, ConversationContent } from "./components/conversation";
 import { Message, MessageContent } from "./components/message";
+import { SlashCommandMenu, filterCommands } from "./components/slash-command-menu";
 import {
   PreviewPane,
   type PreviewPaneHandle,
@@ -30,8 +32,22 @@ import type {
   ChatMessage,
   ContentBlock,
   PreviewRequest,
+  SlashCommand,
   ToolMode,
 } from "./types";
+
+/**
+ * Fallback slash commands when the server hasn't sent a catalog yet (older
+ * deployments, or the very first render before the first poll completes).
+ * Keep this list short — the server is the source of truth.
+ */
+const DEFAULT_SLASH_COMMANDS: SlashCommand[] = [
+  {
+    name: "compact",
+    description: "Summarize the conversation so far to free context window.",
+    takesArgs: false,
+  },
+];
 
 export interface ChatProps {
   bootstrap: ChatBootstrap;
@@ -127,6 +143,22 @@ export function Chat({
   // globe so a page reload (which wipes the previewUrl React state) still
   // lets the user re-mount the iframe with one click.
   const [lastPreviewUrl, setLastPreviewUrl] = useState<string | null>(null);
+  // Server-reported max prompt tokens for the configured model. Seeded
+  // from bootstrap and refreshed on every messages poll so the gauge
+  // picks up a config change without a page reload.
+  const [contextWindow, setContextWindow] = useState<number | null>(
+    typeof bootstrap.contextWindow === "number" && bootstrap.contextWindow > 0
+      ? bootstrap.contextWindow
+      : null,
+  );
+  // Catalog of available slash commands. Hydrated from the server on each
+  // poll; the default keeps the autocomplete usable before the first poll
+  // (or against older backends that don't surface the catalog yet).
+  const [slashCommands, setSlashCommands] = useState<SlashCommand[]>(DEFAULT_SLASH_COMMANDS);
+  // Highlighted index within the *filtered* slash command list. Bounded
+  // by the filtered length on every draft change; reset to 0 when the
+  // filter changes so the highlight always lands on the top entry first.
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   // The actual URL the iframe is currently displaying — updates whenever
   // PreviewPane reports a load (initial mount, redirects, in-iframe link
   // clicks). Used to ride along on the next outgoing message as page
@@ -179,6 +211,19 @@ export function Chat({
       // first poll after a page reload this is what restores the globe
       // toggle to the toolbar even though previewUrl is null.
       setLastPreviewUrl(fetched.lastPreviewUrl);
+      // Pick up the latest context-window setting on every poll. The
+      // value rarely changes mid-session but admins can edit
+      // config/craft-ai.php without restarting and we want the gauge
+      // to reflect it on the next tick.
+      if (typeof fetched.contextWindow === "number" && fetched.contextWindow > 0) {
+        setContextWindow(fetched.contextWindow);
+      }
+      // Server is authoritative for the slash command catalog — refresh
+      // on every poll so adding a command server-side propagates without
+      // a UI deploy.
+      if (Array.isArray(fetched.slashCommands)) {
+        setSlashCommands(fetched.slashCommands);
+      }
     } catch {
       // transient — keep polling
     }
@@ -501,6 +546,77 @@ export function Chat({
     setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
+  // Live-filtered slash command list. The menu component does its own
+  // filter for rendering, but Chat needs the same list to clamp the
+  // selected index, decide whether Enter picks vs. submits, and resolve
+  // which entry the user is selecting when they hit Enter.
+  const filteredSlashCommands = useMemo(
+    () => filterCommands(draft, slashCommands),
+    [draft, slashCommands],
+  );
+  const slashMenuOpen = filteredSlashCommands.length > 0;
+
+  // Keep the highlight inside the filtered range. Without this, typing
+  // characters that shrink the list would leave the selection past the
+  // last visible entry and Enter would no-op silently.
+  useEffect(() => {
+    if (!slashMenuOpen) {
+      setSlashSelectedIndex(0);
+      return;
+    }
+    setSlashSelectedIndex((idx) =>
+      idx >= filteredSlashCommands.length ? 0 : idx,
+    );
+  }, [slashMenuOpen, filteredSlashCommands.length]);
+
+  const sendCommand = useCallback(
+    async (commandText: string) => {
+      if (status !== "idle") return;
+      setStatus("submitting");
+      setError(null);
+      try {
+        await api.sendMessage(commandText, [], undefined);
+        setDraft("");
+        setStatus("streaming");
+        await poll();
+      } catch (err) {
+        setStatus("idle");
+        setError(err instanceof Error ? err.message : "Failed to send command");
+      }
+    },
+    [api, poll, status],
+  );
+
+  const pickSlashCommand = useCallback(
+    (command: SlashCommand) => {
+      if (command.takesArgs) {
+        // Drop the user back into the textarea with the command name
+        // pre-typed and a trailing space so they can keep typing args.
+        // No submit — they still need to provide arguments first.
+        setDraft(`/${command.name} `);
+        return;
+      }
+      // Parameterless command: fire it directly. We bypass the regular
+      // onSubmit so the user only has to hit Enter once.
+      void sendCommand(`/${command.name}`);
+    },
+    [sendCommand],
+  );
+
+  // The "context used" gauge tracks the most recent assistant turn's
+  // prompt-token count. We use a single most-recent value (not the running
+  // max) because auto-compaction resets usage downward — surfacing the
+  // running max would lie about how much room is currently free.
+  const latestAssistantUsage = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m && m.role === "assistant" && typeof m.inputTokens === "number") {
+        return (m.inputTokens ?? 0) + (m.outputTokens ?? 0);
+      }
+    }
+    return 0;
+  }, [messages]);
+
   const transcript = (
     <div className="craftai-chat ai:flex ai:min-h-0 ai:flex-1 ai:flex-col ai:gap-3">
       <Conversation>
@@ -529,7 +645,13 @@ export function Chat({
         </p>
       )}
 
-      <PromptInput onSubmit={onSubmit}>
+      <PromptInput onSubmit={onSubmit} className="ai:relative">
+        <SlashCommandMenu
+          draft={draft}
+          commands={slashCommands}
+          selectedIndex={slashSelectedIndex}
+          onPick={pickSlashCommand}
+        />
         <PromptInputTextarea
           name="message"
           placeholder="Send a message…"
@@ -537,6 +659,48 @@ export function Chat({
           onChange={(e) => setDraft(e.target.value)}
           autoFocus
           onKeyDown={(e) => {
+            // Slash menu keyboard nav takes priority when the menu is open.
+            // ArrowDown/Up move the highlight; Enter picks the highlighted
+            // command (and may auto-submit); Escape closes the menu by
+            // collapsing the draft back to its non-slash prefix.
+            if (slashMenuOpen) {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setSlashSelectedIndex((idx) =>
+                  (idx + 1) % filteredSlashCommands.length,
+                );
+                return;
+              }
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setSlashSelectedIndex((idx) =>
+                  (idx - 1 + filteredSlashCommands.length) %
+                  filteredSlashCommands.length,
+                );
+                return;
+              }
+              if (e.key === "Enter" && !e.shiftKey && !e.altKey) {
+                e.preventDefault();
+                const picked = filteredSlashCommands[slashSelectedIndex];
+                if (picked) pickSlashCommand(picked);
+                return;
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                setDraft("");
+                return;
+              }
+              if (e.key === "Tab") {
+                // Tab autocompletes to the highlighted command name
+                // without firing it, so the user can keep typing args.
+                e.preventDefault();
+                const picked = filteredSlashCommands[slashSelectedIndex];
+                if (picked) {
+                  setDraft(picked.takesArgs ? `/${picked.name} ` : `/${picked.name}`);
+                }
+                return;
+              }
+            }
             if (e.key === "Enter" && !e.shiftKey && !e.altKey) {
               e.preventDefault();
               (e.currentTarget.form as HTMLFormElement | null)?.requestSubmit();
@@ -563,6 +727,7 @@ export function Chat({
                 disabled={status !== "idle"}
               />
             )}
+            <ContextProgress used={latestAssistantUsage} contextWindow={contextWindow} />
             {lastPreviewUrl !== null && previewUrl === null && (
               // Only render when there's a preview to reopen but it's
               // currently hidden. While the pane is mounted, the X on its
@@ -677,6 +842,35 @@ export function Chat({
 const STANDALONE_BLOCK_TYPES = new Set(["thinking", "tool_use", "tool_result"]);
 
 function RenderedMessage({ message }: { message: ChatMessage }) {
+  // Summary messages mark a compaction boundary — everything before this
+  // row in the transcript got squashed into the summary text and the LLM
+  // no longer sees the originals. We render it as a distinct card so the
+  // user knows where the conversation got "rebased."
+  if (message.role === "summary") {
+    const text = message.content
+      .map((b) =>
+        b.type === "text" && typeof (b as { text?: unknown }).text === "string"
+          ? (b as { text: string }).text
+          : "",
+      )
+      .filter((t) => t !== "")
+      .join("\n\n");
+    return (
+      <div
+        data-testid="message-summary"
+        className="ai:rounded ai:border ai:border-amber-300 ai:bg-amber-50 ai:p-3 ai:text-xs ai:text-amber-900"
+      >
+        <div className="ai:mb-1 ai:flex ai:items-center ai:gap-2 ai:text-[10px] ai:font-semibold ai:uppercase ai:tracking-wide">
+          <span aria-hidden>↺</span>
+          Conversation summarized
+        </div>
+        <div className="ai:whitespace-pre-wrap ai:leading-relaxed">
+          {text || "Earlier turns in this conversation were summarized to fit the context window."}
+        </div>
+      </div>
+    );
+  }
+
   // System messages are page-context notes synthesized server-side when the
   // user navigates between pages on the front-end. We render them as a
   // distinct inline note so the user can see what context the agent is

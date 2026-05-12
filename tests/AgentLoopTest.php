@@ -555,6 +555,398 @@ it('fabricates stopped tool_results and exits when stop is requested mid tool_us
     expect($provider->calls)->toHaveCount(1);
 });
 
+it('persists provider-reported input/output token counts on assistant turns', function () {
+    $provider = new FakeProvider([
+        new ProviderResponse(
+            'msg_usage',
+            [['type' => 'text', 'text' => 'sure thing']],
+            'end_turn',
+            ['usage' => ['input_tokens' => 12345, 'output_tokens' => 678]],
+            inputTokens: 12345,
+            outputTokens: 678,
+        ),
+    ]);
+
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->appendUserMessage('session-tokens', 'hi');
+    $loop->run('session-tokens');
+
+    /** @var MessageRecord $assistant */
+    $assistant = MessageRecord::find()
+        ->where(['sessionId' => 'session-tokens', 'role' => 'assistant'])
+        ->orderBy(['id' => SORT_ASC])
+        ->one();
+
+    expect((int) $assistant->inputTokens)->toBe(12345);
+    expect((int) $assistant->outputTokens)->toBe(678);
+});
+
+it('auto-compacts the conversation when the last turn passed 95% of the context window', function () {
+    // Seed: user prompt + assistant reply that "used" 980 tokens — that's
+    // 98%, past the 95% threshold against a 1,000-token simulated window.
+    $sessionId = 'session-compact-preflight';
+    $session = new SessionRecord();
+    $session->id = $sessionId;
+    $session->userId = 1;
+    $session->save();
+
+    $u = new MessageRecord();
+    $u->sessionId = $sessionId;
+    $u->role = 'user';
+    $u->content = json_encode([['type' => 'text', 'text' => 'first question']]);
+    $u->save();
+
+    $a = new MessageRecord();
+    $a->sessionId = $sessionId;
+    $a->role = 'assistant';
+    $a->content = json_encode([['type' => 'text', 'text' => 'first answer']]);
+    $a->inputTokens = 980;
+    $a->outputTokens = 0;
+    $a->save();
+
+    // The user has now sent a follow-up that triggers a new run.
+    $u2 = new MessageRecord();
+    $u2->sessionId = $sessionId;
+    $u2->role = 'user';
+    $u2->content = json_encode([['type' => 'text', 'text' => 'second question']]);
+    $u2->save();
+
+    $summarizer = new FakeProvider([
+        new ProviderResponse(
+            'msg_sum',
+            [['type' => 'text', 'text' => 'SUMMARY: discussed X and Y.']],
+            'end_turn',
+        ),
+    ]);
+
+    $mainProvider = new FakeProvider([
+        new ProviderResponse(
+            'msg_next',
+            [['type' => 'text', 'text' => 'continuing after summary']],
+            'end_turn',
+            inputTokens: 50,
+            outputTokens: 10,
+        ),
+    ]);
+
+    $loop = new AgentLoop($mainProvider, $this->registry);
+    $loop->setSmallProvider($summarizer);
+    $loop->setContextWindow(1000);
+    $loop->run($sessionId);
+
+    // A summary row was written. compactionPivotId points at the id of
+    // the *last summarized* message (the assistant turn), not the summary
+    // row itself — so loadMessages can filter with `>` strict and still
+    // include the freshly-written summary on the next load.
+    /** @var MessageRecord|null $summary */
+    $summary = MessageRecord::find()
+        ->where(['sessionId' => $sessionId, 'role' => 'summary'])
+        ->one();
+    expect($summary)->not->toBeNull();
+
+    $session = SessionRecord::findOne(['id' => $sessionId]);
+    expect((int) $session->compactionPivotId)->toBe((int) $a->id);
+    expect((int) $session->compactionPivotId)->toBeLessThan((int) $summary->id);
+
+    // The provider saw exactly one user turn: the trailing "second
+    // question" with the summary folded in as a system note.
+    expect($mainProvider->calls)->toHaveCount(1);
+    $sentMessages = $mainProvider->calls[0]['messages'];
+    expect($sentMessages)->toHaveCount(1);
+    expect($sentMessages[0]['role'])->toBe('user');
+    $texts = array_values(array_filter(
+        $sentMessages[0]['content'],
+        static fn ($b) => ($b['type'] ?? '') === 'text',
+    ));
+    expect($texts[0]['text'])->toContain('Summary of the conversation so far');
+    expect($texts[0]['text'])->toContain('SUMMARY: discussed X and Y.');
+    expect($texts[1]['text'])->toBe('second question');
+});
+
+it('recovers from a context-length 400 by compacting and retrying once', function () {
+    $sessionId = 'session-compact-recovery';
+    $session = new SessionRecord();
+    $session->id = $sessionId;
+    $session->userId = 1;
+    $session->save();
+
+    // Seed enough transcript that a compaction has something to summarize.
+    foreach (['ping', 'pong', 'ping again'] as $i => $text) {
+        $r = new MessageRecord();
+        $r->sessionId = $sessionId;
+        $r->role = $i % 2 === 0 ? 'user' : 'assistant';
+        $r->content = json_encode([['type' => 'text', 'text' => $text]]);
+        $r->save();
+    }
+
+    // Build a Guzzle ClientException matching the shape DeepSeek returns
+    // when the prompt overruns the model's context window.
+    $request = new \GuzzleHttp\Psr7\Request('POST', 'v1/chat/completions');
+    $body = '{"error":{"message":"This model\'s maximum context length is 1048576 tokens."}}';
+    $response = new \GuzzleHttp\Psr7\Response(400, [], $body);
+    $contextError = new \GuzzleHttp\Exception\ClientException(
+        'Client error: 400',
+        $request,
+        $response,
+    );
+
+    /** @var \markhuot\craftai\agent\providers\LlmProvider $throwingProvider */
+    $throwingProvider = new class($contextError) implements \markhuot\craftai\agent\providers\LlmProvider {
+        /** @var list<array{messages: list<array<string, mixed>>, tools: list<\markhuot\craftai\tools\ToolDescriptor>}> */
+        public array $calls = [];
+        public int $count = 0;
+
+        public function __construct(private readonly \Throwable $err) {}
+
+        public function createMessage(array $messages, array $tools = [], ?string $system = null): ProviderResponse
+        {
+            $this->calls[] = ['messages' => $messages, 'tools' => $tools];
+            $this->count++;
+            if ($this->count === 1) {
+                throw $this->err;
+            }
+            return new ProviderResponse(
+                'msg_after',
+                [['type' => 'text', 'text' => 'recovered after compaction']],
+                'end_turn',
+                inputTokens: 10,
+                outputTokens: 3,
+            );
+        }
+    };
+
+    $summarizer = new FakeProvider([
+        new ProviderResponse(
+            'msg_sum',
+            [['type' => 'text', 'text' => 'Summary of pings.']],
+            'end_turn',
+        ),
+    ]);
+
+    $loop = new AgentLoop($throwingProvider, $this->registry);
+    $loop->setSmallProvider($summarizer);
+    $loop->setContextWindow(1_000_000);
+    $loop->run($sessionId);
+
+    // The provider was retried after compaction: 1 failed call + 1 success.
+    expect($throwingProvider->count)->toBe(2);
+
+    /** @var MessageRecord|null $summary */
+    $summary = MessageRecord::find()
+        ->where(['sessionId' => $sessionId, 'role' => 'summary'])
+        ->one();
+    expect($summary)->not->toBeNull();
+    expect($summary->content)->toContain('Summary of pings.');
+
+    // The retry's prompt summarized the pre-cutoff messages (user "ping" +
+    // assistant "pong") but preserved the trailing user "ping again" — so
+    // the LLM still sees the question that was awaiting an answer.
+    $retryMessages = $throwingProvider->calls[1]['messages'];
+    // The retry sends exactly one user turn: the trailing "ping again",
+    // prepended with the summary as a folded system note.
+    expect($retryMessages)->toHaveCount(1);
+    expect($retryMessages[0]['role'])->toBe('user');
+    $texts = array_values(array_filter(
+        $retryMessages[0]['content'],
+        static fn ($b) => ($b['type'] ?? '') === 'text',
+    ));
+    $joined = implode('|', array_map(static fn ($b) => $b['text'], $texts));
+    expect($joined)->toContain('Summary of pings.');
+    expect($joined)->toContain('ping again');
+    // The first user turn ("ping") and the assistant ("pong") were
+    // summarized into the summary text and dropped from history.
+    expect($joined)->not->toContain('USER:'); // raw transcript markers don't leak
+});
+
+it('skips messages before the compaction pivot when loading history for the next turn', function () {
+    $sessionId = 'session-post-pivot';
+    $session = new SessionRecord();
+    $session->id = $sessionId;
+    $session->userId = 1;
+    $session->save();
+
+    // Pre-pivot history (should be ignored on next run).
+    $u1 = new MessageRecord();
+    $u1->sessionId = $sessionId;
+    $u1->role = 'user';
+    $u1->content = json_encode([['type' => 'text', 'text' => 'old user']]);
+    $u1->save();
+
+    $a1 = new MessageRecord();
+    $a1->sessionId = $sessionId;
+    $a1->role = 'assistant';
+    $a1->content = json_encode([['type' => 'text', 'text' => 'old assistant']]);
+    $a1->save();
+
+    // The summary row marks the pivot. compactionPivotId points at the id
+    // of the *last summarized* message (a1), so loadMessages filters with
+    // `id > pivot` — the summary itself (which has a higher id) survives
+    // and gets folded into the next user turn as a system note.
+    $sum = new MessageRecord();
+    $sum->sessionId = $sessionId;
+    $sum->role = 'summary';
+    $sum->content = json_encode([['type' => 'text', 'text' => 'condensed earlier conversation']]);
+    $sum->save();
+
+    $session->compactionPivotId = (int) $a1->id;
+    $session->save();
+
+    // Post-pivot: a new user turn that triggers the next run.
+    $u2 = new MessageRecord();
+    $u2->sessionId = $sessionId;
+    $u2->role = 'user';
+    $u2->content = json_encode([['type' => 'text', 'text' => 'new question']]);
+    $u2->save();
+
+    $provider = new FakeProvider([
+        new ProviderResponse('msg_a', [['type' => 'text', 'text' => 'new answer']], 'end_turn'),
+    ]);
+
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->run($sessionId);
+
+    $sent = $provider->calls[0]['messages'];
+    // Only one user turn went to the provider — the summary got folded into
+    // it as a text block, and the pre-pivot messages were skipped entirely.
+    expect($sent)->toHaveCount(1);
+    expect($sent[0]['role'])->toBe('user');
+    $texts = array_values(array_filter(
+        $sent[0]['content'],
+        static fn ($b) => ($b['type'] ?? '') === 'text',
+    ));
+    $joined = implode('|', array_map(static fn ($b) => $b['text'], $texts));
+    expect($joined)->toContain('condensed earlier conversation');
+    expect($joined)->toContain('new question');
+    expect($joined)->not->toContain('old user');
+    expect($joined)->not->toContain('old assistant');
+});
+
+it('intercepts a /compact slash command and runs compaction without calling the LLM', function () {
+    $sessionId = 'session-slash-compact';
+    $session = new SessionRecord();
+    $session->id = $sessionId;
+    $session->userId = 1;
+    $session->save();
+
+    // Seed a complete prior turn so compact() has something to summarize.
+    $u = new MessageRecord();
+    $u->sessionId = $sessionId;
+    $u->role = 'user';
+    $u->content = json_encode([['type' => 'text', 'text' => 'tell me about birds']]);
+    $u->save();
+
+    $a = new MessageRecord();
+    $a->sessionId = $sessionId;
+    $a->role = 'assistant';
+    $a->content = json_encode([['type' => 'text', 'text' => 'they fly and sing']]);
+    $a->save();
+
+    // The user's latest message is the slash command itself.
+    $cmd = new MessageRecord();
+    $cmd->sessionId = $sessionId;
+    $cmd->role = 'user';
+    $cmd->content = json_encode([['type' => 'text', 'text' => '/compact']]);
+    $cmd->save();
+
+    // FakeProvider with zero scripted responses — if the loop calls it,
+    // the test fails. That's how we assert the slash command short-circuited
+    // the normal flow.
+    $mainProvider = new FakeProvider([]);
+
+    $summarizer = new FakeProvider([
+        new ProviderResponse(
+            'msg_sum',
+            [['type' => 'text', 'text' => 'Summary: discussed birds.']],
+            'end_turn',
+        ),
+    ]);
+
+    $loop = new AgentLoop($mainProvider, $this->registry);
+    $loop->setSmallProvider($summarizer);
+    $loop->run($sessionId);
+
+    expect($mainProvider->calls)->toHaveCount(0);
+
+    /** @var MessageRecord|null $summary */
+    $summary = MessageRecord::find()
+        ->where(['sessionId' => $sessionId, 'role' => 'summary'])
+        ->one();
+    expect($summary)->not->toBeNull();
+    expect($summary->content)->toContain('Summary: discussed birds.');
+
+    // The slash command path writes an assistant feedback message so the
+    // chat surface renders confirmation that the command ran.
+    /** @var list<MessageRecord> $records */
+    $records = MessageRecord::find()
+        ->where(['sessionId' => $sessionId])
+        ->orderBy(['id' => SORT_DESC])
+        ->all();
+    $confirmation = $records[0];
+    expect($confirmation->role)->toBe('assistant');
+    $confirmText = json_decode($confirmation->content, true)[0]['text'] ?? '';
+    expect($confirmText)->toContain('compacted');
+});
+
+it('reports an unknown slash command without calling the LLM', function () {
+    $sessionId = 'session-slash-unknown';
+    $session = new SessionRecord();
+    $session->id = $sessionId;
+    $session->userId = 1;
+    $session->save();
+
+    $cmd = new MessageRecord();
+    $cmd->sessionId = $sessionId;
+    $cmd->role = 'user';
+    $cmd->content = json_encode([['type' => 'text', 'text' => '/banana']]);
+    $cmd->save();
+
+    $provider = new FakeProvider([]);
+
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->run($sessionId);
+
+    expect($provider->calls)->toHaveCount(0);
+
+    /** @var MessageRecord|null $reply */
+    $reply = MessageRecord::find()
+        ->where(['sessionId' => $sessionId, 'role' => 'assistant'])
+        ->orderBy(['id' => SORT_DESC])
+        ->one();
+    $text = json_decode($reply->content, true)[0]['text'] ?? '';
+    expect($text)->toContain('Unknown command');
+    expect($text)->toContain('/banana');
+    expect($text)->toContain('/compact');
+});
+
+it('warns when /compact runs against a fresh session with no assistant turn', function () {
+    $sessionId = 'session-slash-empty';
+    $session = new SessionRecord();
+    $session->id = $sessionId;
+    $session->userId = 1;
+    $session->save();
+
+    // Only a slash command — no prior assistant to summarize.
+    $cmd = new MessageRecord();
+    $cmd->sessionId = $sessionId;
+    $cmd->role = 'user';
+    $cmd->content = json_encode([['type' => 'text', 'text' => '/compact']]);
+    $cmd->save();
+
+    $provider = new FakeProvider([]);
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->run($sessionId);
+
+    expect($provider->calls)->toHaveCount(0);
+
+    /** @var MessageRecord|null $reply */
+    $reply = MessageRecord::find()
+        ->where(['sessionId' => $sessionId, 'role' => 'assistant'])
+        ->orderBy(['id' => SORT_DESC])
+        ->one();
+    $text = json_decode($reply->content, true)[0]['text'] ?? '';
+    expect($text)->toContain('Nothing to compact');
+});
+
 it('persists a tool_result even when the tool returns invalid UTF-8 bytes', function () {
     // Regression: a tool that returned non-UTF-8 bytes (e.g. fetch_webpage on
     // a Windows-1252 page) used to abort the entire turn at json_encode and

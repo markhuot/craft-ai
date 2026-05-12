@@ -32,6 +32,18 @@ return [
     // OpenRouter, Ollama, LM Studio, etc.). Example: 'https://api.groq.com/openai'
     'baseUrl' => null,
 
+    // Maximum number of tokens this model can accept in a single request.
+    // Drives the chat UI's "context used" gauge and the auto-compaction
+    // trigger — when a conversation passes ~95% of this value, the plugin
+    // summarizes prior turns and replaces them with a single summary message
+    // so the conversation can continue without hitting the provider's hard
+    // limit. Leave null to use the per-provider/model defaults; set explicitly
+    // for self-hosted or non-OpenAI/Anthropic models. Examples:
+    //   200000 — Anthropic Claude (Sonnet, Haiku, Opus)
+    //   128000 — OpenAI GPT-4o / GPT-4o-mini
+    //  1048576 — DeepSeek via opencode.ai zen
+    'contextWindow' => null,
+
     // Image generation providers. Each key registered here adds the matching
     // tool to the agent's tool list — leave a key out to keep its tool hidden
     // from the model entirely. Multiple providers may be enabled at once; the

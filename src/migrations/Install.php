@@ -17,6 +17,12 @@ class Install extends Migration
             'content' => $this->mediumText()->notNull(),
             'rawResponse' => $this->mediumText()->null(),
             'assetIds' => $this->text()->null(),
+            // Token counts as reported by the provider's `usage` payload. Only
+            // populated on assistant rows — user/system/summary rows leave
+            // these null. Used to drive the chat UI's context-window gauge
+            // and the auto-compaction trigger.
+            'inputTokens' => $this->integer()->null(),
+            'outputTokens' => $this->integer()->null(),
             'dateCreated' => $this->dateTime()->notNull(),
             'dateUpdated' => $this->dateTime()->notNull(),
             'uid' => $this->uid(),
@@ -37,6 +43,12 @@ class Install extends Migration
             'toolMode' => $this->string(16)->notNull()->defaultValue('full'),
             // JSON-encoded list<string> of tool names; only set when toolMode = 'custom'.
             'enabledTools' => $this->text()->null(),
+            // ID of the most recent role='summary' message for this session.
+            // When set, loadMessages() skips every row with a lower id and
+            // folds the summary in as a system note — that's the auto-compaction
+            // boundary used to keep the conversation under the model's context
+            // window without losing context entirely.
+            'compactionPivotId' => $this->integer()->null(),
             'dateCreated' => $this->dateTime()->notNull(),
             'dateUpdated' => $this->dateTime()->notNull(),
             'uid' => $this->uid(),

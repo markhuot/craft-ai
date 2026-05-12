@@ -29,6 +29,7 @@ class SessionsController extends Controller
             'sessionTitle' => null,
             'messages' => [],
             'initialSessions' => $this->collectSessionListPayload(),
+            'contextWindow' => $this->contextWindowSetting(),
         ]);
     }
 
@@ -230,7 +231,28 @@ class SessionsController extends Controller
             'sessionTitle' => $session?->title,
             'messages' => $messages,
             'initialSessions' => $this->collectSessionListPayload(),
+            'contextWindow' => $this->contextWindowSetting(),
         ]);
+    }
+
+    /**
+     * Bootstrap the chat surface with the configured context window so its
+     * progress gauge can render before the first messages poll. Falls back
+     * to null when the host hasn't configured one (and Plugin's per-model
+     * defaults can't resolve a value either) — the gauge hides itself in
+     * that case.
+     */
+    private function contextWindowSetting(): ?int
+    {
+        try {
+            $settings = Plugin::getInstance()->getSettingsArray();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $window = $settings['contextWindow'] ?? null;
+
+        return is_int($window) && $window > 0 ? $window : null;
     }
 
     public function actionDelete(): Response

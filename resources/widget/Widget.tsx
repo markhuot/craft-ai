@@ -314,5 +314,6 @@ function chatBootstrapFor(bootstrap: WidgetBootstrap, sessionId: string): ChatBo
     initialSessions: [],
     context: bootstrap.context,
     contextFingerprint: bootstrap.contextFingerprint,
+    contextWindow: bootstrap.contextWindow,
   };
 }

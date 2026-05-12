@@ -58,18 +58,22 @@ class OpenAiProvider implements LlmProvider
 
         $response = $this->http->request('POST', 'v1/chat/completions', ['json' => $body]);
 
-        /** @var array{id: string, choices: list<array{message: array<string, mixed>, finish_reason: string|null}>} $payload */
+        /** @var array{id: string, choices: list<array{message: array<string, mixed>, finish_reason: string|null}>, usage?: array{prompt_tokens?: int, completion_tokens?: int}} $payload */
         $payload = json_decode((string) $response->getBody(), true, 512, JSON_THROW_ON_ERROR);
 
         $choice = $payload['choices'][0];
         $message = $choice['message'];
         $finishReason = $choice['finish_reason'] ?? 'stop';
 
+        $usage = is_array($payload['usage'] ?? null) ? $payload['usage'] : [];
+
         return new ProviderResponse(
             id: $payload['id'],
             content: $this->translateAssistantIn($message),
             stopReason: $this->translateStopReason($finishReason),
             raw: $payload,
+            inputTokens: isset($usage['prompt_tokens']) && is_int($usage['prompt_tokens']) ? $usage['prompt_tokens'] : null,
+            outputTokens: isset($usage['completion_tokens']) && is_int($usage['completion_tokens']) ? $usage['completion_tokens'] : null,
         );
     }
 

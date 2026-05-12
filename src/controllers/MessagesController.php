@@ -6,6 +6,7 @@ use Craft;
 use craft\elements\Asset;
 use craft\web\Controller;
 use markhuot\craftai\agent\AgentLoop;
+use markhuot\craftai\Plugin;
 use markhuot\craftai\preview\PreviewService;
 use markhuot\craftai\queue\AgentJob;
 use markhuot\craftai\records\MessageRecord;
@@ -46,7 +47,53 @@ class MessagesController extends Controller
             // the user re-mount the iframe — the in-memory React state is
             // wiped but this row survives.
             'lastPreviewUrl' => $preview->lastOpenedUrl($sessionId),
+            // Context-window gauge data. The frontend computes "% used"
+            // from the latest assistant turn's tokens / contextWindow and
+            // shows a circular progress indicator on the prompt toolbar.
+            'contextWindow' => self::contextWindow(),
+            // Available slash commands for the prompt autocomplete. The
+            // server is the source of truth so adding a new command
+            // server-side surfaces it in the menu without a UI rebuild.
+            'slashCommands' => self::slashCommandsPayload(),
         ]);
+    }
+
+    /**
+     * Serialize the built-in slash command catalog for the chat UI's
+     * autocomplete menu. Mirrors the array shape declared in AgentLoop so
+     * the menu and the dispatcher can't drift apart.
+     *
+     * @return list<array{name: string, description: string, takesArgs: bool}>
+     */
+    private static function slashCommandsPayload(): array
+    {
+        $payload = [];
+        foreach (AgentLoop::availableSlashCommands() as $name => $meta) {
+            $payload[] = [
+                'name' => $name,
+                'description' => (string) ($meta['description'] ?? ''),
+                'takesArgs' => (bool) ($meta['takesArgs'] ?? false),
+            ];
+        }
+        return $payload;
+    }
+
+    /**
+     * Pull the configured context window from plugin settings. Returns null
+     * when the setting (and the per-model fallback in Plugin::getSettingsArray)
+     * can't resolve a value — the frontend hides its gauge in that case.
+     */
+    private static function contextWindow(): ?int
+    {
+        try {
+            $settings = Plugin::getInstance()->getSettingsArray();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $window = $settings['contextWindow'] ?? null;
+
+        return is_int($window) && $window > 0 ? $window : null;
     }
 
     /**
@@ -74,7 +121,7 @@ class MessagesController extends Controller
      * column entries, ordered to match the original selection so the chat
      * thumbnails render in the expected sequence.
      *
-     * @return array{id: int, role: string, content: list<array<string, mixed>>, attachments: list<array<string, mixed>>, dateCreated: ?string}
+     * @return array{id: int, role: string, content: list<array<string, mixed>>, attachments: list<array<string, mixed>>, dateCreated: ?string, inputTokens: ?int, outputTokens: ?int}
      */
     public static function serializeMessage(MessageRecord $record): array
     {
@@ -87,6 +134,11 @@ class MessagesController extends Controller
             'content' => $content,
             'attachments' => self::resolveAttachments($record->assetIds),
             'dateCreated' => $record->dateCreated,
+            // Frontend reads inputTokens off the most recent assistant
+            // message to render the context-window progress gauge. Null
+            // for user/system/summary rows — the frontend ignores those.
+            'inputTokens' => $record->inputTokens === null ? null : (int) $record->inputTokens,
+            'outputTokens' => $record->outputTokens === null ? null : (int) $record->outputTokens,
         ];
     }
 

@@ -61,14 +61,18 @@ class AnthropicProvider implements LlmProvider
 
         $response = $this->http->request('POST', 'v1/messages', ['json' => $body]);
 
-        /** @var array{id: string, content: list<array<string, mixed>>, stop_reason: string|null} $payload */
+        /** @var array{id: string, content: list<array<string, mixed>>, stop_reason: string|null, usage?: array{input_tokens?: int, output_tokens?: int}} $payload */
         $payload = json_decode((string) $response->getBody(), true, 512, JSON_THROW_ON_ERROR);
+
+        $usage = is_array($payload['usage'] ?? null) ? $payload['usage'] : [];
 
         return new ProviderResponse(
             id: $payload['id'],
             content: $payload['content'],
             stopReason: $payload['stop_reason'] ?? 'end_turn',
             raw: $payload,
+            inputTokens: isset($usage['input_tokens']) && is_int($usage['input_tokens']) ? $usage['input_tokens'] : null,
+            outputTokens: isset($usage['output_tokens']) && is_int($usage['output_tokens']) ? $usage['output_tokens'] : null,
         );
     }
 }

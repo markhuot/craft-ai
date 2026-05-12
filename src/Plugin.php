@@ -60,7 +60,7 @@ use yii\base\Event;
 
 class Plugin extends BasePlugin
 {
-    public string $schemaVersion = '1.8.0';
+    public string $schemaVersion = '1.9.0';
 
     public bool $hasCpSection = true;
 
@@ -272,6 +272,7 @@ class Plugin extends BasePlugin
             'csrfTokenValue' => $request->getCsrfToken(),
             'context' => $context,
             'contextFingerprint' => PageContextSerializer::fingerprint($context),
+            'contextWindow' => $this->getSettingsArray()['contextWindow'],
         ];
 
         $bootstrapJson = Json::htmlEncode($bootstrap);
@@ -431,12 +432,20 @@ HTML;
     }
 
     /**
-     * @return array{provider: ?string, apiKey: ?string, model: ?string, smallModel: ?string, system: ?string, baseUrl: ?string, imageProviders: array<string, array<string, mixed>>, mcpSessionCache: \Closure|string|null}
+     * @return array{provider: ?string, apiKey: ?string, model: ?string, smallModel: ?string, system: ?string, baseUrl: ?string, contextWindow: ?int, imageProviders: array<string, array<string, mixed>>, mcpSessionCache: \Closure|string|null}
      */
     public function getSettingsArray(): array
     {
-        /** @var array{provider?: ?string, apiKey?: ?string, model?: ?string, smallModel?: ?string, system?: ?string, baseUrl?: ?string, imageProviders?: array<string, array<string, mixed>>, mcpSessionCache?: \Closure|string|null} $config */
+        /** @var array{provider?: ?string, apiKey?: ?string, model?: ?string, smallModel?: ?string, system?: ?string, baseUrl?: ?string, contextWindow?: int|null, imageProviders?: array<string, array<string, mixed>>, mcpSessionCache?: \Closure|string|null} $config */
         $config = Craft::$app->getConfig()->getConfigFromFile('craft-ai');
+
+        $explicitContextWindow = $config['contextWindow'] ?? null;
+        $contextWindow = is_int($explicitContextWindow) && $explicitContextWindow > 0
+            ? $explicitContextWindow
+            : self::defaultContextWindowFor(
+                $config['provider'] ?? null,
+                $config['model'] ?? null,
+            );
 
         return [
             'provider' => $config['provider'] ?? null,
@@ -445,9 +454,54 @@ HTML;
             'smallModel' => $config['smallModel'] ?? null,
             'system' => $config['system'] ?? null,
             'baseUrl' => $config['baseUrl'] ?? null,
+            'contextWindow' => $contextWindow,
             'imageProviders' => is_array($config['imageProviders'] ?? null) ? $config['imageProviders'] : [],
             'mcpSessionCache' => $config['mcpSessionCache'] ?? null,
         ];
+    }
+
+    /**
+     * Best-effort default context window per provider/model so the chat UI's
+     * progress gauge and auto-compaction work out of the box for common
+     * setups. Sites using an exotic model can override via
+     * `contextWindow` in config/craft-ai.php.
+     */
+    private static function defaultContextWindowFor(?string $provider, ?string $model): ?int
+    {
+        $model = is_string($model) ? strtolower($model) : '';
+
+        // DeepSeek-class models exposed via OpenAI-compatible endpoints
+        // (opencode.ai zen, etc.) advertise a 1M-token window. Without this
+        // hint the user wouldn't get a meaningful gauge — the most common
+        // failure mode this feature is meant to address.
+        if (str_contains($model, 'deepseek')) {
+            return 1_048_576;
+        }
+
+        if (str_contains($model, 'claude-haiku')) {
+            return 200_000;
+        }
+        if (str_contains($model, 'claude')) {
+            return 200_000;
+        }
+
+        if (str_contains($model, 'gpt-4o-mini')) {
+            return 128_000;
+        }
+        if (str_contains($model, 'gpt-4o')) {
+            return 128_000;
+        }
+        if (str_contains($model, 'gpt-5') || str_contains($model, 'o3') || str_contains($model, 'o4')) {
+            return 200_000;
+        }
+
+        // Conservative fallback by provider so the gauge still shows
+        // something useful when the model name doesn't match a known prefix.
+        return match ($provider) {
+            'anthropic' => 200_000,
+            'openai' => 128_000,
+            default => null,
+        };
     }
 
     public function getMcpSessionCache(): \yii\caching\CacheInterface

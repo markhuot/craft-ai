@@ -124,7 +124,10 @@ class AgentLoop
                 $toolResults[] = [
                     'type' => 'tool_result',
                     'tool_use_id' => $block['id'],
-                    'content' => $output->text,
+                    // Prefer structured blocks (text + image) when the tool
+                    // supplied them so vision-capable providers see the image
+                    // bytes; fall back to the flat text payload otherwise.
+                    'content' => $output->blocks ?? $output->text,
                     'is_error' => $output->isError,
                 ];
             }

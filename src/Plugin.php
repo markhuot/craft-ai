@@ -33,6 +33,7 @@ use markhuot\craftai\tools\GenerateImageGptImage;
 use markhuot\craftai\tools\GenerateImageNanoBanana;
 use markhuot\craftai\tools\GetAsset;
 use markhuot\craftai\tools\GetDraft;
+use markhuot\craftai\tools\GetImage;
 use markhuot\craftai\tools\GetPreview;
 use markhuot\craftai\tools\GetDrafts;
 use markhuot\craftai\tools\GetEntries;
@@ -117,6 +118,7 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(DeleteEntryTypes::class);
         $this->toolRegistry->register(DeleteFields::class);
         $this->toolRegistry->register(FetchWebpage::class, cpOnly: true);
+        $this->toolRegistry->register(GetImage::class);
         $this->toolRegistry->register(OpenPreview::class, cpOnly: true);
         $this->toolRegistry->register(GetPreview::class, cpOnly: true);
 

@@ -2,12 +2,7 @@
 
 Craft AI brings an AI agent into Craft CMS. It adds a control panel chat interface, an optional front-end widget for logged-in control panel users, and an MCP server so external AI clients can safely work with your Craft content and project structure.
 
-![Craft AI in the Craft control panel](branding/cp_ui.png)
-
-<video controls muted playsinline width="100%">
-  <source src="https://github.com/markhuot/craft-ai/raw/main/branding/screencast.mp4" type="video/mp4">
-  Your browser can't play the embedded video. <a href="https://github.com/markhuot/craft-ai/raw/main/branding/screencast.mp4">Download the screencast</a> instead.
-</video>
+https://github.com/user-attachments/assets/0a96ecf0-2383-4f04-a704-6f94551977e6
 
 ## What it can do
 

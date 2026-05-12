@@ -32,6 +32,7 @@ use markhuot\craftai\tools\FetchWebpage;
 use markhuot\craftai\tools\GenerateImageGptImage;
 use markhuot\craftai\tools\GenerateImageNanoBanana;
 use markhuot\craftai\tools\GetAsset;
+use markhuot\craftai\tools\GetAssets;
 use markhuot\craftai\tools\GetDraft;
 use markhuot\craftai\tools\GetImage;
 use markhuot\craftai\tools\GetPreview;
@@ -109,6 +110,7 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(GetTemplate::class);
         $this->toolRegistry->register(UpsertTemplate::class);
         $this->toolRegistry->register(GetAsset::class);
+        $this->toolRegistry->register(GetAssets::class);
         $this->toolRegistry->register(GetVolumes::class);
         $this->toolRegistry->register(UpsertAsset::class);
         $this->toolRegistry->register(DeleteAssets::class);

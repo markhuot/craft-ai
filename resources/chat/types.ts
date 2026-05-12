@@ -172,3 +172,16 @@ export interface SlashCommand {
    */
   takesArgs: boolean;
 }
+
+/**
+ * One element the user picked on the host page via the widget's target tool.
+ * Surfaces in the prompt input as a chip and gets prepended to the next
+ * outgoing message as a `<selected-element>` note so the agent knows which
+ * DOM node the user is talking about.
+ */
+export interface TargetSelection {
+  selector: string;
+  snippet: string;
+  tag: string;
+  text: string;
+}

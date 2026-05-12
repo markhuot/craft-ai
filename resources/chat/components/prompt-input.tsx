@@ -100,7 +100,7 @@ export function PromptInputSubmit({
       data-status={status}
       disabled={disabled || busy}
       className={cn(
-        "ai:inline-flex ai:items-center ai:gap-1.5 ai:rounded-md ai:bg-slate-900 ai:px-3 ai:py-1.5 ai:text-xs ai:font-medium ai:text-white ai:transition ai:disabled:opacity-50",
+        "ai:inline-flex ai:items-center ai:gap-1.5 ai:rounded-md ai:bg-slate-900 ai:px-3 ai:py-1.5 ai:text-xs ai:font-medium ai:text-white ai:transition hover:ai:bg-slate-700 ai:disabled:opacity-50 ai:disabled:hover:bg-slate-900",
         className,
       )}
       {...rest}

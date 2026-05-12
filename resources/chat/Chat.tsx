@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Globe } from "lucide-react";
+import { Crosshair, Globe, X } from "lucide-react";
 import { ChatApi } from "./api";
 import { ContextProgress } from "./components/context-progress";
 import { Conversation, ConversationContent } from "./components/conversation";
@@ -33,6 +33,7 @@ import type {
   ContentBlock,
   PreviewRequest,
   SlashCommand,
+  TargetSelection,
   ToolMode,
 } from "./types";
 
@@ -72,6 +73,23 @@ export interface ChatProps {
    * sidebar so the peek pane gets more horizontal room.
    */
   onPreviewPeekChange?: (peek: boolean) => void;
+  /**
+   * When true, render the "target an element" affordance in the toolbar.
+   * The widget on the front-end opts in; the CP chat surface leaves it off
+   * because clicking host-page DOM doesn't map to anything meaningful inside
+   * the control panel.
+   */
+  enableTargeting?: boolean;
+  /**
+   * Element the user has currently picked, if any. Owned by the widget so it
+   * can persist across the picker entering/leaving "active" mode. Rendered
+   * as a chip above the textarea and prepended to the next outgoing message.
+   */
+  selectedTarget?: TargetSelection | null;
+  /** Fired when the user clicks the target icon — widget kicks off the picker. */
+  onStartTargeting?: () => void;
+  /** Fired when the user clicks the chip's X to drop the current selection. */
+  onClearTarget?: () => void;
 }
 
 const CONTEXT_FP_STORAGE_PREFIX = "craftai-widget:context-fp:";
@@ -92,6 +110,10 @@ export function Chat({
   enableAttachments = true,
   storage,
   onPreviewPeekChange,
+  enableTargeting = false,
+  selectedTarget = null,
+  onStartTargeting,
+  onClearTarget,
 }: ChatProps) {
   const api = useMemo(
     () =>
@@ -495,9 +517,18 @@ export function Chat({
         }
       }
 
+      // When the user has picked an element on the host page, prepend a
+      // structured note so the agent learns which DOM node "this" refers to.
+      // The note is plain text inside the user turn — no backend changes
+      // needed — and `selector` gives the agent something to feed back into
+      // tools that read templates or rendered HTML.
+      const outgoingText = selectedTarget
+        ? `<selected-element selector=${JSON.stringify(selectedTarget.selector)}>\n${selectedTarget.snippet}\n</selected-element>\n\n${text}`
+        : text;
+
       try {
         await api.sendMessage(
-          text,
+          outgoingText,
           pendingAttachments.map((a) => a.id),
           attachContext,
         );
@@ -513,6 +544,9 @@ export function Chat({
         }
         setDraft("");
         setPendingAttachments([]);
+        if (selectedTarget && onClearTarget) {
+          onClearTarget();
+        }
         setStatus("streaming");
         await poll();
       } catch (err) {
@@ -520,7 +554,7 @@ export function Chat({
         setError(err instanceof Error ? err.message : "Failed to send message");
       }
     },
-    [api, bootstrap.context, bootstrap.contextFingerprint, bootstrap.sessionId, draft, pendingAttachments, poll, previewLiveUrl, status, storage],
+    [api, bootstrap.context, bootstrap.contextFingerprint, bootstrap.sessionId, draft, onClearTarget, pendingAttachments, poll, previewLiveUrl, selectedTarget, status, storage],
   );
 
   const onAddAttachments = useCallback(async () => {
@@ -713,10 +747,44 @@ export function Chat({
             onRemove={onRemoveAttachment}
           />
         )}
+        {selectedTarget && (
+          <div
+            data-testid="target-chip"
+            className="ai:flex ai:items-center ai:gap-1.5 ai:rounded-md ai:border ai:border-craftai-accent/40 ai:bg-craftai-user ai:px-2 ai:py-1 ai:text-xs ai:text-craftai-fg"
+          >
+            <Crosshair className="ai:h-3.5 ai:w-3.5 ai:text-craftai-accent" aria-hidden />
+            <span className="ai:min-w-0 ai:flex-1 ai:truncate" title={selectedTarget.selector}>
+              {selectedTarget.snippet}
+            </span>
+            {onClearTarget && (
+              <button
+                type="button"
+                aria-label="Clear selected element"
+                onClick={onClearTarget}
+                className="ai:inline-flex ai:h-4 ai:w-4 ai:items-center ai:justify-center ai:rounded ai:text-craftai-muted hover:ai:bg-craftai-border/40"
+              >
+                <X className="ai:h-3 ai:w-3" aria-hidden />
+              </button>
+            )}
+          </div>
+        )}
         <PromptInputToolbar>
           <div className="ai:flex ai:items-center ai:gap-1.5">
             {enableAttachments && (
               <PromptInputUpload onClick={onAddAttachments} disabled={status !== "idle"} />
+            )}
+            {enableTargeting && onStartTargeting && (
+              <button
+                type="button"
+                onClick={onStartTargeting}
+                disabled={status !== "idle"}
+                aria-label="Target an element on the page"
+                title="Click an element on the page to attach it to your next message"
+                data-testid="target-toggle"
+                className="ai:inline-flex ai:items-center ai:justify-center ai:rounded-md ai:border ai:border-craftai-border ai:bg-white ai:p-1.5 ai:text-craftai-fg ai:transition hover:ai:bg-craftai-border/20 ai:disabled:opacity-50 ai:disabled:cursor-not-allowed"
+              >
+                <Crosshair className="ai:h-3.5 ai:w-3.5" aria-hidden />
+              </button>
             )}
             {toolModeLoaded && availableTools.length > 0 && (
               <PermissionMode

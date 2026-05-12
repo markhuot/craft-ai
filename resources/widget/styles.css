@@ -61,6 +61,69 @@
   z-index: 2147483600;
 }
 
+/*
+ * Targeting mode: fade the panel so the user can see what they're clicking
+ * on, and disable pointer interaction so a misfired click on the panel
+ * doesn't get swallowed (the document-level capture handler in
+ * useElementPicker still receives it via elementFromPoint). The banner and
+ * highlight live outside the panel so they remain fully interactive.
+ */
+.craftai-widget-panel[data-targeting="true"] {
+  opacity: 0.25;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.craftai-target-banner {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 9999px;
+  background: var(--ai-color-craftai-fg);
+  color: #ffffff;
+  font-size: 0.8125rem;
+  box-shadow:
+    0 12px 28px -6px var(--ai-color-craftai-shadow),
+    0 4px 10px -4px var(--ai-color-craftai-shadow);
+  z-index: 2147483601;
+  pointer-events: auto;
+}
+
+.craftai-target-cancel {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: transparent;
+  color: inherit;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.craftai-target-cancel:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.craftai-target-highlight {
+  position: fixed;
+  pointer-events: none;
+  border: 2px solid var(--ai-color-craftai-accent);
+  background: rgba(29, 78, 216, 0.12);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5);
+  z-index: 2147483601;
+  transition:
+    top 60ms ease-out,
+    left 60ms ease-out,
+    width 60ms ease-out,
+    height 60ms ease-out;
+}
+
 .craftai-widget-panel {
   width: min(28rem, calc(100vw - 2rem));
   height: min(36rem, calc(100vh - 2rem));

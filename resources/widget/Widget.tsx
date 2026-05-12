@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, MessageCircle, Plus, X } from "lucide-react";
 import { Chat } from "../chat/Chat";
-import type { ChatBootstrap, SessionListItem } from "../chat/types";
+import type { ChatBootstrap, SessionListItem, TargetSelection } from "../chat/types";
 import { WidgetApi } from "./api";
+import { useElementPicker } from "./lib/useElementPicker";
 import type { WidgetBootstrap } from "./types";
 
 type ViewMode = "closed" | "chat" | "sessions";
@@ -30,6 +31,52 @@ export function Widget({ bootstrap, api: apiOverride, storage }: WidgetProps) {
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Targeting mode: while `targeting` is true the picker hook is live (mouse
+  // tracking + highlight + Esc/click handling). Once the user picks an
+  // element it goes into `selectedTarget` and the picker turns off again.
+  // The selection survives across picker toggles so the user can re-pick
+  // without losing context (they'd just overwrite it).
+  const [targeting, setTargeting] = useState(false);
+  const [selectedTarget, setSelectedTarget] = useState<TargetSelection | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  // Exclude the widget itself from picker hits. The hook climbs from the
+  // shadow host upward, but elementFromPoint on the host page only ever
+  // returns the host element for clicks "through" the shadow tree — so
+  // skipping the host (and the bubble it contains) is sufficient.
+  const getExcludedRoot = useCallback(() => {
+    const el = rootRef.current;
+    if (!el) return null;
+    // Walk up to the shadow host so the picker treats the entire widget
+    // (including overlays we render in this tree) as off-limits.
+    const root = el.getRootNode();
+    if (root instanceof ShadowRoot) {
+      return root.host;
+    }
+    return el;
+  }, []);
+
+  const { highlightRect } = useElementPicker({
+    active: targeting,
+    onPick: (selection) => {
+      setSelectedTarget(selection);
+      setTargeting(false);
+    },
+    onCancel: () => setTargeting(false),
+    getExcludedRoot,
+  });
+
+  const startTargeting = useCallback(() => {
+    setTargeting(true);
+  }, []);
+
+  const clearTarget = useCallback(() => {
+    setSelectedTarget(null);
+  }, []);
+
+  const cancelTargeting = useCallback(() => {
+    setTargeting(false);
+  }, []);
 
   const persistSession = useCallback(
     (id: string | null) => {
@@ -119,19 +166,27 @@ export function Widget({ bootstrap, api: apiOverride, storage }: WidgetProps) {
 
   // Close on Escape from anywhere within the widget. We intentionally listen
   // on the shadow root's owner document so the host page's other Escape
-  // handlers still fire too.
+  // handlers still fire too. Suppressed while targeting — the picker hook
+  // owns Escape in that mode (it'd be jarring if pressing Escape to back
+  // out of element-picking also closed the chat).
   useEffect(() => {
     if (view === "closed") return;
+    if (targeting) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") closeWidget();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [view, closeWidget]);
+  }, [view, targeting, closeWidget]);
 
   if (view === "closed") {
     return (
-      <div className="craftai-widget-root" data-testid="widget-root" data-view="closed">
+      <div
+        ref={rootRef}
+        className="craftai-widget-root"
+        data-testid="widget-root"
+        data-view="closed"
+      >
         <button
           type="button"
           className="craftai-widget-bubble"
@@ -148,12 +203,50 @@ export function Widget({ bootstrap, api: apiOverride, storage }: WidgetProps) {
   }
 
   return (
-    <div className="craftai-widget-root" data-testid="widget-root" data-view={view}>
+    <div
+      ref={rootRef}
+      className="craftai-widget-root"
+      data-testid="widget-root"
+      data-view={view}
+      data-targeting={targeting ? "true" : undefined}
+    >
+      {targeting && (
+        <>
+          <div
+            data-testid="target-banner"
+            className="craftai-target-banner"
+            role="status"
+          >
+            <span>Click an element on the page to target it</span>
+            <button
+              type="button"
+              onClick={cancelTargeting}
+              aria-label="Cancel targeting"
+              className="craftai-target-cancel"
+            >
+              Cancel (Esc)
+            </button>
+          </div>
+          {highlightRect && (
+            <div
+              data-testid="target-highlight"
+              className="craftai-target-highlight"
+              style={{
+                top: highlightRect.top,
+                left: highlightRect.left,
+                width: highlightRect.width,
+                height: highlightRect.height,
+              }}
+            />
+          )}
+        </>
+      )}
       <div
         className="craftai-widget-panel"
         role="dialog"
         aria-label="Craft AI chat"
         data-testid="widget-panel"
+        data-targeting={targeting ? "true" : undefined}
       >
         <header className="ai:flex ai:items-center ai:gap-2 ai:border-b ai:border-craftai-border ai:px-3 ai:py-2">
           {view === "chat" && (
@@ -210,6 +303,10 @@ export function Widget({ bootstrap, api: apiOverride, storage }: WidgetProps) {
                 key={activeSessionId}
                 bootstrap={chatBootstrapFor(bootstrap, activeSessionId)}
                 enableAttachments={false}
+                enableTargeting
+                selectedTarget={selectedTarget}
+                onStartTargeting={startTargeting}
+                onClearTarget={clearTarget}
               />
             </div>
           ) : (

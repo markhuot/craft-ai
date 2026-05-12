@@ -758,6 +758,123 @@ it('recovers from a context-length 400 by compacting and retrying once', functio
     expect($joined)->not->toContain('USER:'); // raw transcript markers don't leak
 });
 
+it('keeps a tool_use/tool_result pair together when compaction picks the cutoff', function () {
+    // Reproduces the failure mode where a tool returned a payload large enough
+    // to overrun the context window. The pre-fix compaction picked the last
+    // assistant as the cutoff (an assistant with tool_use blocks) and left the
+    // matching user tool_result behind the pivot — the retry then sent that
+    // orphan tool_result and DeepSeek 400'd with
+    // "Messages with role 'tool' must be a response to a preceding message".
+    $sessionId = 'session-compact-pair';
+    $session = new SessionRecord();
+    $session->id = $sessionId;
+    $session->userId = 1;
+    $session->save();
+
+    // user -> assistant(tool_use) -> user(tool_result), then a fresh user
+    // question that triggers the run.
+    $u1 = new MessageRecord();
+    $u1->sessionId = $sessionId;
+    $u1->role = 'user';
+    $u1->content = json_encode([['type' => 'text', 'text' => 'fetch the page']]);
+    $u1->save();
+
+    $a1 = new MessageRecord();
+    $a1->sessionId = $sessionId;
+    $a1->role = 'assistant';
+    $a1->content = json_encode([
+        ['type' => 'tool_use', 'id' => 'tu_big', 'name' => 'fetch_webpage', 'input' => []],
+    ]);
+    $a1->save();
+
+    $tr = new MessageRecord();
+    $tr->sessionId = $sessionId;
+    $tr->role = 'user';
+    $tr->content = json_encode([
+        ['type' => 'tool_result', 'tool_use_id' => 'tu_big', 'content' => 'huge payload'],
+    ]);
+    $tr->save();
+
+    $u2 = new MessageRecord();
+    $u2->sessionId = $sessionId;
+    $u2->role = 'user';
+    $u2->content = json_encode([['type' => 'text', 'text' => 'summarize that for me']]);
+    $u2->save();
+
+    // Build a 400 ClientException to force the context-length recovery path,
+    // which is what triggers compaction on a transcript that ends in a
+    // tool_use/tool_result pair.
+    $request = new \GuzzleHttp\Psr7\Request('POST', 'v1/chat/completions');
+    $body = '{"error":{"message":"This model\'s maximum context length is 1048576 tokens."}}';
+    $response = new \GuzzleHttp\Psr7\Response(400, [], $body);
+    $contextError = new \GuzzleHttp\Exception\ClientException(
+        'Client error: 400',
+        $request,
+        $response,
+    );
+
+    $throwingProvider = new class($contextError) implements LlmProvider {
+        /** @var list<array{messages: list<array<string, mixed>>, tools: list<ToolDescriptor>}> */
+        public array $calls = [];
+        public int $count = 0;
+        public function __construct(private readonly \Throwable $err) {}
+        public function createMessage(array $messages, array $tools = [], ?string $system = null): ProviderResponse
+        {
+            $this->calls[] = ['messages' => $messages, 'tools' => $tools];
+            $this->count++;
+            if ($this->count === 1) {
+                throw $this->err;
+            }
+            return new ProviderResponse(
+                'msg_after',
+                [['type' => 'text', 'text' => 'recovered']],
+                'end_turn',
+                inputTokens: 5,
+                outputTokens: 2,
+            );
+        }
+    };
+
+    $summarizer = new FakeProvider([
+        new ProviderResponse(
+            'msg_sum',
+            [['type' => 'text', 'text' => 'Summary of the fetch turn.']],
+            'end_turn',
+        ),
+    ]);
+
+    $loop = new AgentLoop($throwingProvider, $this->registry);
+    $loop->setSmallProvider($summarizer);
+    $loop->setContextWindow(1_000_000);
+    $loop->run($sessionId);
+
+    // The pivot must land on the tool_result row, not on the assistant —
+    // otherwise the next run would reload starting with an orphan tool_result.
+    $session = SessionRecord::findOne(['id' => $sessionId]);
+    expect((int) $session->compactionPivotId)->toBe((int) $tr->id);
+
+    // The retry prompt must NOT contain any orphan tool_result blocks: every
+    // tool_result has to be preceded by an assistant tool_use with the same id.
+    expect($throwingProvider->count)->toBe(2);
+    $retry = $throwingProvider->calls[1]['messages'];
+    $openIds = [];
+    foreach ($retry as $msg) {
+        foreach ($msg['content'] as $block) {
+            $type = $block['type'] ?? '';
+            if ($msg['role'] === 'assistant' && $type === 'tool_use') {
+                $openIds[$block['id']] = true;
+            }
+            if ($msg['role'] === 'user' && $type === 'tool_result') {
+                $id = $block['tool_use_id'] ?? null;
+                expect(isset($openIds[$id]))->toBeTrue(
+                    'orphan tool_result with id '.var_export($id, true).' in retry prompt'
+                );
+                unset($openIds[$id]);
+            }
+        }
+    }
+});
+
 it('skips messages before the compaction pivot when loading history for the next turn', function () {
     $sessionId = 'session-post-pivot';
     $session = new SessionRecord();

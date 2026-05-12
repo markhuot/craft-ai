@@ -810,6 +810,23 @@ class AgentLoop
             return;
         }
 
+        // Don't split a tool_use/tool_result pair. The cutoff assistant may
+        // have issued tool_use blocks whose matching tool_result is the very
+        // next user turn — leaving that user turn on the post-summary side
+        // would produce an orphan tool_result on the next provider call, and
+        // strict providers (DeepSeek) reject it with "Messages with role
+        // 'tool' must be a response to a preceding message". Advance the
+        // cutoff past any immediately-following user turns that carry
+        // tool_result blocks so the pair stays together inside the summary.
+        $total = count($records);
+        while (
+            $cutoff + 1 < $total
+            && $records[$cutoff + 1]->role === 'user'
+            && $this->messageContainsToolResult($records[$cutoff + 1])
+        ) {
+            $cutoff++;
+        }
+
         $toSummarize = array_slice($records, 0, $cutoff + 1);
 
         $transcript = $this->renderTranscriptForSummary($toSummarize);
@@ -832,6 +849,24 @@ class AgentLoop
         // freshly-written summary row (with a higher id) is included.
         $session->compactionPivotId = (int) $toSummarize[count($toSummarize) - 1]->id;
         $session->save();
+    }
+
+    private function messageContainsToolResult(MessageRecord $record): bool
+    {
+        try {
+            $blocks = json_decode($record->content, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return false;
+        }
+        if (! is_array($blocks)) {
+            return false;
+        }
+        foreach ($blocks as $block) {
+            if (is_array($block) && ($block['type'] ?? '') === 'tool_result') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

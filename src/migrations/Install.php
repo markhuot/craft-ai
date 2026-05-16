@@ -94,6 +94,35 @@ class Install extends Migration
             ['sessionId', 'status'],
         );
 
+        $this->createTable('{{%craftai_comments}}', [
+            'id' => $this->primaryKey(),
+            'sessionId' => $this->string(36)->notNull(),
+            'elementId' => $this->integer()->notNull(),
+            'isDraft' => $this->boolean()->notNull()->defaultValue(false),
+            'fieldHandle' => $this->string()->null(),
+            'blockPath' => $this->string()->null(),
+            'body' => $this->text()->notNull(),
+            'status' => $this->string(16)->notNull()->defaultValue('open'),
+            'resolvedAt' => $this->dateTime()->null(),
+            'resolvedBy' => $this->string(16)->null(),
+            'authorMessageId' => $this->integer()->null(),
+            'dateCreated' => $this->dateTime()->notNull(),
+            'dateUpdated' => $this->dateTime()->notNull(),
+            'uid' => $this->uid(),
+        ]);
+
+        $this->createIndex(
+            'idx_craftai_comments_session',
+            '{{%craftai_comments}}',
+            ['sessionId'],
+        );
+
+        $this->createIndex(
+            'idx_craftai_comments_element',
+            '{{%craftai_comments}}',
+            ['elementId', 'isDraft', 'status'],
+        );
+
         return true;
     }
 
@@ -102,6 +131,7 @@ class Install extends Migration
         $this->dropTableIfExists('{{%craftai_messages}}');
         $this->dropTableIfExists('{{%craftai_sessions}}');
         $this->dropTableIfExists('{{%craftai_preview_requests}}');
+        $this->dropTableIfExists('{{%craftai_comments}}');
 
         return true;
     }

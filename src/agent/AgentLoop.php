@@ -91,6 +91,10 @@ PROMPT;
             'description' => 'Summarize the conversation so far to free context window.',
             'takesArgs' => false,
         ],
+        'review' => [
+            'description' => 'Review an entry or draft and leave inline comments. Usage: /review entry:123 or /review draft:456.',
+            'takesArgs' => true,
+        ],
     ];
 
     /**
@@ -151,12 +155,17 @@ PROMPT;
      * reply that lists what's available. Errors during execution (e.g.
      * compaction with nothing to summarize) get persisted as an `error`
      * block on the assistant turn so the UI shows the red box.
+     *
+     * Returns true when the command is terminal (run() should bail without
+     * calling the LLM), false when the command rewrote conversation state
+     * and run() should proceed to the LLM with the new state.
      */
-    private function dispatchSlashCommand(string $sessionId, string $rawCommand): void
+    private function dispatchSlashCommand(string $sessionId, string $rawCommand): bool
     {
         $trimmed = ltrim($rawCommand, '/');
         $parts = preg_split('/\s+/', $trimmed, 2) ?: [''];
         $name = strtolower((string) ($parts[0] ?? ''));
+        $args = isset($parts[1]) ? trim((string) $parts[1]) : '';
 
         if (! isset(self::SLASH_COMMANDS[$name])) {
             $known = implode(', ', array_map(static fn (string $n): string => "/{$n}", array_keys(self::SLASH_COMMANDS)));
@@ -164,7 +173,7 @@ PROMPT;
                 'type' => 'text',
                 'text' => "Unknown command `/{$name}`. Available: {$known}.",
             ]]);
-            return;
+            return true;
         }
 
         switch ($name) {
@@ -184,7 +193,7 @@ PROMPT;
                             'type' => 'text',
                             'text' => 'Nothing to compact yet — there needs to be at least one assistant reply in the conversation first.',
                         ]]);
-                        return;
+                        return true;
                     }
                     $this->saveMessage($sessionId, 'assistant', [[
                         'type' => 'text',
@@ -196,8 +205,166 @@ PROMPT;
                         'text' => 'Could not compact the conversation: '.$e->getMessage(),
                     ]]);
                 }
-                return;
+                return true;
+
+            case 'review':
+                return $this->dispatchReview($sessionId, $args);
         }
+    }
+
+    /**
+     * Set up a review session: parse the user's `/review` argument, rewrite
+     * the trailing user message into a detailed review prompt with the
+     * target element baked in, and inject a system note with review
+     * etiquette. Returns false so {@see run} falls through to the LLM with
+     * the rewritten state — the agent then drives the review autonomously,
+     * calling `get_entry`/`get_draft` and `leave_comment` as needed.
+     *
+     * If the argument is missing or unparseable, writes a friendly
+     * assistant reply asking for an explicit target and returns true to
+     * stop. We deliberately don't auto-pick the "most recent entry" from
+     * conversation context — the cost of reviewing the wrong element is
+     * higher than the cost of one extra user turn.
+     */
+    private function dispatchReview(string $sessionId, string $args): bool
+    {
+        $target = self::parseReviewTarget($args);
+
+        if ($target === null) {
+            $this->saveMessage($sessionId, 'assistant', [[
+                'type' => 'text',
+                'text' => "I need an explicit target to review. Try `/review entry:123` for a canonical entry or `/review draft:456` for a draft. (A bare numeric ID like `/review 123` also works and is treated as an entry.)",
+            ]]);
+            return true;
+        }
+
+        [$kind, $id] = $target;
+        $idArg = $kind === 'draft' ? "draftId: {$id}" : "entryId: {$id}";
+        $reviewLabel = $kind === 'draft' ? "draft #{$id}" : "entry #{$id}";
+        $fetchTool = $kind === 'draft' ? 'get_draft' : 'get_entry';
+
+        // Rewrite the user's "/review …" text into the verbose review
+        // prompt so the LLM sees a normal instruction rather than the slash
+        // command. This is the simplest way to keep the rest of the loop
+        // (compaction, history loading, tool execution) oblivious to the
+        // command-vs-prompt distinction — by the time loadMessages() runs
+        // there's no `/review` left in the transcript.
+        $this->rewriteLatestUserMessage(
+            $sessionId,
+            <<<PROMPT
+            Please conduct a thorough editorial review of {$reviewLabel}.
+
+            1. Read the element with `{$fetchTool}` (using {$idArg}) to see
+               its current contents and field structure.
+            2. Evaluate each populated field on its own merits — clarity,
+               structure, tone, factual accuracy, missing context, broken
+               or unclear references, accessibility (alt text, headings),
+               SEO basics where relevant.
+            3. For every issue you find, call `leave_comment` with the
+               appropriate `fieldHandle` so the indicator surfaces next to
+               that field in the CP. Pair `{$idArg}` on the call. Use a
+               top-level note (omit fieldHandle) only for issues that span
+               the whole entry. Keep comment bodies specific and
+               actionable — they will be read verbatim by the editor.
+            4. Don't comment on fields that look good. A short review is
+               fine; quality over quantity.
+            5. When you're done, summarize what you flagged in a few
+               sentences (not as another comment — as your normal reply).
+            PROMPT,
+        );
+
+        $this->appendSystemContext(
+            $sessionId,
+            <<<NOTE
+            [Review session started]
+            Target: {$reviewLabel}
+            Use leave_comment / resolve_comment / get_comments to manage
+            inline feedback. The user can reply to comments from the entry
+            edit screen — their replies arrive as normal user turns in
+            this chat. They can also mark comments resolved themselves;
+            check get_comments(status: "open") before claiming the review
+            is complete.
+            NOTE,
+        );
+
+        return false;
+    }
+
+    /**
+     * Rewrite the trailing user message's text content so the agent sees
+     * an expanded prompt instead of the literal slash command. Only
+     * touches the first `text` block — attachment blocks (assetIds column)
+     * survive untouched. If there's no user message at all (impossible in
+     * practice — dispatch only runs when latestSlashCommand returned a
+     * value) we no-op.
+     */
+    private function rewriteLatestUserMessage(string $sessionId, string $replacement): void
+    {
+        /** @var MessageRecord|null $latest */
+        $latest = MessageRecord::find()
+            ->where(['sessionId' => $sessionId, 'role' => 'user'])
+            ->orderBy(['id' => SORT_DESC])
+            ->one();
+
+        if ($latest === null) {
+            return;
+        }
+
+        try {
+            /** @var list<array<string, mixed>> $blocks */
+            $blocks = json_decode($latest->content, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return;
+        }
+
+        $rewroteOne = false;
+        foreach ($blocks as $i => $block) {
+            if (($block['type'] ?? '') === 'text') {
+                $blocks[$i]['text'] = $replacement;
+                $rewroteOne = true;
+                break;
+            }
+        }
+
+        if (! $rewroteOne) {
+            $blocks[] = ['type' => 'text', 'text' => $replacement];
+        }
+
+        $latest->content = json_encode(
+            $blocks,
+            JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE,
+        );
+        $latest->save();
+    }
+
+    /**
+     * Parse the argument tail of `/review …` into a (kind, id) tuple.
+     * Accepts:
+     *   - `entry:123`  → ['entry', 123]
+     *   - `draft:456`  → ['draft', 456]
+     *   - `123`        → ['entry', 123]  (bare numeric ID is canonical entry)
+     *   - `#123`       → ['entry', 123]  (CP-style ref)
+     *
+     * Anything else returns null so the dispatcher can prompt for clarity.
+     *
+     * @return array{0: 'entry'|'draft', 1: int}|null
+     */
+    private static function parseReviewTarget(string $args): ?array
+    {
+        $args = trim($args);
+        if ($args === '') {
+            return null;
+        }
+
+        if (preg_match('/^(entry|draft)\s*[:#=]\s*(\d+)$/i', $args, $m)) {
+            return [strtolower($m[1]) === 'draft' ? 'draft' : 'entry', (int) $m[2]];
+        }
+
+        if (preg_match('/^#?(\d+)$/', $args, $m)) {
+            return ['entry', (int) $m[1]];
+        }
+
+        return null;
     }
 
     /**
@@ -248,8 +415,13 @@ PROMPT;
         // them to feel like normal turns in the transcript.
         $slashCommand = $this->latestSlashCommand($sessionId);
         if ($slashCommand !== null) {
-            $this->dispatchSlashCommand($sessionId, $slashCommand);
-            return;
+            // Terminal commands (compact, unknown) return true and stop the
+            // turn. Pass-through commands (review) return false after
+            // rewriting state so we fall through to the LLM with the new
+            // history loaded below.
+            if ($this->dispatchSlashCommand($sessionId, $slashCommand)) {
+                return;
+            }
         }
 
         // Pre-flight: if the last assistant turn consumed >= 95% of the

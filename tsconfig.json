@@ -19,11 +19,17 @@
     "noEmit": true,
     "types": ["bun", "@happy-dom/global-registrator"]
   },
-  "include": ["resources/chat/**/*", "resources/widget/**/*", "build.ts"],
+  "include": [
+    "resources/chat/**/*",
+    "resources/widget/**/*",
+    "resources/comments/**/*",
+    "build.ts"
+  ],
   "exclude": [
     "node_modules",
     "vendor",
     "src/web/assets/chat/dist",
-    "src/web/assets/widget/dist"
+    "src/web/assets/widget/dist",
+    "src/web/assets/comments/dist"
   ]
 }

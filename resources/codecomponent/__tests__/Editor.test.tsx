@@ -97,13 +97,16 @@ describe("CodeComponent editor", () => {
       />,
     );
 
-    // Twig panel is the default per the tab order; CSS is hidden until clicked.
-    const cssPanel = screen.getByTestId("panel-css");
-    expect(cssPanel.hidden).toBe(true);
+    // Prompt is the default per the tab order; the code tabs are hidden
+    // until the user picks one.
+    expect(screen.getByTestId("panel-prompt").hidden).toBe(false);
+    expect(screen.getByTestId("panel-css").hidden).toBe(true);
+    expect(screen.getByTestId("panel-twig").hidden).toBe(true);
 
     fireEvent.click(screen.getByTestId("tab-css"));
 
     expect(screen.getByTestId("panel-css").hidden).toBe(false);
+    expect(screen.getByTestId("panel-prompt").hidden).toBe(true);
     expect(screen.getByTestId("panel-twig").hidden).toBe(true);
   });
 

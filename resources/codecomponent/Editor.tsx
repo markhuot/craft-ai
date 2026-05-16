@@ -35,11 +35,15 @@ export function Editor({ bootstrap, hiddenInputs, csrfTokenName, csrfTokenValue 
   const [values, setValues] = useState<FieldValues>(bootstrap.values);
 
   const availableTabs = useMemo<TabId[]>(() => {
+    // Prompt leads the tab list so a fresh field opens onto the agent
+    // chat — that's the primary surface this field exists to expose.
+    // The code tabs follow in source-order (Twig → CSS → JS) for users
+    // who want to inspect or hand-edit what the agent produced.
     const tabs: TabId[] = [];
+    if (bootstrap.permissions.prompt) tabs.push("prompt");
     if (bootstrap.permissions.twig) tabs.push("twig");
     if (bootstrap.permissions.css) tabs.push("css");
     if (bootstrap.permissions.js) tabs.push("js");
-    if (bootstrap.permissions.prompt) tabs.push("prompt");
     return tabs;
   }, [bootstrap.permissions]);
 

@@ -118,6 +118,46 @@ it('omits empty sections from rendered output', function () {
     expect($html)->toBe('<style>p { margin: 0 }</style>');
 });
 
+it('is a Twig\\Markup instance so `{{ entry.field }}` skips Twig escape', function () {
+    // Twig's `twig_escape_filter` short-circuits on any `Markup`
+    // instance — it returns the value as-is regardless of the
+    // surrounding autoescape mode. Asserting on `instanceof Markup`
+    // captures the contract a template author depends on (no `|raw`
+    // required) without coupling the test to whichever autoescape
+    // setting the rendering view happens to be in.
+    $value = new CodeComponentValue([
+        'twig' => '<section class="hero">Hi</section>',
+        'css' => 'h1 { color: red; }',
+    ]);
+
+    expect($value)->toBeInstanceOf(\Twig\Markup::class);
+    // Stringifying the Markup still produces the fully rendered output —
+    // tags intact, no entity escaping at the boundary.
+    expect((string) $value)->toContain('<section class="hero">');
+    expect((string) $value)->toContain('<style>h1 { color: red; }</style>');
+});
+
+it('escapes a non-Markup sibling render — proving the previous test is exercising the Markup branch', function () {
+    // Render a Twig template with autoescape enabled explicitly so the
+    // contrast with the Markup case above is observable: the raw string
+    // version DOES get escaped, the Markup version does not.
+    $twig = new \Twig\Environment(
+        new \Twig\Loader\ArrayLoader(['t' => '{{ value }}']),
+        ['autoescape' => 'html'],
+    );
+
+    $escaped = $twig->render('t', ['value' => '<script>x</script>']);
+    expect($escaped)->toBe('&lt;script&gt;x&lt;/script&gt;');
+
+    $passthrough = $twig->render('t', [
+        'value' => new CodeComponentValue([
+            'twig' => '<section class="hero">Hi</section>',
+        ]),
+    ]);
+    expect($passthrough)->toContain('<section class="hero">');
+    expect($passthrough)->not->toContain('&lt;');
+});
+
 it('round-trips a saved entry through the database with all three tabs', function () {
     $entry = makeCodeComponentSection('articles');
     $entry->setFieldValue('component', new CodeComponentValue([

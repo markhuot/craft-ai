@@ -1,0 +1,75 @@
+/*
+ * Tailwind v4 with the same `ai` prefix the chat + widget bundles use,
+ * so utility classes can't collide with Craft CP styles. We import the
+ * standalone utilities entry directly (skipping `tailwindcss` umbrella)
+ * for the same reasons the chat bundle does — no preflight, no
+ * @layer wrap.
+ */
+@import "tailwindcss/theme.css" layer(theme) prefix(ai);
+@import "tailwindcss/utilities.css" prefix(ai);
+
+@theme {
+  --color-craftai-bg: #ffffff;
+  --color-craftai-border: #e3e5e8;
+  --color-craftai-muted: #606d7b;
+  --color-craftai-accent: #1f6feb;
+  --color-craftai-accent-soft: #e7f0ff;
+}
+
+.craftai-code-component-root {
+  font-family: inherit;
+}
+
+/* The CodeMirror editor's outer wrapper. A border + soft fill keeps the
+ * editor visually distinct from Craft CP's standard text inputs without
+ * forcing a heavyweight theme override on CodeMirror itself. */
+.craftai-code-editor {
+  border: 1px solid var(--ai-color-craftai-border);
+  border-radius: 6px;
+  background: #fdfdfe;
+  overflow: hidden;
+}
+
+/* CodeMirror sets its own focus ring; make ours win without an outline
+ * jump on focus. */
+.craftai-code-editor:focus-within {
+  border-color: var(--ai-color-craftai-accent);
+  box-shadow: 0 0 0 1px var(--ai-color-craftai-accent);
+}
+
+/* Tabs row. Use a subtle bottom border that meets the active tab so the
+ * row reads as a tablist instead of a button group. */
+.craftai-tab {
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  color: var(--ai-color-craftai-muted);
+  cursor: pointer;
+  padding: 6px 12px;
+  margin-bottom: -1px;
+  font-size: 12px;
+  font-weight: 500;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+}
+
+.craftai-tab:hover:not([aria-selected="true"]) {
+  color: inherit;
+  background: var(--ai-color-craftai-accent-soft);
+}
+
+.craftai-tab[aria-selected="true"] {
+  color: inherit;
+  background: var(--ai-color-craftai-bg);
+  border-color: var(--ai-color-craftai-border);
+}
+
+/* Constrain the embedded chat. Inside the field its parent gives it a
+ * fixed height so messages scroll without pushing the rest of the
+ * entry-edit form. */
+.craftai-prompt-shell {
+  height: 480px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}

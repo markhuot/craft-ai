@@ -32,6 +32,17 @@ class PageContextSerializer
      */
     public static function toSystemNote(array $context): string
     {
+        // CodeComponent field authoring has its own framing — the user is in
+        // the CP editing a specific field, not browsing the public site —
+        // so route those payloads through a dedicated branch that explains
+        // the agent's role and embeds the live tab values. Falls through to
+        // the standard page-context prelude when no field-author block is
+        // present.
+        $fieldAuthor = is_array($context['fieldAuthor'] ?? null) ? $context['fieldAuthor'] : null;
+        if ($fieldAuthor !== null && self::isCodeComponentFieldAuthor($fieldAuthor)) {
+            return self::toCodeComponentFieldNote($fieldAuthor, $context);
+        }
+
         $url = self::stringOrNull($context['url'] ?? null);
         $path = self::stringOrNull($context['path'] ?? null);
         $template = self::stringOrNull($context['template'] ?? null);
@@ -75,7 +86,7 @@ class PageContextSerializer
     }
 
     /**
-     * @param array<string, mixed> $element
+     * @param array<array-key, mixed> $element
      */
     private static function renderElement(array $element): ?string
     {
@@ -154,5 +165,102 @@ class PageContextSerializer
             return $trimmed === '' ? null : $trimmed;
         }
         return null;
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $fieldAuthor
+     */
+    private static function isCodeComponentFieldAuthor(array $fieldAuthor): bool
+    {
+        $kind = $fieldAuthor['kind'] ?? null;
+
+        return is_string($kind) && $kind === 'code-component-field';
+    }
+
+    /**
+     * Render the framing the agent sees when the user is editing a Code
+     * Component field. The block lives at the top of the system note so
+     * the agent reads the role + tool callout before any per-tab content.
+     *
+     * @param  array<array-key, mixed>  $fieldAuthor
+     * @param  array<string, mixed>  $context
+     */
+    private static function toCodeComponentFieldNote(array $fieldAuthor, array $context): string
+    {
+        $handle = self::stringOrNull($fieldAuthor['fieldHandle'] ?? null);
+        $name = self::stringOrNull($fieldAuthor['fieldName'] ?? null);
+        $fieldId = $fieldAuthor['fieldId'] ?? null;
+        $values = is_array($fieldAuthor['currentValues'] ?? null) ? $fieldAuthor['currentValues'] : [];
+
+        $element = is_array($context['element'] ?? null) ? $context['element'] : null;
+
+        $headerParts = [];
+        if ($name !== null) {
+            $headerParts[] = '"'.$name.'"';
+        }
+        $meta = [];
+        if ($handle !== null) {
+            $meta[] = "handle: {$handle}";
+        }
+        if (is_int($fieldId) && $fieldId > 0) {
+            $meta[] = "id: {$fieldId}";
+        } elseif (is_string($fieldId) && $fieldId !== '') {
+            $meta[] = "id: {$fieldId}";
+        }
+        if ($meta !== []) {
+            $headerParts[] = '('.implode(', ', $meta).')';
+        }
+        $fieldHeader = $headerParts === []
+            ? 'Field: (unknown)'
+            : 'Field: '.implode(' ', $headerParts);
+
+        $elementLine = null;
+        if ($element !== null) {
+            $rendered = self::renderElement($element);
+            if ($rendered !== null) {
+                $elementLine = "Element: {$rendered}";
+            }
+        }
+        if ($elementLine === null) {
+            $elementLine = 'Element: (entry not yet saved)';
+        }
+
+        $body = [];
+        $body[] = $fieldHeader;
+        $body[] = $elementLine;
+        $body[] = '';
+        $body[] = 'Current Twig:';
+        $body[] = self::tabFence('twig', $values['twig'] ?? null);
+        $body[] = '';
+        $body[] = 'Current CSS:';
+        $body[] = self::tabFence('css', $values['css'] ?? null);
+        $body[] = '';
+        $body[] = 'Current JS:';
+        $body[] = self::tabFence('js', $values['js'] ?? null);
+
+        $preamble = 'The user is editing a Code Component custom field in the Craft control panel. '
+            ."Anything you author with them needs to be written back into the field via the "
+            ."`update_code_component` tool — pass the field handle plus any of `twig`, `css`, "
+            ."or `js` and the changes appear live in the user's editor. Drafts are the rollback "
+            ."mechanism; prefer writing to a draft when iterating.";
+
+        return "<code-component-context>\n"
+            .$preamble."\n\n"
+            .implode("\n", $body)
+            ."\n</code-component-context>";
+    }
+
+    /**
+     * Render one tab's current value as a fenced code block, or "(empty)"
+     * when the tab is blank. Trailing newlines are trimmed so the fence
+     * always closes flush against the value.
+     */
+    private static function tabFence(string $lang, mixed $value): string
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return '(empty)';
+        }
+
+        return "```{$lang}\n".rtrim($value, "\n")."\n```";
     }
 }

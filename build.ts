@@ -28,6 +28,17 @@ const bundles: Bundle[] = [
     cssEntry: resolve(root, "resources/widget/styles.css"),
     cssOut: resolve(root, "src/web/assets/widget/dist/widget.css"),
   },
+  {
+    // `name` doubles as the path segment under `src/web/assets/<name>/dist/`,
+    // and that has to match the asset-bundle's PHP namespace — which can't
+    // contain hyphens. The output filenames keep the readable hyphenated
+    // form since those land inside the bundle and only show up in URLs.
+    name: "codecomponent",
+    jsEntry: resolve(root, "resources/codecomponent/index.tsx"),
+    jsOut: "code-component-field.js",
+    cssEntry: resolve(root, "resources/codecomponent/styles.css"),
+    cssOut: resolve(root, "src/web/assets/codecomponent/dist/code-component-field.css"),
+  },
 ];
 
 async function buildJs(bundle: Bundle): Promise<void> {

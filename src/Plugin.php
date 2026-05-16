@@ -14,7 +14,11 @@ use craft\web\UrlManager;
 use craft\web\View;
 use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\agent\PageContextSerializer;
+use markhuot\craftai\agent\RegisterAgentToolsEvent;
 use markhuot\craftai\agent\ToolContext;
+use markhuot\craftai\fields\CodeComponent;
+use markhuot\craftai\fields\CodeComponentModule;
+use markhuot\craftai\fields\CodeComponentPermissions;
 use markhuot\craftai\permissions\ToolPermissions;
 use markhuot\craftai\preview\PreviewService;
 use markhuot\craftai\agent\providers\AnthropicProvider;
@@ -67,6 +71,16 @@ use yii\base\Event;
 
 class Plugin extends BasePlugin
 {
+    /**
+     * @event RegisterAgentToolsEvent Fired after the plugin's built-in
+     * agent tools have been registered. Listeners may append entries to
+     * `$event->tools`; each will then be added to the shared ToolRegistry.
+     * Used by the CodeComponent field (and intended for other Craft
+     * plugins) to contribute custom tools without modifying the base
+     * plugin.
+     */
+    public const EVENT_REGISTER_AGENT_TOOLS = 'registerAgentTools';
+
     public string $schemaVersion = '1.9.0';
 
     public bool $hasCpSection = true;
@@ -134,6 +148,13 @@ class Plugin extends BasePlugin
         $this->registerImageTools();
         $this->registerSearchTools();
 
+        // PoC consumer of the public registration event — also wires the
+        // field type into Craft. Doing this *before* firing the event keeps
+        // the bundled module on equal footing with any external listener.
+        CodeComponentModule::bootstrap();
+
+        $this->dispatchAgentToolRegistration();
+
         $this->registerContainerBindings();
 
         if (Craft::$app->getRequest()->getIsConsoleRequest()) {
@@ -149,6 +170,13 @@ class Plugin extends BasePlugin
                     $permissions[ToolPermissions::nameForDescriptor($descriptor)] = [
                         'label' => Craft::t('craft-ai', 'Use tool: {name}', ['name' => $descriptor->name]),
                         'info' => $descriptor->description !== '' ? $descriptor->description : null,
+                    ];
+                }
+
+                foreach (CodeComponentPermissions::definitions() as $definition) {
+                    $permissions[$definition['key']] = [
+                        'label' => Craft::t('craft-ai', $definition['label']),
+                        'info' => Craft::t('craft-ai', $definition['info']),
                     ];
                 }
 
@@ -586,6 +614,24 @@ HTML;
 
         $this->bindImageProviders();
         $this->bindSearchProviders();
+    }
+
+    /**
+     * Fire {@see self::EVENT_REGISTER_AGENT_TOOLS} so other plugins (and
+     * our own bundled {@see \markhuot\craftai\fields\CodeComponentModule})
+     * can contribute tools without modifying this class. Each listed tool
+     * is added to the shared registry exactly as if the plugin had called
+     * `register()` directly. Duplicate registrations clobber by name;
+     * listeners that need cpOnly semantics opt in per entry.
+     */
+    private function dispatchAgentToolRegistration(): void
+    {
+        $event = new RegisterAgentToolsEvent();
+        $this->trigger(self::EVENT_REGISTER_AGENT_TOOLS, $event);
+
+        foreach ($event->tools as $tool) {
+            $this->toolRegistry->register($tool['class'], $tool['cpOnly'] ?? false);
+        }
     }
 
     /**

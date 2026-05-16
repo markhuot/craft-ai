@@ -68,6 +68,31 @@ class ToolRegistryBadArrayFixture extends Tool
     }
 }
 
+/** Field-scoped fixture for the client-filter tests. */
+class ToolRegistryFieldOnlyFixture extends Tool
+{
+    public const ALLOWED_CLIENTS = [\markhuot\craftai\agent\ClientType::CODE_COMPONENT_FIELD];
+
+    public function __invoke(): string
+    {
+        return 'field';
+    }
+}
+
+/** MCP-allowed fixture for the client-filter tests. */
+class ToolRegistryMcpOrCpFixture extends Tool
+{
+    public const ALLOWED_CLIENTS = [
+        \markhuot\craftai\agent\ClientType::CP,
+        \markhuot\craftai\agent\ClientType::MCP,
+    ];
+
+    public function __invoke(): string
+    {
+        return 'cp-or-mcp';
+    }
+}
+
 it('registers a tool and lists its descriptor', function () {
     $registry = new ToolRegistry();
     $registry->register(GetHealth::class);
@@ -326,4 +351,48 @@ it('ignores garbage JSON in the custom allowlist without throwing', function () 
     );
 
     expect($filtered)->toBe([]);
+});
+
+it('filterByClient keeps unrestricted tools and drops tools the client is not in', function () {
+    $registry = new ToolRegistry();
+    $registry->register(ToolRegistryEchoFixture::class);            // ALLOWED_CLIENTS = []
+    $registry->register(ToolRegistryFieldOnlyFixture::class);       // [CODE_COMPONENT_FIELD]
+    $registry->register(ToolRegistryMcpOrCpFixture::class);         // [CP, MCP]
+
+    $all = $registry->descriptors();
+    expect($all)->toHaveCount(3);
+
+    $forField = $registry->filterByClient($all, \markhuot\craftai\agent\ClientType::CODE_COMPONENT_FIELD);
+    $forFieldNames = array_map(static fn ($d) => $d->name, $forField);
+    expect($forFieldNames)->toContain('tool_registry_echo_fixture');
+    expect($forFieldNames)->toContain('tool_registry_field_only_fixture');
+    // The CP/MCP-only tool is not in the field surface.
+    expect($forFieldNames)->not->toContain('tool_registry_mcp_or_cp_fixture');
+
+    $forMcp = $registry->filterByClient($all, \markhuot\craftai\agent\ClientType::MCP);
+    $forMcpNames = array_map(static fn ($d) => $d->name, $forMcp);
+    expect($forMcpNames)->toContain('tool_registry_echo_fixture');
+    expect($forMcpNames)->toContain('tool_registry_mcp_or_cp_fixture');
+    // The field-only tool is hidden from MCP.
+    expect($forMcpNames)->not->toContain('tool_registry_field_only_fixture');
+});
+
+it('filterByClient drops restricted tools when the client is null', function () {
+    $registry = new ToolRegistry();
+    $registry->register(ToolRegistryEchoFixture::class);
+    $registry->register(ToolRegistryFieldOnlyFixture::class);
+
+    $filtered = $registry->filterByClient($registry->descriptors(), null);
+    $names = array_map(static fn ($d) => $d->name, $filtered);
+    expect($names)->toContain('tool_registry_echo_fixture');
+    expect($names)->not->toContain('tool_registry_field_only_fixture');
+});
+
+it('exposes the tool\'s ALLOWED_CLIENTS list on the descriptor', function () {
+    $registry = new ToolRegistry();
+    $registry->register(ToolRegistryFieldOnlyFixture::class);
+
+    $descriptor = $registry->describe('tool_registry_field_only_fixture');
+    expect($descriptor)->not->toBeNull();
+    expect($descriptor->allowedClients)->toBe([\markhuot\craftai\agent\ClientType::CODE_COMPONENT_FIELD]);
 });

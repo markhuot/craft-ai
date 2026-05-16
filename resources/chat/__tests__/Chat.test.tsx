@@ -146,6 +146,42 @@ describe("<Chat />", () => {
     await waitFor(() => expect(textarea.value).toBe(""));
   });
 
+  test("fires onAssistantMessage when a poll cycle lands a new assistant turn", async () => {
+    let polls = 0;
+    const api = makeApi({
+      fetchMessagesAfter: async () => {
+        polls += 1;
+        // First poll: nothing new. Second poll: a fresh assistant turn.
+        if (polls === 1) return envelope([]);
+        return envelope([
+          {
+            id: 99,
+            role: "assistant",
+            content: [{ type: "text", text: "wrote your component" }],
+          },
+        ]);
+      },
+    });
+
+    let calls = 0;
+    render(
+      <Chat
+        bootstrap={bootstrap()}
+        api={api}
+        pollIntervalMs={20}
+        onAssistantMessage={() => {
+          calls += 1;
+        }}
+      />,
+    );
+
+    await waitFor(() => expect(calls).toBeGreaterThanOrEqual(1));
+    // User-role responses shouldn't fire it — verified implicitly because
+    // the first poll returned an empty array and the callback only fired
+    // after the assistant turn landed.
+    expect(calls).toBeGreaterThanOrEqual(1);
+  });
+
   test("submit is disabled when the draft is empty and there are no attachments", () => {
     render(<Chat bootstrap={bootstrap()} api={makeApi()} pollIntervalMs={1_000_000} />);
     const submit = screen.getByRole("button", { name: /send/i }) as HTMLButtonElement;

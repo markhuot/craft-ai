@@ -129,3 +129,20 @@ it('updates the existing session id when called a second time on the same field'
     $value = EntryElement::find()->id($entry->id)->status(null)->one()->getFieldValue('component');
     expect($value->agentSessionId)->toBe('new-session');
 });
+
+it('only exposes update_code_component on sessions tagged code-component-field', function () {
+    $registry = \markhuot\craftai\Plugin::getInstance()->getToolRegistry();
+    $all = $registry->descriptors();
+
+    $names = static fn (array $list): array => array_map(static fn ($d) => $d->name, $list);
+
+    $fieldSurface = $registry->filterByClient($all, \markhuot\craftai\agent\ClientType::CODE_COMPONENT_FIELD);
+    $cpSurface = $registry->filterByClient($all, \markhuot\craftai\agent\ClientType::CP);
+    $widgetSurface = $registry->filterByClient($all, \markhuot\craftai\agent\ClientType::WIDGET);
+    $mcpSurface = $registry->filterByClient($all, \markhuot\craftai\agent\ClientType::MCP);
+
+    expect($names($fieldSurface))->toContain('update_code_component');
+    expect($names($cpSurface))->not->toContain('update_code_component');
+    expect($names($widgetSurface))->not->toContain('update_code_component');
+    expect($names($mcpSurface))->not->toContain('update_code_component');
+});

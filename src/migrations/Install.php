@@ -43,6 +43,10 @@ class Install extends Migration
             'toolMode' => $this->string(16)->notNull()->defaultValue('full'),
             // JSON-encoded list<string> of tool names; only set when toolMode = 'custom'.
             'enabledTools' => $this->text()->null(),
+            // Surface the session was created from — `cp`, `widget`, `mcp`,
+            // or `code-component-field`. Used by the agent loop to filter
+            // tools whose `ALLOWED_CLIENTS` doesn't include this client.
+            'clientType' => $this->string(32)->notNull()->defaultValue('cp'),
             // ID of the most recent role='summary' message for this session.
             // When set, loadMessages() skips every row with a lower id and
             // folds the summary in as a system note — that's the auto-compaction

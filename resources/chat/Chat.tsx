@@ -90,6 +90,15 @@ export interface ChatProps {
   onStartTargeting?: () => void;
   /** Fired when the user clicks the chip's X to drop the current selection. */
   onClearTarget?: () => void;
+  /**
+   * Fires after a poll cycle appends a new assistant turn to the transcript.
+   * The CodeComponent field's editor uses this to kick its own field-state
+   * poll the moment the agent finishes a turn, so writes from
+   * `update_code_component` show up in the Twig/CSS/JS tabs without
+   * waiting for the next interval tick (and, more importantly, before the
+   * user's autosave can submit stale empty hidden inputs).
+   */
+  onAssistantMessage?: () => void;
 }
 
 const CONTEXT_FP_STORAGE_PREFIX = "craftai-widget:context-fp:";
@@ -114,6 +123,7 @@ export function Chat({
   selectedTarget = null,
   onStartTargeting,
   onClearTarget,
+  onAssistantMessage,
 }: ChatProps) {
   const api = useMemo(
     () =>
@@ -206,6 +216,16 @@ export function Chat({
     bootstrap.initialMessages.reduce((max, m) => Math.max(max, m.id), 0),
   );
 
+  // Stash the latest callback in a ref so the `poll` closure can fire it
+  // without listing `onAssistantMessage` as a dep — including it would
+  // re-allocate the poll closure on every render the parent re-emits a
+  // new function identity (which is the common case, since the editor's
+  // refresh callback closes over state).
+  const onAssistantMessageRef = useRef(onAssistantMessage);
+  useEffect(() => {
+    onAssistantMessageRef.current = onAssistantMessage;
+  }, [onAssistantMessage]);
+
   const poll = useCallback(async () => {
     try {
       const fetched = await api.fetchMessagesAfter(lastIdRef.current);
@@ -224,6 +244,11 @@ export function Chat({
         const last = fetched.messages[fetched.messages.length - 1];
         if (last && last.role === "assistant") {
           setStatus("idle");
+          // Surface "the agent just finished a turn" to the field's
+          // editor so it can refresh its hidden-input mirror before any
+          // autosave fires. Fires once per poll cycle that lands an
+          // assistant turn, regardless of how many turns landed.
+          onAssistantMessageRef.current?.();
         }
       }
       if (fetched.previewRequest) {

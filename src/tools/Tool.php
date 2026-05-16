@@ -38,6 +38,21 @@ abstract class Tool
     public const KIND = ToolKind::LiveWrite;
 
     /**
+     * Which {@see \markhuot\craftai\agent\ClientType} surfaces are allowed
+     * to see and invoke this tool. Empty = no restriction (every surface).
+     * Subclasses override with a non-empty list when they only make sense
+     * on a specific surface — e.g. `[ClientType::CODE_COMPONENT_FIELD]`
+     * for tools that mutate a Code Component field on the user's behalf.
+     *
+     * The registry's `filterByClient()` consults this constant, AgentLoop
+     * applies the filter before each turn, and the MCP descriptor builder
+     * applies it before advertising tools to external clients.
+     *
+     * @var list<\markhuot\craftai\agent\ClientType>
+     */
+    public const ALLOWED_CLIENTS = [];
+
+    /**
      * Validate the named arguments against the rules that apply to the given
      * phase. Returns a ToolOutput with isError=true to abort, or null to proceed.
      *

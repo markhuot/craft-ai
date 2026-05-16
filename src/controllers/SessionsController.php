@@ -191,6 +191,16 @@ class SessionsController extends Controller
         $session->id = $uuid;
         $session->active = false;
         $session->userId = $this->currentUserId();
+        // The originating surface — defaults to whatever the request looks
+        // like (CP vs front-end widget) but can be overridden by callers
+        // that know they're a more specific surface, e.g. the
+        // CodeComponent field's Prompt tab passes `code-component-field`
+        // so its session never picks up tools that belong elsewhere.
+        $rawClient = $this->request->getBodyParam('clientType');
+        $clientType = is_string($rawClient) && $rawClient !== ''
+            ? ClientType::tryFrom($rawClient)
+            : null;
+        $session->clientType = ($clientType ?? $this->resolveClientType())->value;
         $session->save();
 
         if ($this->request->getAcceptsJson()) {
@@ -369,10 +379,18 @@ class SessionsController extends Controller
     {
         $registry = Plugin::getInstance()->getToolRegistry();
 
+        // The session's stored surface wins over the request surface — a
+        // CP request landing on a session that was minted for the
+        // CodeComponent field still gets the field's restricted toolset.
+        $sessionClient = $session !== null
+            ? (ClientType::tryFrom((string) ($session->clientType ?? 'cp')) ?? $client)
+            : $client;
+
         $descriptors = $registry->descriptors(
-            includeCpOnly: $client === ClientType::CP,
+            includeCpOnly: $sessionClient !== ClientType::MCP,
             onlyAllowed: true,
         );
+        $descriptors = $registry->filterByClient($descriptors, $sessionClient);
 
         $availableTools = array_map(
             static fn (ToolDescriptor $d): array => [

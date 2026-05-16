@@ -35,7 +35,16 @@ class ServerFactory
                 $this->toolContext,
             ));
 
-        foreach ($this->registry->descriptors(includeCpOnly: false, onlyAllowed: true) as $descriptor) {
+        // Two filters apply: the legacy cpOnly flag hides tools that
+        // never made sense outside the CP (e.g. preview-pane drivers),
+        // and the per-tool ALLOWED_CLIENTS list scopes some tools to a
+        // single surface (e.g. update_code_component to the
+        // CodeComponent field's Prompt tab). Both run here so external
+        // MCP clients never see a tool they couldn't successfully
+        // execute.
+        $descriptors = $this->registry->descriptors(includeCpOnly: false, onlyAllowed: true);
+        $descriptors = $this->registry->filterByClient($descriptors, \markhuot\craftai\agent\ClientType::MCP);
+        foreach ($descriptors as $descriptor) {
             $this->registerTool($builder, $descriptor);
         }
 

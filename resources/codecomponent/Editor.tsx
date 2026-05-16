@@ -138,21 +138,29 @@ export function Editor({ bootstrap, hiddenInputs, csrfTokenName, csrfTokenValue 
     ],
   );
 
-  // Poll the server for fresh tab values so agent-driven writes show up
-  // in the editor live. The poll only runs when there's a resolved
-  // element to query — a brand-new entry that hasn't been saved yet has
-  // no disk row to read from, so polling would 404 on every cycle.
+  // Single field-state poller, exposed via a ref so both the interval and
+  // the chat-activity callback can invoke it on demand. The interval keeps
+  // a steady cadence; the chat callback fires the same poll immediately
+  // after an assistant turn lands so writes from `update_code_component`
+  // reach the hidden inputs before any autosave can submit stale values.
+  const pollFieldStateRef = useRef<() => Promise<void>>(async () => {});
+
   useEffect(() => {
     const target = bootstrap.element;
-    if (target === null) return;
     const stateUrl = bootstrap.persist.stateUrl;
-    if (stateUrl === "") return;
+    if (target === null || stateUrl === "") {
+      pollFieldStateRef.current = async () => {};
+      return;
+    }
     const hasIdentifier = target.draftId !== null || target.id !== null;
-    if (!hasIdentifier) return;
+    if (!hasIdentifier) {
+      pollFieldStateRef.current = async () => {};
+      return;
+    }
 
     let cancelled = false;
 
-    const poll = async () => {
+    const pollOnce = async () => {
       const params = new URLSearchParams();
       params.set("fieldHandle", bootstrap.fieldHandle);
       if (target.draftId !== null) {
@@ -204,7 +212,12 @@ export function Editor({ bootstrap, hiddenInputs, csrfTokenName, csrfTokenValue 
             const value = updates[tab] as string;
             merged[tab] = value;
             const input = hiddenInputs[tab];
-            if (input) input.value = value;
+            if (input) {
+              input.value = value;
+              // Mark the form dirty so Craft's autosave flushes the
+              // refreshed value to disk before the user navigates away.
+              notifyCraftOfChange(input);
+            }
           }
           if ("agentSessionId" in updates && current.agentSessionId === prevServer.agentSessionId) {
             const value = updates.agentSessionId ?? null;
@@ -223,13 +236,19 @@ export function Editor({ bootstrap, hiddenInputs, csrfTokenName, csrfTokenValue 
       }
     };
 
-    void poll();
-    const id = setInterval(poll, POLL_INTERVAL_MS);
+    pollFieldStateRef.current = pollOnce;
+    void pollOnce();
+    const id = setInterval(pollOnce, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       clearInterval(id);
+      pollFieldStateRef.current = async () => {};
     };
   }, [bootstrap.element, bootstrap.fieldHandle, bootstrap.persist.stateUrl, hiddenInputs]);
+
+  const refreshFieldStateNow = useCallback(() => {
+    void pollFieldStateRef.current();
+  }, []);
 
   if (availableTabs.length === 0) {
     return (
@@ -282,6 +301,7 @@ export function Editor({ bootstrap, hiddenInputs, csrfTokenName, csrfTokenValue 
               values={values}
               agentSessionId={values.agentSessionId}
               onSessionMinted={setSessionId}
+              onAssistantMessage={refreshFieldStateNow}
               csrfTokenName={csrfTokenName}
               csrfTokenValue={csrfTokenValue}
             />

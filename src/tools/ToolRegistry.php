@@ -3,6 +3,7 @@
 namespace markhuot\craftai\tools;
 
 use Craft;
+use markhuot\craftai\agent\ClientType;
 use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\binders\Binder;
 use markhuot\craftai\permissions\ToolPermissionDeniedException;
@@ -56,6 +57,37 @@ class ToolRegistry
         } catch (ToolPermissionDeniedException) {
             return false;
         }
+    }
+
+    /**
+     * Filter a descriptor list to the tools whose declared
+     * `ALLOWED_CLIENTS` either includes the supplied client or is empty
+     * (meaning unrestricted). Used by the agent loop and the MCP server
+     * factory to keep surface-specific tools (e.g. `update_code_component`)
+     * off of surfaces that shouldn't see them.
+     *
+     * Passing `null` is treated as "unknown surface" and matches only
+     * tools with no restriction — same conservative default GetPreview
+     * et al. apply at runtime.
+     *
+     * @param  list<ToolDescriptor>  $descriptors
+     * @return list<ToolDescriptor>
+     */
+    public function filterByClient(array $descriptors, ?ClientType $client): array
+    {
+        return array_values(array_filter(
+            $descriptors,
+            static function (ToolDescriptor $d) use ($client): bool {
+                if ($d->allowedClients === []) {
+                    return true;
+                }
+                if ($client === null) {
+                    return false;
+                }
+
+                return in_array($client, $d->allowedClients, true);
+            },
+        ));
     }
 
     /**

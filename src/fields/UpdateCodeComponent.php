@@ -5,6 +5,7 @@ namespace markhuot\craftai\fields;
 use Craft;
 use craft\base\Field;
 use craft\elements\Entry;
+use markhuot\craftai\agent\ClientType;
 use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
@@ -34,6 +35,14 @@ use markhuot\craftai\validators\ExistingEntry;
 class UpdateCodeComponent extends Tool
 {
     public const KIND = ToolKind::DraftWrite;
+
+    /**
+     * Restricted to the CodeComponent field's Prompt tab — the only
+     * surface where this tool makes sense. The general CP chat at
+     * `/ai/sessions`, the front-end widget, and external MCP clients all
+     * get filtered out of the registry before the LLM sees its tool list.
+     */
+    public const ALLOWED_CLIENTS = [ClientType::CODE_COMPONENT_FIELD];
 
     /**
      * @return array{_notes: string, data: array<string, mixed>}|ToolOutput

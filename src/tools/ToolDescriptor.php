@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\tools;
 
+use markhuot\craftai\agent\ClientType;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Tool as ToolAttribute;
 use phpDocumentor\Reflection\DocBlockFactory;
@@ -34,6 +35,16 @@ class ToolDescriptor
     public readonly ToolKind $kind;
 
     /**
+     * Which client surfaces are allowed to see and invoke this tool. Empty
+     * = no restriction (every surface). Mirrors `Tool::ALLOWED_CLIENTS`
+     * so the registry can filter descriptors without instantiating the
+     * underlying tool.
+     *
+     * @var list<ClientType>
+     */
+    public readonly array $allowedClients;
+
+    /**
      * @param class-string<Tool> $toolClass
      */
     public function __construct(
@@ -51,6 +62,9 @@ class ToolDescriptor
         $this->inputSchema = self::buildInputSchema($reflection);
         $this->annotations = $attribute === null ? [] : $attribute->annotations;
         $this->kind = $toolClass::KIND;
+        /** @var list<ClientType> $allowed */
+        $allowed = $toolClass::ALLOWED_CLIENTS;
+        $this->allowedClients = $allowed;
     }
 
     /**

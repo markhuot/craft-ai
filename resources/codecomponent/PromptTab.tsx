@@ -31,6 +31,10 @@ interface PromptTabProps {
   /** Called once a fresh session UUID is minted so the parent persists it
    * into the field's hidden input alongside the tab values. */
   onSessionMinted: (sessionId: string) => void;
+  /** Forwarded to the embedded `<Chat>`: fires when a new assistant turn
+   * lands on a poll cycle. Lets the surrounding editor immediately refresh
+   * its field-state poll instead of waiting for the next 3-second tick. */
+  onAssistantMessage?: () => void;
   csrfTokenName: string;
   csrfTokenValue: string;
 }
@@ -51,6 +55,7 @@ export function PromptTab({
   values,
   agentSessionId,
   onSessionMinted,
+  onAssistantMessage,
   csrfTokenName,
   csrfTokenValue,
 }: PromptTabProps) {
@@ -63,6 +68,12 @@ export function PromptTab({
     try {
       const form = new FormData();
       form.set(csrfTokenName, csrfTokenValue);
+      // Tag the session with its originating surface so the agent loop
+      // and MCP server know this session can see field-only tools like
+      // `update_code_component`. The general CP chat (which uses the
+      // same endpoint without this param) stays in the default `cp`
+      // surface and never sees those tools.
+      form.set("clientType", "code-component-field");
       const res = await fetch(chatUrls.newSessionUrl, {
         method: "POST",
         headers: { Accept: "application/json" },
@@ -171,7 +182,7 @@ export function PromptTab({
 
   return (
     <div className="craftai-prompt-shell" data-testid="prompt-shell">
-      <Chat bootstrap={bootstrap} />
+      <Chat bootstrap={bootstrap} onAssistantMessage={onAssistantMessage} />
     </div>
   );
 }

@@ -1,0 +1,83 @@
+{% import "_includes/forms" as forms %}
+
+{#
+  CP settings form for craft-ai automations.
+
+  Stays narrow on purpose: only the user-managed pieces (automation rules)
+  live here. Provider/API-key/model knobs continue to live in
+  `config/craft-ai.php` because the LLM config is a contract between the
+  plugin and the deployment, not something an editor should change at
+  runtime.
+
+  The form renders one editable table per automation list. Craft persists
+  the POSTed rows into `plugins.craft-ai.settings.automations` (and to
+  project config when enabled), and `Settings::setAutomations()` drops
+  any row whose prompt is blank — so the "+" button can leave empty
+  stubs without dispatching against an empty automation.
+#}
+
+{% set sectionChoices = [{label: '— Any section —'|t('craft-ai'), value: ''}] %}
+{% for section in craft.app.entries.allSections %}
+    {% set sectionChoices = sectionChoices|merge([{label: section.name, value: section.handle}]) %}
+{% endfor %}
+
+{% set eventChoices = [] %}
+{% for value, label in eventChoices_source %}
+    {% set eventChoices = eventChoices|merge([{label: label, value: value}]) %}
+{% endfor %}
+
+{% set rows = [] %}
+{% for auto in settings.getAutomations() %}
+    {% set rows = rows|merge([{
+        uid: auto.uid,
+        name: auto.name,
+        event: auto.event,
+        sectionHandle: auto.sectionHandle,
+        prompt: auto.prompt,
+        enabled: auto.enabled,
+    }]) %}
+{% endfor %}
+
+<p class="instructions">{{
+    "Each automation listens for a Craft event and starts a new agent session with the prompt below whenever the event fires. The triggering element is appended to the session as context, so the agent can fetch and act on it directly."|t('craft-ai')
+}}</p>
+
+{{ forms.editableTableField({
+    label: "Automations"|t('craft-ai'),
+    instructions: "Use the “+” button to add a rule. Section is optional and only applies to entry/draft events."|t('craft-ai'),
+    id: 'automations',
+    name: 'automations',
+    cols: {
+        enabled: {
+            heading: 'On'|t('craft-ai'),
+            type: 'checkbox',
+            thin: true,
+        },
+        name: {
+            heading: 'Name'|t('craft-ai'),
+            type: 'singleline',
+            placeholder: 'Review drafts'|t('craft-ai'),
+        },
+        event: {
+            heading: 'Event'|t('craft-ai'),
+            type: 'select',
+            options: eventChoices,
+        },
+        sectionHandle: {
+            heading: 'Section'|t('craft-ai'),
+            type: 'select',
+            options: sectionChoices,
+        },
+        prompt: {
+            heading: 'Prompt'|t('craft-ai'),
+            type: 'multiline',
+            rows: 2,
+            placeholder: 'Review this draft for clarity and tone.'|t('craft-ai'),
+        },
+    },
+    rows: rows,
+    addRowLabel: "Add an automation"|t('craft-ai'),
+    allowAdd: true,
+    allowDelete: true,
+    allowReorder: true,
+}) }}

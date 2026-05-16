@@ -3,20 +3,29 @@
 namespace markhuot\craftai;
 
 use Craft;
+use craft\base\Model;
 use craft\base\Plugin as BasePlugin;
+use craft\elements\Asset;
+use craft\elements\Entry;
+use craft\events\DraftEvent;
+use craft\events\ModelEvent;
 use craft\events\RegisterUrlRulesEvent;
 use craft\events\RegisterUserPermissionsEvent;
 use craft\events\TemplateEvent;
 use craft\helpers\Json;
 use craft\helpers\UrlHelper;
+use craft\services\Drafts;
 use craft\services\UserPermissions;
 use craft\web\UrlManager;
 use craft\web\View;
 use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\agent\PageContextSerializer;
 use markhuot\craftai\agent\ToolContext;
+use markhuot\craftai\models\Automation;
+use markhuot\craftai\models\Settings;
 use markhuot\craftai\permissions\ToolPermissions;
 use markhuot\craftai\preview\PreviewService;
+use markhuot\craftai\services\AutomationDispatcher;
 use markhuot\craftai\agent\providers\AnthropicProvider;
 use markhuot\craftai\agent\providers\BraveSearchProvider;
 use markhuot\craftai\agent\providers\DuckDuckGoSearchProvider;
@@ -73,6 +82,8 @@ class Plugin extends BasePlugin
     public string $schemaVersion = '1.10.0';
 
     public bool $hasCpSection = true;
+
+    public bool $hasCpSettings = true;
 
     private ToolRegistry $toolRegistry;
 
@@ -146,6 +157,7 @@ class Plugin extends BasePlugin
         $this->registerSearchTools();
 
         $this->registerContainerBindings();
+        $this->registerAutomationListeners();
 
         if (Craft::$app->getRequest()->getIsConsoleRequest()) {
             $this->controllerNamespace = 'markhuot\\craftai\\console\\controllers';
@@ -656,6 +668,7 @@ HTML;
         Craft::$container->setSingleton(ToolRegistry::class, fn () => $this->toolRegistry);
         Craft::$container->setSingleton(ToolContext::class);
         Craft::$container->setSingleton(PreviewService::class);
+        Craft::$container->setSingleton(AutomationDispatcher::class);
 
         Craft::$container->setSingleton(LlmProvider::class, function (): LlmProvider {
             $settings = $this->getSettingsArray();
@@ -925,6 +938,107 @@ HTML;
         }
 
         return $resolved;
+    }
+
+    protected function createSettingsModel(): ?Model
+    {
+        return new Settings();
+    }
+
+    /**
+     * Render the CP settings form. Craft hands us a partial-page surface
+     * (the outer `<form>` and save button are provided by the framework's
+     * settings layout), so the template only needs to render the editable
+     * automation table.
+     */
+    protected function settingsHtml(): ?string
+    {
+        $settings = $this->getSettings();
+        if (! $settings instanceof Settings) {
+            return null;
+        }
+
+        return Craft::$app->getView()->renderTemplate('craft-ai/settings', [
+            'settings' => $settings,
+            'eventChoices_source' => Automation::eventChoices(),
+        ]);
+    }
+
+    /**
+     * Register Craft event listeners that hand off to the
+     * {@see AutomationDispatcher}. We register one listener per Craft
+     * event class regardless of how many automations exist, and let the
+     * dispatcher filter at fire time — this keeps settings changes live
+     * without re-booting the plugin, and avoids surprising "I disabled
+     * the rule but it still fires" behavior from cached listener state.
+     *
+     * Listeners are deliberately registered after
+     * {@see registerContainerBindings} so the dispatcher singleton is
+     * always resolvable at fire time. We re-resolve per fire (rather
+     * than capturing in a closure variable) so a container rebind from
+     * tests sees the new instance.
+     */
+    private function registerAutomationListeners(): void
+    {
+        $dispatch = static function (string $eventKey, ?\craft\base\ElementInterface $element): void {
+            if ($element === null) {
+                return;
+            }
+            try {
+                /** @var AutomationDispatcher $dispatcher */
+                $dispatcher = Craft::$container->get(AutomationDispatcher::class);
+            } catch (\Throwable) {
+                return;
+            }
+            $dispatcher->dispatch($eventKey, $element);
+        };
+
+        Event::on(Entry::class, Entry::EVENT_AFTER_SAVE, static function (ModelEvent $event) use ($dispatch): void {
+            $sender = $event->sender;
+            if (! $sender instanceof Entry) {
+                return;
+            }
+            // Propagating saves fire EVENT_AFTER_SAVE per site. Without
+            // this guard a multi-site save would dispatch N automations
+            // for the same logical edit.
+            if ($sender->propagating) {
+                return;
+            }
+            // Resave queue jobs (Craft's own bulk re-save) and similar
+            // background fixups set $resaving = true. Treat those like
+            // propagation — the editor didn't actually touch the entry.
+            if ($sender->resaving) {
+                return;
+            }
+
+            $eventKey = $sender->getIsDraft()
+                ? Automation::EVENT_DRAFT_SAVED
+                : Automation::EVENT_ENTRY_SAVED;
+            $dispatch($eventKey, $sender);
+        });
+
+        Event::on(Entry::class, Entry::EVENT_AFTER_DELETE, static function (Event $event) use ($dispatch): void {
+            $sender = $event->sender;
+            if (! $sender instanceof Entry) {
+                return;
+            }
+            $dispatch(Automation::EVENT_ENTRY_DELETED, $sender);
+        });
+
+        Event::on(Drafts::class, Drafts::EVENT_AFTER_APPLY_DRAFT, static function (DraftEvent $event) use ($dispatch): void {
+            $dispatch(Automation::EVENT_DRAFT_APPLIED, $event->canonical);
+        });
+
+        Event::on(Asset::class, Asset::EVENT_AFTER_SAVE, static function (ModelEvent $event) use ($dispatch): void {
+            $sender = $event->sender;
+            if (! $sender instanceof Asset) {
+                return;
+            }
+            if ($sender->propagating) {
+                return;
+            }
+            $dispatch(Automation::EVENT_ASSET_SAVED, $sender);
+        });
     }
 
     /**

@@ -28,6 +28,13 @@ const bundles: Bundle[] = [
     cssEntry: resolve(root, "resources/widget/styles.css"),
     cssOut: resolve(root, "src/web/assets/widget/dist/widget.css"),
   },
+  {
+    name: "comments",
+    jsEntry: resolve(root, "resources/comments/index.ts"),
+    jsOut: "comments.js",
+    cssEntry: resolve(root, "resources/comments/styles.css"),
+    cssOut: resolve(root, "src/web/assets/comments/dist/comments.css"),
+  },
 ];
 
 async function buildJs(bundle: Bundle): Promise<void> {

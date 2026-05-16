@@ -1,0 +1,175 @@
+/*
+ * CP-side styles for the AI review comment overlay.
+ *
+ * The comments bundle runs in the CP page's normal DOM (no Shadow DOM)
+ * because the popover needs to inherit Craft's own button/input styles
+ * for the inline reply form. We scope every selector under
+ * `craftai-comments-*` so the rules can't collide with stock CP styles
+ * or any other plugin that decorates entry edit screens.
+ *
+ * Tailwind would be overkill here — there's a handful of rules. Plain
+ * CSS keeps the bundle small and easy to override per-install via
+ * Craft's CP CSS hook.
+ */
+
+.craftai-comments-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-left: 6px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 9999px;
+  background: transparent;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.craftai-comments-indicator__dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  background: #d23b48; /* Craft's red ~ */
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.craftai-comments-indicator:hover .craftai-comments-indicator__dot {
+  background: #b62734;
+}
+
+.craftai-comments-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin: 0 0 14px 0;
+  background: #fff7e6;
+  border: 1px solid #f3d9a8;
+  border-radius: 5px;
+  cursor: pointer;
+  color: #5a3e00;
+}
+
+.craftai-comments-banner:hover {
+  background: #ffeec7;
+}
+
+.craftai-comments-host {
+  /*
+   * Overlay host sits at body root; popovers position themselves with
+   * absolute coordinates so the host itself needs no layout intrinsics.
+   */
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 9000;
+  pointer-events: none;
+}
+
+.craftai-comments-popover {
+  position: absolute;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  background: #fff;
+  border: 1px solid #d6d9dc;
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+  padding: 10px 12px 12px;
+  pointer-events: auto;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #1f2937;
+}
+
+.craftai-comments-popover__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.craftai-comments-popover__title {
+  font-weight: 600;
+}
+
+.craftai-comments-popover__close {
+  appearance: none;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  color: #606d7b;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.craftai-comments-popover__close:hover {
+  color: #1f2937;
+}
+
+.craftai-comments-popover__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.craftai-comments-popover__item + .craftai-comments-popover__item {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #eef0f2;
+}
+
+.craftai-comments-popover__body {
+  margin: 0 0 6px 0;
+  white-space: pre-wrap;
+}
+
+.craftai-comments-popover__meta {
+  margin: 0 0 8px 0;
+  font-size: 11px;
+  color: #606d7b;
+}
+
+.craftai-comments-popover__link {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.craftai-comments-popover__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.craftai-comments-popover__textarea {
+  width: 100%;
+  border: 1px solid #d6d9dc;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font: inherit;
+  resize: vertical;
+  min-height: 56px;
+  box-sizing: border-box;
+}
+
+.craftai-comments-popover__textarea:focus {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 1px;
+  border-color: #1d4ed8;
+}
+
+.craftai-comments-popover__actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}

@@ -38,7 +38,10 @@ use markhuot\craftai\tools\GenerateImageGptImage;
 use markhuot\craftai\tools\GenerateImageNanoBanana;
 use markhuot\craftai\tools\GetAsset;
 use markhuot\craftai\tools\GetAssets;
+use markhuot\craftai\tools\GetComments;
 use markhuot\craftai\tools\GetDraft;
+use markhuot\craftai\tools\LeaveComment;
+use markhuot\craftai\tools\ResolveComment;
 use markhuot\craftai\tools\GetImage;
 use markhuot\craftai\tools\GetPreview;
 use markhuot\craftai\tools\GetDrafts;
@@ -67,7 +70,7 @@ use yii\base\Event;
 
 class Plugin extends BasePlugin
 {
-    public string $schemaVersion = '1.9.0';
+    public string $schemaVersion = '1.10.0';
 
     public bool $hasCpSection = true;
 
@@ -130,6 +133,14 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(GetImage::class);
         $this->toolRegistry->register(OpenPreview::class, cpOnly: true);
         $this->toolRegistry->register(GetPreview::class, cpOnly: true);
+        // Review-comments tools. The leave/resolve pair is CP-only because
+        // their value depends on the CP-side overlay that surfaces the
+        // comments next to fields — an MCP client wouldn't have anywhere
+        // to render them. get_comments is allowed everywhere so external
+        // clients can audit feedback.
+        $this->toolRegistry->register(LeaveComment::class, cpOnly: true);
+        $this->toolRegistry->register(ResolveComment::class, cpOnly: true);
+        $this->toolRegistry->register(GetComments::class);
 
         $this->registerImageTools();
         $this->registerSearchTools();
@@ -171,6 +182,14 @@ class Plugin extends BasePlugin
                 $event->rules['POST ai/sessions/stop'] = 'craft-ai/sessions/stop';
                 $event->rules['POST ai/preview/respond'] = 'craft-ai/preview/respond';
                 $event->rules['ai/session/<uuid:[A-Za-z0-9\-]+>'] = 'craft-ai/sessions/view';
+
+                // Review-comments endpoints. Lookup runs on entry edit
+                // page load, resolve/reply when the user interacts with
+                // the popover. All scoped under `ai/comments/*` so a host
+                // site can disable them with a single rule override.
+                $event->rules['ai/comments'] = 'craft-ai/comments/index';
+                $event->rules['POST ai/comments/resolve'] = 'craft-ai/comments/resolve';
+                $event->rules['POST ai/comments/reply'] = 'craft-ai/comments/reply';
             },
         );
 
@@ -209,8 +228,87 @@ class Plugin extends BasePlugin
             View::EVENT_AFTER_RENDER_PAGE_TEMPLATE,
             function (TemplateEvent $event): void {
                 $this->maybeInjectWidget($event);
+                $this->maybeInjectCommentsOverlay($event);
             },
         );
+    }
+
+    /**
+     * Append the AI review-comments overlay to every CP page response.
+     *
+     * The bundle's TS short-circuits if the page lacks an `elementId` /
+     * `draftId` hidden input, so registering globally is cheaper than
+     * detecting "is this an entry edit URL" server-side and getting it
+     * wrong on third-party plugin routes. The overlay reads its own
+     * bootstrap (CSRF + endpoint URLs) from a JSON script tag we inject
+     * alongside the bundle reference.
+     */
+    private function maybeInjectCommentsOverlay(TemplateEvent $event): void
+    {
+        if ($event->templateMode !== View::TEMPLATE_MODE_CP) {
+            return;
+        }
+
+        $request = Craft::$app->getRequest();
+        if (! $request instanceof \craft\web\Request) {
+            return;
+        }
+        if (! $request->getIsCpRequest() || $request->getIsAjax()) {
+            return;
+        }
+
+        if (Craft::$app->getUser()->getIsGuest()) {
+            return;
+        }
+
+        if ($event->output === '') {
+            return;
+        }
+
+        $assetManager = Craft::$app->getAssetManager();
+        $sourcePath = __DIR__.'/web/assets/comments/dist';
+
+        try {
+            $published = $assetManager->publish($sourcePath);
+        } catch (\Throwable) {
+            return;
+        }
+
+        $baseUrl = $published[1] ?? null;
+        if (! is_string($baseUrl) || $baseUrl === '') {
+            return;
+        }
+
+        $bootstrap = [
+            'listUrl' => UrlHelper::cpUrl('ai/comments'),
+            'resolveUrl' => UrlHelper::actionUrl('craft-ai/comments/resolve'),
+            'replyUrl' => UrlHelper::actionUrl('craft-ai/comments/reply'),
+            'csrfTokenName' => Craft::$app->getConfig()->getGeneral()->csrfTokenName,
+            'csrfTokenValue' => $request->getCsrfToken(),
+        ];
+
+        $bootstrapJson = Json::htmlEncode($bootstrap);
+        $jsUrl = $baseUrl.'/comments.js';
+        $cssUrl = $baseUrl.'/comments.css';
+
+        $snippet = <<<HTML
+<link rel="stylesheet" href="{$cssUrl}">
+<script type="application/json" data-craftai-comments-bootstrap>{$bootstrapJson}</script>
+<script type="module" src="{$jsUrl}"></script>
+HTML;
+
+        if (str_contains($event->output, '</body>')) {
+            $event->output = (string) preg_replace(
+                '/<\/body>/i',
+                $snippet."\n</body>",
+                $event->output,
+                1,
+            );
+
+            return;
+        }
+
+        $event->output .= $snippet;
     }
 
     /**

@@ -123,12 +123,71 @@ it('renders a code-component framing when the context carries a fieldAuthor bloc
     expect($note)->toContain('update_code_component');
     expect($note)->toContain('Field: "Component" (handle: component, id: 42)');
     expect($note)->toContain('Element: entry #100 "Pricing" (section: pages)');
+    expect($note)->toContain('Call update_code_component with entryId=100');
     expect($note)->toContain("Current Twig:\n```twig\n<h1>{{ entry.title }}</h1>\n```");
     expect($note)->toContain("Current CSS:\n```css\nh1 { color: red; }\n```");
     expect($note)->toContain("Current JS:\n(empty)");
     // Field-author framing replaces — does not stack on top of — the
     // public-site preamble.
     expect($note)->not->toContain('<page-context>');
+});
+
+it('points the agent at draftId when the element is a draft (e.g. a matrix block)', function () {
+    $note = PageContextSerializer::toSystemNote([
+        'element' => [
+            'type' => 'entry',
+            'id' => 276,
+            'title' => null,
+            'sectionHandle' => null,
+            'isDraft' => true,
+            'isProvisionalDraft' => false,
+            'draftId' => 40,
+            'canonicalId' => null,
+            'ownerId' => 273,
+        ],
+        'fieldAuthor' => [
+            'kind' => 'code-component-field',
+            'fieldHandle' => 'component',
+            'fieldName' => 'Component',
+            'fieldId' => 33,
+            'currentValues' => ['twig' => '', 'css' => '', 'js' => ''],
+        ],
+    ]);
+
+    expect($note)->toContain('Element: draft #276');
+    expect($note)->toContain('draftId: 40');
+    expect($note)->toContain('owner entry: #273');
+    expect($note)->toContain('Call update_code_component with draftId=40');
+    expect($note)->toContain('not reachable via get_entry');
+    // No `entryId` hint — we don't want the agent to attempt that path.
+    expect($note)->not->toContain('Call update_code_component with entryId=276');
+});
+
+it('flags provisional drafts so the agent knows the CP autosave is in play', function () {
+    $note = PageContextSerializer::toSystemNote([
+        'element' => [
+            'type' => 'entry',
+            'id' => 99,
+            'title' => 'Pricing',
+            'sectionHandle' => 'pages',
+            'isDraft' => true,
+            'isProvisionalDraft' => true,
+            'draftId' => 12,
+            'canonicalId' => 50,
+            'ownerId' => null,
+        ],
+        'fieldAuthor' => [
+            'kind' => 'code-component-field',
+            'fieldHandle' => 'component',
+            'fieldName' => 'Component',
+            'fieldId' => 33,
+            'currentValues' => ['twig' => '', 'css' => '', 'js' => ''],
+        ],
+    ]);
+
+    expect($note)->toContain('Element: provisional draft #99 "Pricing"');
+    expect($note)->toContain('canonical entry: #50');
+    expect($note)->toContain('Call update_code_component with draftId=12');
 });
 
 it('marks the element as not-yet-saved when the field is opened on a fresh entry', function () {

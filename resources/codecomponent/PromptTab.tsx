@@ -3,6 +3,23 @@ import { Chat } from "../chat/Chat";
 import type { ChatBootstrap } from "../chat/types";
 import type { ChatUrls, ElementSummary, FieldValues } from "./types";
 
+/**
+ * Stable, non-cryptographic hash of an arbitrary JSON-serializable payload.
+ * Used as the localStorage dedup key for the chat's context-attach logic;
+ * collisions would just cause a re-send to be skipped once, so a simple
+ * djb2 walk is sufficient here. Exported so tests can assert the
+ * fingerprint changes when the relevant inputs change.
+ */
+export function fingerprint(value: unknown): string {
+  const json = JSON.stringify(value) ?? "";
+  let hash = 5381;
+  for (let i = 0; i < json.length; i++) {
+    // djb2 with XOR: `hash * 33 ^ c`, masked to 32 bits via `>>> 0` at the end.
+    hash = ((hash << 5) + hash) ^ json.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(16);
+}
+
 interface PromptTabProps {
   chatUrls: ChatUrls;
   fieldHandle: string;
@@ -82,14 +99,10 @@ export function PromptTab({
       template: null,
       siteHandle: null,
       query: {},
-      element: element
-        ? {
-            type: element.type,
-            id: element.id,
-            title: element.title,
-            sectionHandle: element.sectionHandle,
-          }
-        : null,
+      // Forward the whole element snapshot — including draft pointers and
+      // matrix-block owner — so the serializer can route the agent to the
+      // right `update_code_component` argument (entryId vs draftId).
+      element: element ? { ...element } : null,
       fieldAuthor: {
         kind: "code-component-field",
         fieldHandle,
@@ -119,7 +132,15 @@ export function PromptTab({
       initialMessages: [],
       initialSessions: [],
       context,
-      contextFingerprint: undefined,
+      // Chat.tsx only attaches `bootstrap.context` when the fingerprint is
+      // a non-empty string — a quiet guard against double-sending the same
+      // payload on subsequent turns. We can't reuse `PageContextSerializer`
+      // from the browser, but we don't need a cryptographic hash either:
+      // the fingerprint is only used for localStorage dedup. A small
+      // synchronous djb2 over the canonical JSON gives us a stable string
+      // that changes whenever any tab value (or the resolved element)
+      // changes — which is exactly when the agent needs a fresh re-send.
+      contextFingerprint: fingerprint(context),
       contextWindow: null,
     } satisfies ChatBootstrap;
   }, [agentSessionId, chatUrls, csrfTokenName, csrfTokenValue, element, fieldHandle, fieldName, fieldId, values.twig, values.css, values.js]);

@@ -23,6 +23,20 @@ export interface ElementSummary {
   id: number | null;
   title: string | null;
   sectionHandle: string | null;
+  /**
+   * True when the element is a draft — including the provisional drafts
+   * Craft auto-creates around matrix-block edits in the CP. Drives the
+   * `update_code_component` call-target hint in the system note: a draft
+   * requires `draftId`, not `entryId`.
+   */
+  isDraft: boolean;
+  isProvisionalDraft: boolean;
+  /** Draft pointer; only set when `isDraft` is true. */
+  draftId: number | null;
+  /** Canonical entry id for a draft; null when there is no canonical yet. */
+  canonicalId: number | null;
+  /** Owner entry id for nested elements like matrix blocks. */
+  ownerId: number | null;
 }
 
 /** URLs the embedded `<Chat>` needs from the host CP page. */
@@ -35,6 +49,14 @@ export interface ChatUrls {
   previewRespondUrl: string;
   toolModeUrl: string;
   updateToolModeUrl: string;
+}
+
+/** Field-only endpoints the React editor uses to stay in sync with disk. */
+export interface PersistUrls {
+  /** GET — current persisted tab values, queried on a poll cycle. */
+  stateUrl: string;
+  /** POST — write the agent session id to disk immediately on mint. */
+  persistSessionUrl: string;
 }
 
 export interface FieldBootstrap {
@@ -51,6 +73,7 @@ export interface FieldBootstrap {
   values: FieldValues;
   element: ElementSummary | null;
   chat: ChatUrls;
+  persist: PersistUrls;
 }
 
 export type TabId = "twig" | "css" | "js" | "prompt";

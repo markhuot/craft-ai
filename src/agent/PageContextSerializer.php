@@ -215,11 +215,9 @@ class PageContextSerializer
             : 'Field: '.implode(' ', $headerParts);
 
         $elementLine = null;
+        $callTarget = null;
         if ($element !== null) {
-            $rendered = self::renderElement($element);
-            if ($rendered !== null) {
-                $elementLine = "Element: {$rendered}";
-            }
+            [$elementLine, $callTarget] = self::renderFieldAuthorElement($element);
         }
         if ($elementLine === null) {
             $elementLine = 'Element: (entry not yet saved)';
@@ -228,6 +226,9 @@ class PageContextSerializer
         $body = [];
         $body[] = $fieldHeader;
         $body[] = $elementLine;
+        if ($callTarget !== null) {
+            $body[] = $callTarget;
+        }
         $body[] = '';
         $body[] = 'Current Twig:';
         $body[] = self::tabFence('twig', $values['twig'] ?? null);
@@ -241,13 +242,86 @@ class PageContextSerializer
         $preamble = 'The user is editing a Code Component custom field in the Craft control panel. '
             ."Anything you author with them needs to be written back into the field via the "
             ."`update_code_component` tool — pass the field handle plus any of `twig`, `css`, "
-            ."or `js` and the changes appear live in the user's editor. Drafts are the rollback "
-            ."mechanism; prefer writing to a draft when iterating.";
+            ."or `js` and the changes appear live in the user's editor. Use the exact `entryId` "
+            ."or `draftId` value from the call-target hint below; do not look the element up "
+            ."with `get_entry` or `get_drafts` first. Drafts are the rollback mechanism; prefer "
+            ."writing to a draft when iterating.";
 
         return "<code-component-context>\n"
             .$preamble."\n\n"
             .implode("\n", $body)
             ."\n</code-component-context>";
+    }
+
+    /**
+     * Render the element line + call-target hint for the field-author
+     * branch. The two lines are returned as a tuple so the formatter can
+     * decide whether to emit them. The call-target tells the agent the
+     * exact `update_code_component` parameter to use, which sidesteps an
+     * earlier failure mode where the model looked the element up with
+     * `get_entry`/`get_drafts` first and gave up when those returned
+     * nothing (matrix-block drafts aren't reachable from the default
+     * Entry::find() query).
+     *
+     * @param  array<array-key, mixed>  $element
+     * @return array{0: string, 1: ?string}
+     */
+    private static function renderFieldAuthorElement(array $element): array
+    {
+        $id = $element['id'] ?? null;
+        $idInt = is_int($id) ? $id : (is_string($id) && ctype_digit($id) ? (int) $id : null);
+        $type = self::stringOrNull($element['type'] ?? null) ?? 'element';
+        $title = self::stringOrNull($element['title'] ?? null);
+        $sectionHandle = self::stringOrNull($element['sectionHandle'] ?? null);
+        $isDraft = (bool) ($element['isDraft'] ?? false);
+        $isProvisional = (bool) ($element['isProvisionalDraft'] ?? false);
+        $draftId = is_int($element['draftId'] ?? null) ? (int) $element['draftId'] : null;
+        $canonicalId = is_int($element['canonicalId'] ?? null) ? (int) $element['canonicalId'] : null;
+        $ownerId = is_int($element['ownerId'] ?? null) ? (int) $element['ownerId'] : null;
+
+        $kind = $isDraft
+            ? ($isProvisional ? 'provisional draft' : 'draft')
+            : $type;
+
+        // Build the human-readable element line.
+        $parts = [$kind];
+        if ($idInt !== null) {
+            $parts[] = "#{$idInt}";
+        }
+        if ($title !== null) {
+            $parts[] = '"'.$title.'"';
+        }
+        $line = 'Element: '.implode(' ', $parts);
+
+        $tail = [];
+        if ($sectionHandle !== null) {
+            $tail[] = "section: {$sectionHandle}";
+        }
+        if ($ownerId !== null && $ownerId !== $idInt) {
+            $tail[] = "owner entry: #{$ownerId}";
+        }
+        if ($canonicalId !== null) {
+            $tail[] = "canonical entry: #{$canonicalId}";
+        }
+        if ($draftId !== null) {
+            $tail[] = "draftId: {$draftId}";
+        }
+        if ($tail !== []) {
+            $line .= ' ('.implode(', ', $tail).')';
+        }
+
+        // The call-target tells the agent exactly which argument to pass
+        // to `update_code_component`. Drafts (including matrix-block
+        // provisional drafts that get_entry can't see) require `draftId`;
+        // a non-draft element uses `entryId`.
+        $callTarget = null;
+        if ($isDraft && $draftId !== null) {
+            $callTarget = "→ Call update_code_component with draftId={$draftId} (this element is a draft and is not reachable via get_entry).";
+        } elseif (! $isDraft && $idInt !== null) {
+            $callTarget = "→ Call update_code_component with entryId={$idInt}.";
+        }
+
+        return [$line, $callTarget];
     }
 
     /**

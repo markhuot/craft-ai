@@ -428,7 +428,7 @@ describe("<Chat />", () => {
     expect(data.get("craftai-widget:context-fp:session-1")).toBeUndefined();
   });
 
-  test("renders system messages with a distinct 'Page context' panel", () => {
+  test("renders system messages with a distinct 'Page context' chip, collapsed by default", () => {
     const messages: ChatMessage[] = [
       {
         id: 1,
@@ -439,8 +439,40 @@ describe("<Chat />", () => {
     render(<Chat bootstrap={bootstrap(messages)} api={makeApi()} pollIntervalMs={1_000_000} />);
 
     const panel = screen.getByTestId("message-system");
+    expect(panel.dataset.expanded).toBe("false");
     expect(panel.textContent).toContain("Page context");
+    // Body is collapsed by default — the prose isn't in the DOM yet.
+    expect(panel.textContent).not.toContain("URL: https://x.test/about");
+
+    // Expanding via the chip header reveals the full system note.
+    fireEvent.click(screen.getByRole("button", { name: /page context/i }));
+    expect(panel.dataset.expanded).toBe("true");
     expect(panel.textContent).toContain("URL: https://x.test/about");
+  });
+
+  test("re-labels the chip as 'Field context' for code-component-context notes", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: 1,
+        role: "system",
+        content: [
+          {
+            type: "text",
+            text:
+              "<code-component-context>\nThe user is editing a Code Component custom field.\nField: \"Component\" (handle: component)\n</code-component-context>",
+          },
+        ],
+      },
+    ];
+    render(<Chat bootstrap={bootstrap(messages)} api={makeApi()} pollIntervalMs={1_000_000} />);
+
+    const panel = screen.getByTestId("message-system");
+    expect(panel.textContent).toContain("Field context");
+    expect(panel.textContent).not.toContain("Page context");
+    // Body stays hidden until the chip is expanded.
+    expect(panel.textContent).not.toContain("(handle: component)");
+    fireEvent.click(screen.getByRole("button", { name: /field context/i }));
+    expect(panel.textContent).toContain("(handle: component)");
   });
 
   test("renders attachments on past messages", () => {

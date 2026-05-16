@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Crosshair, Globe, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Crosshair, Globe, X } from "lucide-react";
 import { ChatApi } from "./api";
 import { ContextProgress } from "./components/context-progress";
 import { Conversation, ConversationContent } from "./components/conversation";
@@ -939,10 +939,12 @@ function RenderedMessage({ message }: { message: ChatMessage }) {
     );
   }
 
-  // System messages are page-context notes synthesized server-side when the
-  // user navigates between pages on the front-end. We render them as a
-  // distinct inline note so the user can see what context the agent is
-  // working from, without making them look like a normal chat turn.
+  // System messages are context notes synthesized server-side — page
+  // context when the user navigates the front-end, code-component context
+  // when they open the agent on a CodeComponent field. Rendered as a
+  // collapsed-by-default chip so the prose doesn't dominate the
+  // transcript; the label still reads as a clear breadcrumb of what the
+  // agent is working from.
   if (message.role === "system") {
     const text = message.content
       .map((b) => (b.type === "text" && typeof (b as { text?: unknown }).text === "string"
@@ -951,17 +953,7 @@ function RenderedMessage({ message }: { message: ChatMessage }) {
       .filter((t) => t !== "")
       .join("\n\n");
     if (text === "") return null;
-    return (
-      <div
-        data-testid="message-system"
-        className="ai:rounded ai:border ai:border-dashed ai:border-craftai-border ai:bg-slate-50 ai:p-2 ai:text-xs ai:text-slate-600"
-      >
-        <div className="ai:mb-1 ai:text-[10px] ai:font-medium ai:uppercase ai:tracking-wide ai:text-slate-500">
-          Page context
-        </div>
-        <div className="ai:whitespace-pre-wrap">{text}</div>
-      </div>
-    );
+    return <SystemContextNote text={text} />;
   }
 
   // Walk content blocks and group consecutive inline blocks together so we
@@ -1027,6 +1019,47 @@ function RenderedMessage({ message }: { message: ChatMessage }) {
         ),
       )}
     </>
+  );
+}
+
+/**
+ * Collapsible note that wraps an `appendSystemContext` row from the agent
+ * loop. Renders the same chip on both the widget and the embedded
+ * CodeComponent chat surface, with the label switching between "Page
+ * context" and "Field context" based on the wrapper tag the serializer
+ * emitted. Default is collapsed because the prose is dense — the label
+ * alone is a sufficient breadcrumb most of the time, and the user can
+ * expand when they need to inspect what the agent saw.
+ */
+function SystemContextNote({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const isField = text.includes("<code-component-context>");
+  const label = isField ? "Field context" : "Page context";
+  return (
+    <div
+      data-testid="message-system"
+      data-expanded={expanded ? "true" : "false"}
+      className="ai:rounded ai:border ai:border-dashed ai:border-craftai-border ai:bg-slate-50 ai:text-xs ai:text-slate-600"
+    >
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+        className="ai:flex ai:w-full ai:items-center ai:gap-1.5 ai:p-2 ai:text-left ai:text-[10px] ai:font-medium ai:uppercase ai:tracking-wide ai:text-slate-500 hover:ai:text-slate-700"
+      >
+        {expanded ? (
+          <ChevronDown aria-hidden className="ai:h-3 ai:w-3" />
+        ) : (
+          <ChevronRight aria-hidden className="ai:h-3 ai:w-3" />
+        )}
+        <span>{label}</span>
+      </button>
+      {expanded && (
+        <div className="ai:border-t ai:border-dashed ai:border-craftai-border ai:px-2 ai:py-2 ai:whitespace-pre-wrap">
+          {text}
+        </div>
+      )}
+    </div>
   );
 }
 

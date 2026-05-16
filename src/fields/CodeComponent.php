@@ -142,6 +142,7 @@ class CodeComponent extends Field
             ],
             'element' => self::summarizeElement($element),
             'chat' => self::chatBootstrap(),
+            'persist' => self::persistBootstrap(),
         ];
 
         return Html::tag(
@@ -191,10 +192,17 @@ class CodeComponent extends Field
 
     /**
      * Compact element snapshot for the chat's page-context payload. Keeps
-     * just enough to let the agent describe what entry it's editing without
-     * shipping the whole element tree.
+     * just enough to let the agent describe what entry it's editing — and
+     * crucially, which identifier the `update_code_component` tool should
+     * see — without shipping the whole element tree.
      *
-     * @return array{type: string, id: ?int, title: ?string, sectionHandle: ?string}|null
+     * Drafts (including the provisional drafts Craft auto-creates around
+     * matrix blocks in the CP editor) round-trip both their `draftId` and
+     * `canonicalId` so the agent can pick the right tool argument. Matrix
+     * blocks additionally expose their `ownerId` so the agent has the
+     * parent entry id when it needs to reason about the surrounding page.
+     *
+     * @return array{type: string, id: ?int, title: ?string, sectionHandle: ?string, isDraft: bool, isProvisionalDraft: bool, draftId: ?int, canonicalId: ?int, ownerId: ?int}|null
      */
     private static function summarizeElement(?ElementInterface $element): ?array
     {
@@ -217,11 +225,38 @@ class CodeComponent extends Field
         }
 
         $sectionHandle = null;
+        $ownerId = null;
         if ($element instanceof \craft\elements\Entry) {
             try {
                 $sectionHandle = $element->getSection()?->handle;
             } catch (\Throwable) {
                 // Nested entries without a section — leave null.
+            }
+            $rawOwnerId = $element->primaryOwnerId ?? null;
+            if (is_int($rawOwnerId) && $rawOwnerId > 0) {
+                $ownerId = $rawOwnerId;
+            }
+        }
+
+        $isDraft = $element->getIsDraft();
+        $isProvisional = $isDraft && (bool) $element->isProvisionalDraft;
+
+        // For a draft, `getCanonicalId()` falls back to the element's own id
+        // when there's no canonical yet (fresh draft). Normalize that case
+        // to null so the agent can tell "draft of #123" from "fresh draft".
+        $canonicalId = null;
+        if ($isDraft) {
+            $rawCanonicalId = $element->getCanonicalId();
+            if (is_int($rawCanonicalId) && $rawCanonicalId !== $element->id) {
+                $canonicalId = $rawCanonicalId;
+            }
+        }
+
+        $draftId = null;
+        if ($isDraft) {
+            $rawDraftId = $element->draftId ?? null;
+            if (is_int($rawDraftId) && $rawDraftId > 0) {
+                $draftId = $rawDraftId;
             }
         }
 
@@ -230,6 +265,28 @@ class CodeComponent extends Field
             'id' => $element->id !== null ? (int) $element->id : null,
             'title' => $title !== '' ? $title : null,
             'sectionHandle' => $sectionHandle,
+            'isDraft' => $isDraft,
+            'isProvisionalDraft' => $isProvisional,
+            'draftId' => $draftId,
+            'canonicalId' => $canonicalId,
+            'ownerId' => $ownerId,
+        ];
+    }
+
+    /**
+     * URLs the React editor uses to sync field state out-of-band with the
+     * surrounding entry-edit form. `stateUrl` polls the persisted tab
+     * values so agent writes show up live; `persistSessionUrl` writes a
+     * newly minted chat session id to disk immediately so a thread never
+     * gets orphaned by a navigation that pre-empts autosave.
+     *
+     * @return array<string, string>
+     */
+    private static function persistBootstrap(): array
+    {
+        return [
+            'stateUrl' => UrlHelper::actionUrl('craft-ai/code-component/state'),
+            'persistSessionUrl' => UrlHelper::actionUrl('craft-ai/code-component/persist-session'),
         ];
     }
 

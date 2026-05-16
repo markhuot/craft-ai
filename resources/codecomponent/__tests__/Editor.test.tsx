@@ -14,7 +14,17 @@ function bootstrap(overrides: Partial<FieldBootstrap> = {}): FieldBootstrap {
     inputName: "fields[component]",
     permissions: { twig: true, css: true, js: true, prompt: true },
     values: { twig: "TWIG", css: "CSS", js: "JS", agentSessionId: null },
-    element: { type: "entry", id: 100, title: "Page", sectionHandle: "pages" },
+    element: {
+      type: "entry",
+      id: 100,
+      title: "Page",
+      sectionHandle: "pages",
+      isDraft: false,
+      isProvisionalDraft: false,
+      draftId: null,
+      canonicalId: null,
+      ownerId: null,
+    },
     chat: {
       messagesUrl: "/messages",
       sendUrl: "/send",
@@ -24,6 +34,10 @@ function bootstrap(overrides: Partial<FieldBootstrap> = {}): FieldBootstrap {
       previewRespondUrl: "/preview/respond",
       toolModeUrl: "/tool-mode",
       updateToolModeUrl: "/update-tool-mode",
+    },
+    persist: {
+      stateUrl: "/code-component/state",
+      persistSessionUrl: "/code-component/persist-session",
     },
     ...overrides,
   };
@@ -122,6 +136,150 @@ describe("CodeComponent editor", () => {
 
     fireEvent.click(screen.getByTestId("tab-prompt"));
     expect(screen.getByRole("button", { name: /start chatting/i })).toBeDefined();
+  });
+
+  test("pulls fresh server-side tab values into the editor on its initial poll", async () => {
+    const inputs = makeHiddenInputs();
+
+    const originalFetch = global.fetch;
+    global.fetch = (async (url: RequestInfo | URL) => {
+      const u = typeof url === "string" ? url : url.toString();
+      if (u.includes("/code-component/state")) {
+        // Simulate the agent having just written through the
+        // update_code_component tool, so the persisted Twig is now ahead
+        // of the React state.
+        return new Response(
+          JSON.stringify({
+            twig: "<h1>AGENT WROTE THIS</h1>",
+            css: "CSS",
+            js: "JS",
+            agentSessionId: null,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response("", { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      render(
+        <Editor
+          bootstrap={bootstrap()}
+          hiddenInputs={inputs}
+          csrfTokenName="CRAFT_CSRF"
+          csrfTokenValue="tok"
+        />,
+      );
+
+      // Switch to the Twig tab and wait for the poll to land.
+      fireEvent.click(screen.getByTestId("tab-twig"));
+
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+      // The polled value should have replaced the bootstrap value in both
+      // the visible editor and the hidden input that the form will
+      // serialize on save.
+      expect(inputs.twig.value).toBe("<h1>AGENT WROTE THIS</h1>");
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  test("skips the polling loop entirely when the element hasn't been saved yet", async () => {
+    // A fresh entry that hasn't been saved has no `element` snapshot in
+    // the bootstrap, so the editor has nothing to poll for. The loop
+    // must short-circuit instead of firing requests against a null id.
+    const inputs = makeHiddenInputs();
+    let calls = 0;
+    const originalFetch = global.fetch;
+    global.fetch = (async () => {
+      calls++;
+      return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+
+    try {
+      render(
+        <Editor
+          bootstrap={bootstrap({ element: null })}
+          hiddenInputs={inputs}
+          csrfTokenName="CRAFT_CSRF"
+          csrfTokenValue="tok"
+        />,
+      );
+
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      expect(calls).toBe(0);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  test("dispatches input + change on the hidden agentSessionId input after the chat creates a session", async () => {
+    const inputs = makeHiddenInputs();
+    const events: string[] = [];
+    inputs.agentSessionId.addEventListener("input", () => events.push("input"));
+    inputs.agentSessionId.addEventListener("change", () => events.push("change"));
+
+    // Stub fetch so the PromptTab's "Start chatting" button gets back a
+    // real session id and writes it through to the hidden input.
+    const originalFetch = global.fetch;
+    global.fetch = (async () =>
+      new Response(JSON.stringify({ sessionId: "abc-123" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })) as typeof fetch;
+
+    try {
+      render(
+        <Editor
+          bootstrap={bootstrap({
+            permissions: { twig: false, css: false, js: false, prompt: true },
+          })}
+          hiddenInputs={inputs}
+          csrfTokenName="CRAFT_CSRF"
+          csrfTokenValue="tok"
+        />,
+      );
+
+      const startBtn = await screen.findByRole("button", { name: /start chatting/i });
+      fireEvent.click(startBtn);
+
+      // Wait for the async fetch + setSessionId to settle.
+      await screen.findByTestId("prompt-shell");
+
+      expect(inputs.agentSessionId.value).toBe("abc-123");
+      // Craft listens for either event — both are dispatched so the
+      // element-editor flushes an autosave for the surrounding entry.
+      expect(events).toContain("input");
+      expect(events).toContain("change");
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  test("fingerprint changes when any tab value changes", async () => {
+    const { fingerprint } = await import("../PromptTab");
+    const base = {
+      element: null,
+      fieldAuthor: {
+        kind: "code-component-field",
+        fieldHandle: "component",
+        fieldName: "Component",
+        fieldId: 42,
+        currentValues: { twig: "", css: "", js: "" },
+      },
+    };
+    const a = fingerprint(base);
+    const b = fingerprint({
+      ...base,
+      fieldAuthor: {
+        ...base.fieldAuthor,
+        currentValues: { twig: "<h1></h1>", css: "", js: "" },
+      },
+    });
+    expect(a).not.toBe(b);
+    expect(a.length).toBeGreaterThan(0);
   });
 
   test("does not show the Start affordance once an agentSessionId is already present", () => {

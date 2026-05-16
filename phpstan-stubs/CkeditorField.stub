@@ -1,0 +1,9 @@
+<?php
+
+namespace craft\ckeditor;
+
+class Field extends \craft\base\Field
+{
+    /** @return \craft\ckeditor\models\EntryType[] */
+    public function getEntryTypes(): array { return []; }
+}

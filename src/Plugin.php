@@ -19,6 +19,7 @@ use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\fields\CodeComponent;
 use markhuot\craftai\fields\CodeComponentModule;
 use markhuot\craftai\fields\CodeComponentPermissions;
+use markhuot\craftai\notes\CkeditorFieldNotes;
 use markhuot\craftai\permissions\ToolPermissions;
 use markhuot\craftai\preview\PreviewService;
 use markhuot\craftai\agent\providers\AnthropicProvider;
@@ -81,7 +82,7 @@ class Plugin extends BasePlugin
      */
     public const EVENT_REGISTER_AGENT_TOOLS = 'registerAgentTools';
 
-    public string $schemaVersion = '1.9.0';
+    public string $schemaVersion = '1.10.0';
 
     public bool $hasCpSection = true;
 
@@ -160,6 +161,12 @@ class Plugin extends BasePlugin
         if (Craft::$app->getRequest()->getIsConsoleRequest()) {
             $this->controllerNamespace = 'markhuot\\craftai\\console\\controllers';
         }
+
+        Event::on(
+            UpsertField::class,
+            UpsertField::EVENT_DEFINE_FIELD_NOTES,
+            new CkeditorFieldNotes(),
+        );
 
         Event::on(
             UserPermissions::class,

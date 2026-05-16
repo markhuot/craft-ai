@@ -33,7 +33,7 @@ class FakeProvider implements LlmProvider
     /** @var list<ProviderResponse> */
     public array $responses;
 
-    /** @var list<array{messages: list<array<string, mixed>>, tools: list<ToolDescriptor>}> */
+    /** @var list<array{messages: list<array<string, mixed>>, tools: list<ToolDescriptor>, system: ?string}> */
     public array $calls = [];
 
     /**
@@ -46,7 +46,7 @@ class FakeProvider implements LlmProvider
 
     public function createMessage(array $messages, array $tools = [], ?string $system = null): ProviderResponse
     {
-        $this->calls[] = ['messages' => $messages, 'tools' => $tools];
+        $this->calls[] = ['messages' => $messages, 'tools' => $tools, 'system' => $system];
 
         $next = array_shift($this->responses);
         if ($next === null) {
@@ -60,6 +60,39 @@ class FakeProvider implements LlmProvider
 beforeEach(function () {
     $this->registry = new ToolRegistry();
     $this->registry->register(GetHealth::class);
+});
+
+it('sends a built-in system prompt with each provider call', function () {
+    $provider = new FakeProvider([
+        new ProviderResponse('msg_1', [['type' => 'text', 'text' => 'Hi.']], 'end_turn'),
+    ]);
+
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->appendUserMessage('session-system-default', 'Hello');
+    $loop->run('session-system-default');
+
+    expect($provider->calls)->toHaveCount(1);
+    expect($provider->calls[0]['system'])->not->toBeNull();
+    expect($provider->calls[0]['system'])->toContain('pause and surface the observation');
+});
+
+it('threads the same system prompt through multi-turn tool runs', function () {
+    $provider = new FakeProvider([
+        new ProviderResponse(
+            'msg_1',
+            [['type' => 'tool_use', 'id' => 'tu_1', 'name' => 'get_health', 'input' => []]],
+            'tool_use',
+        ),
+        new ProviderResponse('msg_2', [['type' => 'text', 'text' => 'Done.']], 'end_turn'),
+    ]);
+
+    $loop = new AgentLoop($provider, $this->registry);
+    $loop->appendUserMessage('session-system-multiturn', 'Check things.');
+    $loop->run('session-system-multiturn');
+
+    expect($provider->calls)->toHaveCount(2);
+    expect($provider->calls[0]['system'])->toBe($provider->calls[1]['system']);
+    expect($provider->calls[0]['system'])->toContain('pause and surface the observation');
 });
 
 it('persists the user message and a single assistant response when no tools are called', function () {

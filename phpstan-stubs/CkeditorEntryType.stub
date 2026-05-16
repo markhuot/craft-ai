@@ -1,0 +1,8 @@
+<?php
+
+namespace craft\ckeditor\models;
+
+class EntryType extends \craft\models\EntryType
+{
+    public bool $expanded = false;
+}

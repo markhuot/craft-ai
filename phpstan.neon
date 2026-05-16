@@ -10,5 +10,7 @@ parameters:
     scanFiles:
         - vendor/craftcms/cms/src/Craft.php
         - vendor/yiisoft/yii2/Yii.php
+        - phpstan-stubs/CkeditorField.stub
+        - phpstan-stubs/CkeditorEntryType.stub
     stubFiles:
         - phpstan-stubs/Craft.stub

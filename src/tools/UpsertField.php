@@ -11,9 +11,11 @@ use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
 use markhuot\craftai\binders\Field as FieldBinder;
+use markhuot\craftai\events\DefineFieldNotesEvent;
 use markhuot\craftai\validators\AssetSettingsValidation;
 use markhuot\craftai\validators\AvailableFieldType;
 use markhuot\craftai\validators\ExistingField;
+use yii\base\Event;
 
 /**
  * Create or update a custom field in the global field context. Pass `id` to
@@ -49,9 +51,26 @@ use markhuot\craftai\validators\ExistingField;
  * To change an existing block type's sub-fields, edit the entry type's field
  * layout via `upsert_field_layout_element` — Matrix blocks share entry types
  * with regular sections.
+ *
+ * CKEditor fields receive the same `settings.entryTypes` enrichment, plus
+ * a per-field `_notes` describing the embed format. CKEditor's entry types
+ * are embedded inline as *nested* entries (owned by the host entry,
+ * sectionId is null) rather than authored as Matrix-style blocks. To change
+ * which entry types are embeddable, pass `settings.entryTypes` the same way
+ * as Matrix.
+ *
+ * Per-field `_notes` are driven by the `EVENT_DEFINE_FIELD_NOTES` event:
+ * `summarize()` fires a `DefineFieldNotesEvent` for every field and any
+ * non-empty notes added by listeners are joined with "\n\n" into the
+ * field's `_notes` key. Plugins (including this one — see `notes/` for the
+ * CKEditor listener) attach handlers via `Event::on(UpsertField::class,
+ * UpsertField::EVENT_DEFINE_FIELD_NOTES, $handler)` to ship guidance for
+ * their own field types without modifying this class.
  */
 class UpsertField extends Tool
 {
+    public const EVENT_DEFINE_FIELD_NOTES = 'defineFieldNotes';
+
     /**
      * @param  array<string, mixed>|null  $settings  Field-type-specific settings keyed by setting name
      * @return array{_notes: string, data: array<array-key, mixed>}|ToolOutput
@@ -162,8 +181,10 @@ class UpsertField extends Tool
 
     /**
      * Build the public payload for a field — the same shape returned by both
-     * `UpsertField` and `GetFields`. For Matrix fields, `settings.entryTypes`
-     * is enriched with each block type's handle, name, and field layout.
+     * `UpsertField` and `GetFields`. For Matrix and CKEditor fields,
+     * `settings.entryTypes` is enriched with each block/embeddable entry
+     * type's handle, name, and field layout. Per-field `_notes` are gathered
+     * from `EVENT_DEFINE_FIELD_NOTES` subscribers; see the class docblock.
      *
      * @return array<array-key, mixed>
      */
@@ -176,9 +197,16 @@ class UpsertField extends Tool
                 static fn (EntryType $entryType): array => self::summarizeBlockType($entryType),
                 $field->getEntryTypes(),
             );
+        } elseif ($field instanceof \craft\ckeditor\Field) {
+            $settings['entryTypes'] = array_map(
+                static fn (\craft\ckeditor\models\EntryType $entryType): array => self::summarizeBlockType($entryType) + [
+                    'expanded' => $entryType->expanded,
+                ],
+                $field->getEntryTypes(),
+            );
         }
 
-        return [
+        $payload = [
             'id' => $field->id,
             'uid' => $field->uid,
             'name' => $field->name,
@@ -190,6 +218,14 @@ class UpsertField extends Tool
             'translationKeyFormat' => $field->translationKeyFormat,
             'settings' => $settings,
         ];
+
+        $notesEvent = new DefineFieldNotesEvent(['field' => $field]);
+        Event::trigger(self::class, self::EVENT_DEFINE_FIELD_NOTES, $notesEvent);
+        if ($notesEvent->notes !== []) {
+            $payload['_notes'] = implode("\n\n", $notesEvent->notes);
+        }
+
+        return $payload;
     }
 
     /**

@@ -5,6 +5,8 @@ namespace markhuot\craftai\tools;
 use Craft;
 use craft\helpers\FileHelper;
 use markhuot\craftai\attributes\Description;
+use Twig\Error\SyntaxError;
+use Twig\Source;
 
 /**
  * Create or overwrite a Twig template inside the site `templates/` directory.
@@ -17,6 +19,11 @@ use markhuot\craftai\attributes\Description;
  * `html`). Absolute paths and paths that escape the templates root via `..`
  * are rejected. Plugin-registered template roots are read-only — writes only
  * land inside the user's `templates/` directory.
+ *
+ * Twig syntax is validated before the file is written — if the contents
+ * fail to tokenize/parse, the tool returns the syntax error (with line
+ * number) and does not touch the filesystem. This prevents a broken write
+ * from taking the site down with a 500.
  */
 class UpsertTemplate extends Tool
 {
@@ -81,6 +88,15 @@ class UpsertTemplate extends Tool
             );
         }
 
+        $relativePath = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
+
+        if (($syntaxError = self::twigSyntaxError($contents, $relativePath)) !== null) {
+            return new ToolOutput(
+                "Refusing to write \"{$relativePath}\": ".$syntaxError,
+                isError: true,
+            );
+        }
+
         $resolvedTarget = $resolvedParent.DIRECTORY_SEPARATOR.basename($target);
 
         if (file_put_contents($resolvedTarget, $contents) === false) {
@@ -89,8 +105,6 @@ class UpsertTemplate extends Tool
                 isError: true,
             );
         }
-
-        $relativePath = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
 
         $notes = sprintf(
             'Template "%s" %s (%d bytes). Use get_template path="%s" to re-read it, or reference it from a section via upsert_section template="%s".',
@@ -110,6 +124,29 @@ class UpsertTemplate extends Tool
                 'created' => $created,
             ],
         ];
+    }
+
+    /**
+     * Parse the template through Twig's lexer + parser without executing it,
+     * so we catch syntax errors (`indexOf`-style unknown filters, mismatched
+     * tags, etc.) before clobbering a working file. Returns a short error
+     * message including the source line, or null when the template parses.
+     */
+    private static function twigSyntaxError(string $contents, string $relativePath): ?string
+    {
+        try {
+            $twig = Craft::$app->getView()->getTwig();
+            $stream = $twig->tokenize(new Source($contents, $relativePath));
+            $twig->parse($stream);
+        } catch (SyntaxError $e) {
+            $line = $e->getTemplateLine();
+
+            return $line > 0
+                ? "Twig syntax error on line {$line}: ".$e->getRawMessage()
+                : 'Twig syntax error: '.$e->getRawMessage();
+        }
+
+        return null;
     }
 
     private static function normalizeRelativePath(string $path): ?string

@@ -18,6 +18,12 @@ use markhuot\craftai\validators\AvailableFieldType;
  * block type's `handle`, `name`, and field layout (`tabs` containing the
  * sub-fields available inside each block). Use these block-type handles as
  * the `type` value when submitting blocks via `upsert_entry` / `upsert_draft`.
+ *
+ * CKEditor fields receive the same `settings.entryTypes` enrichment — but
+ * those entry types are embedded inline as *nested* entries (owned by the
+ * host entry, sectionId is null), not authored as Matrix-style blocks. Each
+ * CKEditor field also includes a per-field `_notes` key with the embed format
+ * (`<craft-entry data-entry-id="...">`) and authoring sequence.
  */
 class GetFields extends Tool
 {
@@ -44,7 +50,7 @@ class GetFields extends Tool
             ? ($type !== null
                 ? "No fields of type \"{$type}\" exist. Use upsert_field with that type to create one."
                 : 'No global fields are defined. Use upsert_field to create one.')
-            : 'Returned '.count($data).' field(s). Reference these handles in upsert_entry/upsert_draft, or call upsert_field with an id to modify a field. For Matrix fields, `settings.entryTypes[].handle` is the block type handle used when authoring blocks.';
+            : 'Returned '.count($data).' field(s). Reference these handles in upsert_entry/upsert_draft, or call upsert_field with an id to modify a field. For Matrix fields, `settings.entryTypes[].handle` is the block type handle used when authoring blocks. For CKEditor fields, `settings.entryTypes[]` lists entry types that can be embedded inline as nested entries — see each CKEditor field\'s `_notes` for the embed format.';
 
         return [
             '_notes' => $notes,

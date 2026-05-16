@@ -20,6 +20,24 @@ class AgentLoop
     private const COMPACTION_THRESHOLD = 0.95;
 
     /**
+     * Built-in system prompt sent on every provider call. Captures behavioural
+     * guidance the agent should follow regardless of how a host project
+     * customises its own `'system'` setting. Any user-configured prompt is
+     * appended after this with a blank-line separator.
+     *
+     * The "pause and ask" guidance below was added after a session where the
+     * agent watched a preview render wrong, decided the template was at fault,
+     * rewrote it with invalid Twig, 500'd the site, and then pivoted to a
+     * legacy workaround — all without checking in. Encoding this rule into
+     * the system prompt is the lightest-weight place to discourage that loop.
+     */
+    private const BUILT_IN_SYSTEM = <<<'PROMPT'
+When a change you just made appears to render or behave incorrectly downstream — content that does not appear in the preview, a template that errors, output that does not match what you intended — pause and surface the observation to the user before making further edits. Describe what you see, what you think is causing it, and what you would change next. Wait for permission or correction.
+
+This is guidance, not a hard rule. With explicit permission, or when you have a clear reason (a typo you just introduced, an obvious field omission), you can proceed. The failure mode to avoid is silently chasing perceived issues by editing templates to match content, deleting and recreating entries, or pivoting to workarounds — that has historically erased correct work and introduced new bugs.
+PROMPT;
+
+    /**
      * Lazy reference to the small-model provider. Resolved on first compact()
      * to keep the constructor simple (DI binds the main LlmProvider, not the
      * small one — that's pulled from Plugin settings).
@@ -247,12 +265,14 @@ class AgentLoop
 
         $messages = $this->ensureToolResults($this->loadMessages($sessionId));
         $tools = $this->registry->descriptors(onlyAllowed: true);
+        $system = $this->composeSystemPrompt();
 
         // Apply the session-scoped tool-mode filter (Full / Draft / Read-only
         // / Custom). Read once at the top of run() — the loop's iterations
         // re-use the same tool list rather than re-reading per turn, so a
         // mode change mid-run won't take effect until the next actionSend.
         $session = SessionRecord::findOne(['id' => $sessionId]);
+        $sessionClient = self::resolveSessionClient($session);
         if ($session !== null) {
             $tools = $this->registry->filterByToolMode(
                 $tools,
@@ -260,6 +280,11 @@ class AgentLoop
                 $session->enabledTools,
             );
         }
+        // Per-client filter: drop tools whose ALLOWED_CLIENTS doesn't
+        // include the surface this session was minted from. Runs after the
+        // user's tool-mode filter so a "Custom" allowlist that names a
+        // surface-restricted tool still gets the surface filter applied.
+        $tools = $this->registry->filterByClient($tools, $sessionClient);
 
         while (true) {
             if ($this->isStopRequested($sessionId)) {
@@ -267,7 +292,7 @@ class AgentLoop
                 return;
             }
 
-            $response = $this->callWithCompactionRecovery($sessionId, $messages, $tools);
+            $response = $this->callWithCompactionRecovery($sessionId, $messages, $tools, $system);
 
             // The recovery path may have rewritten history with a fresh
             // summary, so reload the in-memory transcript from the DB before
@@ -326,7 +351,11 @@ class AgentLoop
 
                 $toolUseId = is_string($block['id'] ?? null) ? $block['id'] : null;
 
-                $this->toolContext->begin($sessionId, $toolUseId, ClientType::CP);
+                // Push the session's originating surface — not a hardcoded
+                // ClientType::CP — so tools that gate on `getClient()` see
+                // the same context the LLM saw when picking from the
+                // surface-filtered tool list above.
+                $this->toolContext->begin($sessionId, $toolUseId, $sessionClient ?? ClientType::CP);
                 try {
                     $output = $this->registry->execute($name, $input);
                 } finally {
@@ -359,6 +388,24 @@ class AgentLoop
         $session = SessionRecord::findOne(['id' => $sessionId]);
 
         return $session !== null && (bool) $session->stopRequested;
+    }
+
+    /**
+     * Decode the session's stored client surface back into a {@see ClientType}.
+     * Sessions created before the `clientType` column existed fall back to
+     * CP (the column default), and a bad value (e.g. a typo from a future
+     * client we haven't taught the enum about yet) also falls back rather
+     * than throwing — the agent loop is already running by the time we get
+     * here and a runtime error would lose the user's turn.
+     */
+    private static function resolveSessionClient(?SessionRecord $session): ?ClientType
+    {
+        if ($session === null) {
+            return null;
+        }
+        $raw = (string) ($session->clientType ?? 'cp');
+
+        return ClientType::tryFrom($raw) ?? ClientType::CP;
     }
 
     private function recordStopMarker(string $sessionId): void
@@ -680,11 +727,11 @@ class AgentLoop
      * @param list<\markhuot\craftai\tools\ToolDescriptor> $tools
      * @return array{response: \markhuot\craftai\agent\providers\ProviderResponse, compacted: bool}
      */
-    private function callWithCompactionRecovery(string $sessionId, array $messages, array $tools): array
+    private function callWithCompactionRecovery(string $sessionId, array $messages, array $tools, ?string $system): array
     {
         try {
             return [
-                'response' => $this->provider->createMessage($messages, $tools),
+                'response' => $this->provider->createMessage($messages, $tools, $system),
                 'compacted' => false,
             ];
         } catch (\Throwable $e) {
@@ -705,10 +752,34 @@ class AgentLoop
             $compactedMessages = $this->ensureToolResults($this->loadMessages($sessionId));
 
             return [
-                'response' => $this->provider->createMessage($compactedMessages, $tools),
+                'response' => $this->provider->createMessage($compactedMessages, $tools, $system),
                 'compacted' => true,
             ];
         }
+    }
+
+    /**
+     * Combine the built-in behavioural prompt with any project-level `system`
+     * setting so callers always get a single string (or null) to hand to the
+     * provider. The project prompt comes after the built-in so a host can
+     * layer additional context on top without losing the baked-in guidance.
+     */
+    private function composeSystemPrompt(): string
+    {
+        try {
+            $settings = Plugin::getInstance()->getSettingsArray();
+        } catch (\Throwable) {
+            $settings = [];
+        }
+
+        $configured = $settings['system'] ?? null;
+        $configured = is_string($configured) ? trim($configured) : '';
+
+        if ($configured === '') {
+            return self::BUILT_IN_SYSTEM;
+        }
+
+        return self::BUILT_IN_SYSTEM."\n\n".$configured;
     }
 
     /**

@@ -219,3 +219,38 @@ it('returns the resolved absolutePath inside the templates root', function () {
     expect($payload['data']['absolutePath'])->toStartWith($this->tempTemplatesPath.DIRECTORY_SEPARATOR);
     expect(realpath($payload['data']['absolutePath']))->toBe($payload['data']['absolutePath']);
 });
+
+it('rejects contents that contain a Twig syntax error and does not write the file', function () {
+    $output = $this->registry->execute('upsert_template', [
+        'path' => 'broken.twig',
+        'contents' => "{% for x in [1,2] %}\n  {{ x|indexOf('?') }}\n  {% break %}\n{% endfor %}\n",
+    ]);
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('Refusing to write');
+    expect($output->text)->toContain('broken.twig');
+    expect(is_file($this->tempTemplatesPath.'/broken.twig'))->toBeFalse();
+});
+
+it('preserves the previous file when an update would introduce a Twig syntax error', function () {
+    $existing = $this->tempTemplatesPath.'/keep.twig';
+    file_put_contents($existing, '<p>Original</p>');
+
+    $output = $this->registry->execute('upsert_template', [
+        'path' => 'keep.twig',
+        'contents' => "{% if %}",
+    ]);
+
+    expect($output->isError)->toBeTrue();
+    expect(file_get_contents($existing))->toBe('<p>Original</p>');
+});
+
+it('accepts valid Twig and writes the file', function () {
+    $output = $this->registry->execute('upsert_template', [
+        'path' => 'valid.twig',
+        'contents' => "{% for item in items %}{{ item.title }}{% endfor %}",
+    ]);
+
+    expect($output->isError)->toBeFalse($output->text);
+    expect(is_file($this->tempTemplatesPath.'/valid.twig'))->toBeTrue();
+});

@@ -15,11 +15,14 @@ use markhuot\craftai\binders\Entry as EntryBinder;
 use markhuot\craftai\binders\EntryType as EntryTypeBinder;
 use markhuot\craftai\binders\Section as SectionBinder;
 use markhuot\craftai\binders\Site as SiteBinder;
+use markhuot\craftai\helpers\NestedEntryResolver;
 use markhuot\craftai\helpers\PreviewSuggestion;
 use markhuot\craftai\validators\ExistingEntry;
 use markhuot\craftai\validators\ExistingEntryType;
 use markhuot\craftai\validators\ExistingSection;
 use markhuot\craftai\validators\ExistingSite;
+use RuntimeException;
+use Throwable;
 
 /**
  * Create or update a content entry. Pass `id` to update an existing entry;
@@ -46,6 +49,32 @@ use markhuot\craftai\validators\ExistingSite;
  * To preserve an existing block unchanged, include its numeric ID with empty
  * `fields` (or omit `fields` entirely). To delete a block, leave its ID out
  * of the object.
+ *
+ * CKEditor fields accept either a plain HTML string (current behaviour) or
+ * a structured `{html, entries}` payload that inline-creates *nested* entries
+ * owned by this entry — useful when the field's content embeds components,
+ * callouts, or any other entry type listed in the field's allowlist. The
+ * `entries` object is keyed by placeholder strings (`new1`, `new2`, …) and
+ * each value mirrors the per-entry fields below. Reference each placeholder
+ * in the HTML as `<craft-entry data-entry-id="<placeholder>"></craft-entry>`;
+ * the tool substitutes real numeric IDs at save time. Existing nested entries
+ * keep their numeric `data-entry-id` and are left alone. Example:
+ *
+ *     {
+ *       "storyContent": {
+ *         "html": "<h2>Intro</h2><p>...</p><craft-entry data-entry-id=\"new1\"></craft-entry><p>Outro.</p>",
+ *         "entries": {
+ *           "new1": {
+ *             "type": "component",
+ *             "title": "Tetris Falling Pieces",
+ *             "fields": {"component": {"twig": "...", "css": "...", "js": "..."}}
+ *           }
+ *         }
+ *       }
+ *     }
+ *
+ * Every placeholder in `entries` must appear in the HTML and vice versa —
+ * the tool errors otherwise so dangling state does not slip through.
  */
 class UpsertEntry extends Tool
 {
@@ -149,17 +178,48 @@ class UpsertEntry extends Tool
             $entry->siteId = $site->id;
         }
 
+        $structuredFields = [];
+        $flatFields = [];
         if ($fields !== null) {
-            $entry->setFieldValues($fields);
+            foreach ($fields as $handle => $value) {
+                if (NestedEntryResolver::isStructured($value)) {
+                    $structuredFields[$handle] = $value;
+                } else {
+                    $flatFields[$handle] = $value;
+                }
+            }
         }
 
-        if (! Craft::$app->elements->saveElement($entry)) {
-            $errors = $entry->getErrorSummary(true);
+        if ($flatFields !== []) {
+            $entry->setFieldValues($flatFields);
+        }
 
-            return new ToolOutput(
-                'Could not save entry: '.implode('; ', $errors),
-                isError: true,
-            );
+        try {
+            Craft::$app->getDb()->transaction(function () use ($entry, $structuredFields): void {
+                if (! Craft::$app->elements->saveElement($entry)) {
+                    throw new RuntimeException(
+                        'Could not save entry: '.implode('; ', $entry->getErrorSummary(true)),
+                    );
+                }
+
+                if ($structuredFields === []) {
+                    return;
+                }
+
+                $resolved = NestedEntryResolver::resolve($structuredFields, $entry);
+                $entry->setFieldValues($resolved);
+
+                if (! Craft::$app->elements->saveElement($entry)) {
+                    throw new RuntimeException(
+                        'Could not save entry after resolving nested entries: '
+                            .implode('; ', $entry->getErrorSummary(true)),
+                    );
+                }
+            });
+        } catch (RuntimeException $e) {
+            return new ToolOutput($e->getMessage(), isError: true);
+        } catch (Throwable $e) {
+            return new ToolOutput('Could not save entry: '.$e->getMessage(), isError: true);
         }
 
         $url = $entry->getUrl();

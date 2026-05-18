@@ -77,6 +77,41 @@ it('renders the sessions index with grouped session rows', function () {
     expect($body)->toContain('bbbb-2');
 });
 
+it('exposes parentSessionId on session list rows so the sidebar can nest forks', function () {
+    $parent = new SessionRecord();
+    $parent->id = 'parent-session-id';
+    $parent->active = false;
+    $parent->userId = 1;
+    $parent->save();
+
+    $child = new SessionRecord();
+    $child->id = 'child-session-id';
+    $child->active = false;
+    $child->userId = 1;
+    $child->parentSessionId = 'parent-session-id';
+    $child->save();
+
+    $response = test()->http('get', 'admin')
+        ->addHeader('Accept', 'application/json')
+        ->setBody(['action' => 'craft-ai/sessions/data'])
+        ->send();
+
+    $response->assertOk();
+    $payload = json_decode((string) $response->content, true, 32, JSON_THROW_ON_ERROR);
+    $rows = $payload['sessions'] ?? [];
+    expect($rows)->toBeArray();
+
+    $byId = [];
+    foreach ($rows as $row) {
+        $byId[$row['sessionId']] = $row;
+    }
+
+    expect($byId['parent-session-id'] ?? null)->not->toBeNull();
+    expect($byId['parent-session-id']['parentSessionId'])->toBeNull();
+    expect($byId['child-session-id'] ?? null)->not->toBeNull();
+    expect($byId['child-session-id']['parentSessionId'])->toBe('parent-session-id');
+});
+
 it('hides sessions created by other users from the index', function () {
     $suffix = bin2hex(random_bytes(4));
     $elementsTable = Craft::$app->getDb()->getSchema()->getRawTableName('{{%elements}}');

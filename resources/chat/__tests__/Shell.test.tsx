@@ -120,6 +120,87 @@ describe("<Shell />", () => {
   });
 });
 
+describe("<SessionsSidebar /> parent/child nesting", () => {
+  function row(
+    overrides: Partial<SessionListItem> & Pick<SessionListItem, "sessionId">,
+  ): SessionListItem {
+    return {
+      title: overrides.sessionId,
+      url: `http://localhost/sessions/${overrides.sessionId}`,
+      active: false,
+      messageCount: 0,
+      firstMessage: "",
+      lastMessage: "",
+      parentSessionId: null,
+      ...overrides,
+    };
+  }
+
+  function renderSidebar(sessions: SessionListItem[]) {
+    return render(
+      <SessionsSidebar
+        sessions={sessions}
+        currentSessionId={sessions[0]?.sessionId ?? ""}
+        newSessionUrl="http://localhost/sessions/new"
+        csrfTokenName="CRAFT_CSRF"
+        csrfTokenValue="tok"
+        isOpen={false}
+        onClose={() => {}}
+        desktopCollapsed={false}
+        onDesktopExpand={() => {}}
+      />,
+    );
+  }
+
+  test("renders a flat list when no session has a parent", () => {
+    renderSidebar([row({ sessionId: "a" }), row({ sessionId: "b" })]);
+    expect(screen.getByTestId("sessions-list").children).toHaveLength(2);
+    expect(screen.queryByTestId("sessions-children")).toBeNull();
+  });
+
+  test("nests children under their parent inside a connector list", () => {
+    renderSidebar([
+      row({ sessionId: "parent" }),
+      row({ sessionId: "child-1", parentSessionId: "parent" }),
+      row({ sessionId: "child-2", parentSessionId: "parent" }),
+      row({ sessionId: "sibling" }),
+    ]);
+    const list = screen.getByTestId("sessions-list");
+    // Two roots: "parent" and "sibling"
+    expect(list.children).toHaveLength(2);
+
+    const children = screen.getByTestId("sessions-children");
+    // Both child rows live inside the connector list
+    expect(children.children).toHaveLength(2);
+    expect(children.textContent).toContain("child-1");
+    expect(children.textContent).toContain("child-2");
+
+    // Connector list carries a dotted left border so the parent/child
+    // relationship is visible even when the parent row is off-screen.
+    expect(children.className).toContain("border-dotted");
+  });
+
+  test("supports nested grandchildren", () => {
+    renderSidebar([
+      row({ sessionId: "root" }),
+      row({ sessionId: "child", parentSessionId: "root" }),
+      row({ sessionId: "grandchild", parentSessionId: "child" }),
+    ]);
+    const connectors = screen.getAllByTestId("sessions-children");
+    expect(connectors).toHaveLength(2);
+  });
+
+  test("promotes orphaned children to top-level when their parent is missing", () => {
+    renderSidebar([
+      row({ sessionId: "orphan", parentSessionId: "deleted-parent" }),
+      row({ sessionId: "normal" }),
+    ]);
+    const list = screen.getByTestId("sessions-list");
+    expect(list.children).toHaveLength(2);
+    expect(screen.queryByTestId("sessions-children")).toBeNull();
+  });
+});
+
 describe("<SessionsSidebar /> desktop collapse states", () => {
   function defaultProps() {
     return {

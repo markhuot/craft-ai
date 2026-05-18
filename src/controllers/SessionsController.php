@@ -105,7 +105,7 @@ class SessionsController extends Controller
     }
 
     /**
-     * @return list<array{sessionId: string, url: string, title: ?string, active: bool, messageCount: int, firstMessage: string, lastMessage: string}>
+     * @return list<array{sessionId: string, parentSessionId: ?string, url: string, title: ?string, active: bool, messageCount: int, firstMessage: string, lastMessage: string}>
      */
     private function collectSessionListPayload(): array
     {
@@ -115,6 +115,7 @@ class SessionsController extends Controller
         return array_map(static function (array $row) use ($formatter): array {
             return [
                 'sessionId' => $row['sessionId'],
+                'parentSessionId' => $row['parentSessionId'],
                 'url' => UrlHelper::cpUrl('ai/session/'.$row['sessionId']),
                 'title' => $row['title'],
                 'active' => $row['active'],
@@ -130,7 +131,7 @@ class SessionsController extends Controller
     }
 
     /**
-     * @return list<array{sessionId: string, title: ?string, active: bool, messageCount: int, firstMessage: ?string, lastMessage: ?string}>
+     * @return list<array{sessionId: string, parentSessionId: ?string, title: ?string, active: bool, messageCount: int, firstMessage: ?string, lastMessage: ?string}>
      */
     private function collectSessionRows(): array
     {
@@ -168,6 +169,7 @@ class SessionsController extends Controller
             $stat = $stats[$id] ?? null;
             $rows[] = [
                 'sessionId' => $id,
+                'parentSessionId' => $session?->parentSessionId,
                 'title' => $session?->title,
                 'active' => $session !== null && (bool) $session->active,
                 'messageCount' => $stat['messageCount'] ?? 0,

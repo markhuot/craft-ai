@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { Chat } from "./Chat";
 import type { ChatBootstrap, SessionListItem } from "./types";
@@ -275,19 +282,11 @@ export function SessionsSidebar({
         {sessions.length === 0 ? (
           <p className="ai:text-xs ai:text-craftai-muted">No sessions yet.</p>
         ) : (
-          <ul
-            data-testid="sessions-list"
-            className="ai:flex ai:flex-1 ai:min-h-0 ai:flex-col ai:gap-1 ai:list-none ai:overflow-y-auto ai:p-0 ai:m-0"
-          >
-            {sessions.map((s) => (
-              <SessionRow
-                key={s.sessionId}
-                session={s}
-                isCurrent={s.sessionId === currentSessionId}
-                onNavigate={onClose}
-              />
-            ))}
-          </ul>
+          <SessionsTree
+            sessions={sessions}
+            currentSessionId={currentSessionId}
+            onNavigate={onClose}
+          />
         )}
       </aside>
 
@@ -311,14 +310,90 @@ export function SessionsSidebar({
   );
 }
 
+/**
+ * Group the flat session list into a tree by walking `parentSessionId`
+ * pointers. A session whose parent is missing from the list (e.g. the
+ * parent was deleted, or the payload was filtered) is promoted to the
+ * roots so it remains reachable — losing it would strand a real
+ * conversation behind a deleted parent.
+ *
+ * The map preserves the input order for siblings, which the controller
+ * already sorts by lastMessage desc, so the rendered tree inherits that
+ * ordering at every depth.
+ */
+function buildSessionTree(sessions: SessionListItem[]): {
+  roots: SessionListItem[];
+  childrenByParent: Map<string, SessionListItem[]>;
+} {
+  const ids = new Set(sessions.map((s) => s.sessionId));
+  const childrenByParent = new Map<string, SessionListItem[]>();
+  const roots: SessionListItem[] = [];
+  for (const s of sessions) {
+    const parent = s.parentSessionId ?? null;
+    if (parent && parent !== s.sessionId && ids.has(parent)) {
+      const list = childrenByParent.get(parent) ?? [];
+      list.push(s);
+      childrenByParent.set(parent, list);
+    } else {
+      roots.push(s);
+    }
+  }
+  return { roots, childrenByParent };
+}
+
+function SessionsTree({
+  sessions,
+  currentSessionId,
+  onNavigate,
+}: {
+  sessions: SessionListItem[];
+  currentSessionId: string;
+  onNavigate: () => void;
+}) {
+  const { roots, childrenByParent } = buildSessionTree(sessions);
+
+  const renderNode = (session: SessionListItem) => {
+    const children = childrenByParent.get(session.sessionId) ?? [];
+    return (
+      <SessionRow
+        key={session.sessionId}
+        session={session}
+        isCurrent={session.sessionId === currentSessionId}
+        onNavigate={onNavigate}
+      >
+        {children.length > 0 && (
+          <ul
+            data-testid="sessions-children"
+            className="ai:flex ai:flex-col ai:list-none ai:m-0 ai:ml-3 ai:pl-3 ai:border-l ai:border-dotted ai:border-craftai-border/70"
+          >
+            {children.map(renderNode)}
+          </ul>
+        )}
+      </SessionRow>
+    );
+  };
+
+  return (
+    <ul
+      data-testid="sessions-list"
+      className="ai:flex ai:flex-1 ai:min-h-0 ai:flex-col ai:gap-1 ai:list-none ai:overflow-y-auto ai:p-0 ai:m-0"
+    >
+      {roots.map(renderNode)}
+    </ul>
+  );
+}
+
 function SessionRow({
   session,
   isCurrent,
   onNavigate,
+  children,
 }: {
   session: SessionListItem;
   isCurrent: boolean;
   onNavigate: () => void;
+  /** Nested child sessions, rendered beneath the row connected by a dotted line. */
+  children?: ReactNode;
 }) {
   const statusClass = session.active ? "yellow" : "green";
   const statusLabel = session.active ? "Active" : "Idle";
@@ -351,6 +426,7 @@ function SessionRow({
           </span>
         </span>
       </a>
+      {children}
     </li>
   );
 }

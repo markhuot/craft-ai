@@ -60,6 +60,13 @@ export interface ChatMessage {
 
 export interface SessionListItem {
   sessionId: string;
+  /**
+   * When this session was forked from another (today only used for comment
+   * threads), the parent's session id. Drives the sidebar's nested rendering
+   * — children appear indented beneath their parent. Null on top-level
+   * sessions or older payloads that predate this field.
+   */
+  parentSessionId?: string | null;
   url: string;
   title?: string | null;
   active: boolean;

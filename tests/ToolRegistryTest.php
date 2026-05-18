@@ -388,6 +388,39 @@ it('filterByClient drops restricted tools when the client is null', function () 
     expect($names)->not->toContain('tool_registry_field_only_fixture');
 });
 
+it('scopes the preview tools to the full CP chat surface only', function () {
+    // Regression test for the in-page widgets (CP and front-end) and MCP
+    // clients picking up `get_preview` / `open_preview` even though they
+    // have no iframe to drive. The two tools should advertise themselves
+    // exclusively to ClientType::CP — the dedicated /admin/ai/session
+    // page — so the LLM doesn't see them as an option on any other
+    // surface and loop on the runtime CP guard.
+    $registry = new ToolRegistry();
+    $registry->register(\markhuot\craftai\tools\GetPreview::class);
+    $registry->register(\markhuot\craftai\tools\OpenPreview::class);
+
+    $all = $registry->descriptors();
+    $allNames = array_map(static fn ($d) => $d->name, $all);
+    expect($allNames)->toContain('get_preview');
+    expect($allNames)->toContain('open_preview');
+
+    foreach ([
+        \markhuot\craftai\agent\ClientType::WIDGET,
+        \markhuot\craftai\agent\ClientType::MCP,
+        \markhuot\craftai\agent\ClientType::CODE_COMPONENT_FIELD,
+    ] as $client) {
+        $filtered = $registry->filterByClient($all, $client);
+        $names = array_map(static fn ($d) => $d->name, $filtered);
+        expect($names)->not->toContain('get_preview');
+        expect($names)->not->toContain('open_preview');
+    }
+
+    $forCp = $registry->filterByClient($all, \markhuot\craftai\agent\ClientType::CP);
+    $cpNames = array_map(static fn ($d) => $d->name, $forCp);
+    expect($cpNames)->toContain('get_preview');
+    expect($cpNames)->toContain('open_preview');
+});
+
 it('exposes the tool\'s ALLOWED_CLIENTS list on the descriptor', function () {
     $registry = new ToolRegistry();
     $registry->register(ToolRegistryFieldOnlyFixture::class);

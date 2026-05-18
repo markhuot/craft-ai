@@ -80,6 +80,34 @@ it('preserves uid when round-tripping', function () {
     expect($models[0]->uid)->toBe('abc-123');
 });
 
+it('round-trips volumeHandle for asset-shaped events', function () {
+    $settings = new Settings();
+    $settings->setAutomations([
+        [
+            'name' => 'Tag uploads',
+            'event' => Automation::EVENT_ASSET_SAVED,
+            'volumeHandle' => 'uploads',
+            'prompt' => 'Suggest tags.',
+            'enabled' => true,
+        ],
+    ]);
+
+    $models = $settings->getAutomations();
+    expect($models)->toHaveCount(1);
+    expect($models[0]->event)->toBe(Automation::EVENT_ASSET_SAVED);
+    expect($models[0]->volumeHandle)->toBe('uploads');
+    expect($models[0]->sectionHandle)->toBe('');
+});
+
+it('reports the scope kind per event', function () {
+    expect(Automation::scopeFor(Automation::EVENT_ENTRY_SAVED))->toBe('section');
+    expect(Automation::scopeFor(Automation::EVENT_DRAFT_SAVED))->toBe('section');
+    expect(Automation::scopeFor(Automation::EVENT_DRAFT_APPLIED))->toBe('section');
+    expect(Automation::scopeFor(Automation::EVENT_ENTRY_DELETED))->toBe('section');
+    expect(Automation::scopeFor(Automation::EVENT_ASSET_SAVED))->toBe('volume');
+    expect(Automation::scopeFor('unknown.event'))->toBeNull();
+});
+
 it('lists supported events in the dropdown choices', function () {
     $choices = Automation::eventChoices();
     expect($choices)->toHaveKey(Automation::EVENT_ENTRY_SAVED);

@@ -32,6 +32,17 @@ class GetPreview extends Tool
     public const KIND = ToolKind::Read;
 
     /**
+     * The preview pane only lives on the full CP chat page
+     * (`/admin/ai/session/<uuid>`). Floating widget surfaces — front-end
+     * AND CP-injected — have no iframe to drive, and MCP clients can't
+     * mount one at all. Advertising the tool to those surfaces caused the
+     * LLM to call it, hit the runtime CP check, and loop on the error.
+     * Listing CP as the sole allowed client keeps it off the widget tool
+     * roster entirely so the model never sees it as an option.
+     */
+    public const ALLOWED_CLIENTS = [ClientType::CP];
+
+    /**
      * Hard cap on bytes returned to the agent. CP edit pages can render
      * megabytes of HTML; piping all of that into the LLM context burns
      * tokens fast and (historically) overflowed the messages table column.

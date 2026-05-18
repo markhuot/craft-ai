@@ -8,6 +8,7 @@ use craft\helpers\Db;
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use markhuot\craftai\agent\AgentLoop;
+use markhuot\craftai\helpers\CommentMarkdown;
 use markhuot\craftai\queue\AgentJob;
 use markhuot\craftai\records\CommentRecord;
 use yii\web\BadRequestHttpException;
@@ -239,7 +240,14 @@ class CommentsController extends Controller
             'isDraft' => (bool) $record->isDraft,
             'fieldHandle' => $record->fieldHandle,
             'blockPath' => $record->blockPath,
+            // `body` stays the raw markdown source so the agent-side tools
+            // and any future surface can re-render it however they want.
+            // `bodyHtml` is the pre-rendered, sanitized markup the comment
+            // overlay JS drops into the popover via innerHTML — mirroring
+            // the markdown rendering the main chat does client-side with
+            // react-markdown.
             'body' => $record->body,
+            'bodyHtml' => CommentMarkdown::render((string) $record->body),
             'status' => $record->status,
             'resolvedAt' => $record->resolvedAt,
             'resolvedBy' => $record->resolvedBy,

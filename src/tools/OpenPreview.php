@@ -28,6 +28,14 @@ class OpenPreview extends Tool
 {
     public const KIND = ToolKind::Read;
 
+    /**
+     * Restricted to the full CP chat surface — see the matching const on
+     * {@see GetPreview} for the reasoning. The two preview tools always
+     * travel together: opening a URL without being able to read it back
+     * (or vice versa) leaves the agent stuck.
+     */
+    public const ALLOWED_CLIENTS = [ClientType::CP];
+
     public function __construct(
         private readonly PreviewService $preview = new PreviewService(),
         private readonly ToolContext $context = new ToolContext(),

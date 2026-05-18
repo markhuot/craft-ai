@@ -46,6 +46,28 @@ class Automation extends Model
     }
 
     /**
+     * Which container an event scopes against. Entry-shaped events filter
+     * by section handle; asset-shaped events filter by volume handle. The
+     * settings UI swaps its scope picker based on this, and the dispatcher
+     * uses it to decide which handle to consult.
+     *
+     * Returns `null` for events with no meaningful scope (none today, but
+     * leaves room for future events like `user.saved` that wouldn't fit
+     * either category).
+     */
+    public static function scopeFor(string $event): ?string
+    {
+        return match ($event) {
+            self::EVENT_ENTRY_SAVED,
+            self::EVENT_DRAFT_SAVED,
+            self::EVENT_DRAFT_APPLIED,
+            self::EVENT_ENTRY_DELETED => 'section',
+            self::EVENT_ASSET_SAVED => 'volume',
+            default => null,
+        };
+    }
+
+    /**
      * Stable identifier for this rule. Persisted so the settings UI can
      * preserve ordering and the dispatcher can log which rule fired.
      * Generated on first save if the caller didn't supply one.
@@ -57,8 +79,11 @@ class Automation extends Model
 
     public string $event = self::EVENT_DRAFT_SAVED;
 
-    /** Empty string means "any section". Asset/entry-delete rules ignore this. */
+    /** Empty string means "any section". Only consulted for entry-shaped events; ignored otherwise. */
     public string $sectionHandle = '';
+
+    /** Empty string means "any volume". Only consulted for asset-shaped events; ignored otherwise. */
+    public string $volumeHandle = '';
 
     public string $prompt = '';
 
@@ -81,7 +106,7 @@ class Automation extends Model
         return [
             [['event', 'prompt'], 'required'],
             [['event'], 'in', 'range' => array_keys(self::eventChoices())],
-            [['name', 'sectionHandle'], 'string', 'max' => 255],
+            [['name', 'sectionHandle', 'volumeHandle'], 'string', 'max' => 255],
             [['prompt'], 'string', 'max' => 4000],
             [['enabled'], 'boolean'],
         ];
@@ -97,6 +122,7 @@ class Automation extends Model
             'name' => $this->name,
             'event' => $this->event,
             'sectionHandle' => $this->sectionHandle,
+            'volumeHandle' => $this->volumeHandle,
             'prompt' => $this->prompt,
             'enabled' => $this->enabled,
         ];
@@ -115,6 +141,7 @@ class Automation extends Model
         $auto->name = is_string($data['name'] ?? null) ? $data['name'] : '';
         $auto->event = is_string($data['event'] ?? null) ? $data['event'] : self::EVENT_DRAFT_SAVED;
         $auto->sectionHandle = is_string($data['sectionHandle'] ?? null) ? $data['sectionHandle'] : '';
+        $auto->volumeHandle = is_string($data['volumeHandle'] ?? null) ? $data['volumeHandle'] : '';
         $auto->prompt = is_string($data['prompt'] ?? null) ? $data['prompt'] : '';
         // Craft form posts deliver booleans as "1"/"0" or "on"/"" depending
         // on the input. Normalize to a real bool so the rules validator and

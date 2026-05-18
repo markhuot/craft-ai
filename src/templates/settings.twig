@@ -3,81 +3,229 @@
 {#
   CP settings form for craft-ai automations.
 
-  Stays narrow on purpose: only the user-managed pieces (automation rules)
-  live here. Provider/API-key/model knobs continue to live in
-  `config/craft-ai.php` because the LLM config is a contract between the
-  plugin and the deployment, not something an editor should change at
-  runtime.
+  Custom HTML table (rather than `forms.editableTableField`) because the
+  scope cell has to swap between a section select and a volume select
+  depending on the event chosen for the row. Editable tables don't
+  natively support per-row conditional columns, so we own the markup and
+  layer a small JS controller on top.
 
-  The form renders one editable table per automation list. Craft persists
-  the POSTed rows into `plugins.craft-ai.settings.automations` (and to
-  project config when enabled), and `Settings::setAutomations()` drops
-  any row whose prompt is blank — so the "+" button can leave empty
-  stubs without dispatching against an empty automation.
+  All inputs are auto-namespaced under `settings[...]` by Craft's plugin
+  settings wrapper (see `craft\base\Plugin::settingsResponse()`), so we
+  emit names like `automations[<i>][<col>]` and they round-trip into
+  `Settings::setAutomations()` server-side.
 #}
 
-{% set sectionChoices = [{label: '— Any section —'|t('craft-ai'), value: ''}] %}
-{% for section in craft.app.entries.allSections %}
-    {% set sectionChoices = sectionChoices|merge([{label: section.name, value: section.handle}]) %}
-{% endfor %}
-
-{% set eventChoices = [] %}
-{% for value, label in eventChoices_source %}
-    {% set eventChoices = eventChoices|merge([{label: label, value: value}]) %}
-{% endfor %}
-
-{% set rows = [] %}
-{% for auto in settings.getAutomations() %}
-    {% set rows = rows|merge([{
-        uid: auto.uid,
-        name: auto.name,
-        event: auto.event,
-        sectionHandle: auto.sectionHandle,
-        prompt: auto.prompt,
-        enabled: auto.enabled,
-    }]) %}
-{% endfor %}
+{% set automations = settings.getAutomations() %}
 
 <p class="instructions">{{
     "Each automation listens for a Craft event and starts a new agent session with the prompt below whenever the event fires. The triggering element is appended to the session as context, so the agent can fetch and act on it directly."|t('craft-ai')
 }}</p>
 
-{{ forms.editableTableField({
-    label: "Automations"|t('craft-ai'),
-    instructions: "Use the “+” button to add a rule. Section is optional and only applies to entry/draft events."|t('craft-ai'),
-    id: 'automations',
-    name: 'automations',
-    cols: {
-        enabled: {
-            heading: 'On'|t('craft-ai'),
-            type: 'checkbox',
-            thin: true,
-        },
-        name: {
-            heading: 'Name'|t('craft-ai'),
-            type: 'singleline',
-            placeholder: 'Review drafts'|t('craft-ai'),
-        },
-        event: {
-            heading: 'Event'|t('craft-ai'),
-            type: 'select',
-            options: eventChoices,
-        },
-        sectionHandle: {
-            heading: 'Section'|t('craft-ai'),
-            type: 'select',
-            options: sectionChoices,
-        },
-        prompt: {
-            heading: 'Prompt'|t('craft-ai'),
-            type: 'multiline',
-            rows: 2,
-            placeholder: 'Review this draft for clarity and tone.'|t('craft-ai'),
-        },
-    },
-    rows: rows,
-    addRowLabel: "Add an automation"|t('craft-ai'),
-    allowAdd: true,
-    allowDelete: true,
-    allowReorder: true,
-}) }}
+<div
+    class="craftai-automations"
+    data-craftai-automations
+    data-scope-by-event="{{ scopeByEvent|json_encode }}"
+>
+    <table class="data fullwidth craftai-automations__table">
+        <thead>
+            <tr>
+                <th class="thin">{{ "On"|t('craft-ai') }}</th>
+                <th>{{ "Name"|t('craft-ai') }}</th>
+                <th>{{ "Event"|t('craft-ai') }}</th>
+                <th>{{ "Scope"|t('craft-ai') }}</th>
+                <th>{{ "Prompt"|t('craft-ai') }}</th>
+                <th class="thin"></th>
+            </tr>
+        </thead>
+        <tbody data-craftai-automations-body>
+            {% for i, auto in automations %}
+                {% include 'craft-ai/_settings_row.twig' with {
+                    index: i,
+                    auto: auto,
+                    eventChoices: eventChoices,
+                    sectionOptions: sectionOptions,
+                    volumeOptions: volumeOptions,
+                } only %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="craftai-automations__actions">
+        <button
+            type="button"
+            class="btn add icon"
+            data-craftai-add-automation
+        >{{ "Add an automation"|t('craft-ai') }}</button>
+    </div>
+
+    {# Hidden template used by JS to clone fresh rows. Using a <template>
+       keeps the markup inert until cloned, so it never posts. #}
+    <template data-craftai-automation-template>
+        {% include 'craft-ai/_settings_row.twig' with {
+            index: '__INDEX__',
+            auto: null,
+            eventChoices: eventChoices,
+            sectionOptions: sectionOptions,
+            volumeOptions: volumeOptions,
+        } only %}
+    </template>
+</div>
+
+<style>
+    .craftai-automations__table td,
+    .craftai-automations__table th {
+        vertical-align: top;
+    }
+    .craftai-automations__scope-cell .craftai-automations__scope-input[hidden] {
+        display: none;
+    }
+    .craftai-automations__actions {
+        margin-top: 8px;
+    }
+    .craftai-automations__remove {
+        cursor: pointer;
+    }
+    .craftai-commands__table td,
+    .craftai-commands__table th {
+        vertical-align: top;
+    }
+    .craftai-commands__actions {
+        margin-top: 8px;
+    }
+    .craftai-commands__remove {
+        cursor: pointer;
+    }
+    .craftai-commands__name input {
+        font-family: var(--mono-font, ui-monospace, monospace);
+    }
+</style>
+
+<script>
+    (function () {
+        var root = document.querySelector('[data-craftai-automations]');
+        if (!root) return;
+        var body = root.querySelector('[data-craftai-automations-body]');
+        var tpl = root.querySelector('[data-craftai-automation-template]');
+        var addBtn = root.querySelector('[data-craftai-add-automation]');
+        var scopeByEvent;
+        try {
+            scopeByEvent = JSON.parse(root.getAttribute('data-scope-by-event') || '{}');
+        } catch (e) {
+            scopeByEvent = {};
+        }
+
+        function applyScope(row) {
+            var eventSelect = row.querySelector('[data-craftai-event]');
+            if (!eventSelect) return;
+            var kind = scopeByEvent[eventSelect.value] || null;
+            var sectionWrap = row.querySelector('[data-craftai-scope="section"]');
+            var volumeWrap = row.querySelector('[data-craftai-scope="volume"]');
+            if (sectionWrap) sectionWrap.hidden = kind !== 'section';
+            if (volumeWrap) volumeWrap.hidden = kind !== 'volume';
+        }
+
+        function wire(row) {
+            var eventSelect = row.querySelector('[data-craftai-event]');
+            if (eventSelect) {
+                eventSelect.addEventListener('change', function () { applyScope(row); });
+            }
+            var removeBtn = row.querySelector('[data-craftai-remove]');
+            if (removeBtn) {
+                removeBtn.addEventListener('click', function () { row.remove(); });
+            }
+            applyScope(row);
+        }
+
+        Array.prototype.forEach.call(body.querySelectorAll('[data-craftai-automation-row]'), wire);
+
+        // We need indices to stay unique across the form. Existing rows already
+        // have their own indices (set server-side); cloned rows get a high-water
+        // index so they never collide. PHP doesn't require contiguous indices —
+        // setAutomations normalizes through `array_values`-style iteration.
+        var nextIndex = body.querySelectorAll('[data-craftai-automation-row]').length;
+
+        addBtn.addEventListener('click', function () {
+            var html = tpl.innerHTML.replace(/__INDEX__/g, String(nextIndex++));
+            var temp = document.createElement('tbody');
+            temp.innerHTML = html;
+            var row = temp.firstElementChild;
+            if (!row) return;
+            body.appendChild(row);
+            wire(row);
+        });
+    })();
+</script>
+
+<hr>
+
+<h2>{{ "Slash commands"|t('craft-ai') }}</h2>
+<p class="instructions">{{
+    "Slash commands let editors invoke a saved prompt from the chat input by typing /name. Names must be slug-safe (lowercase letters, digits, dashes). The plugin ships with two seeded commands — they can be edited or removed like any other row."|t('craft-ai')
+}}</p>
+
+<div class="craftai-commands" data-craftai-commands>
+    <table class="data fullwidth craftai-commands__table">
+        <thead>
+            <tr>
+                <th class="thin">{{ "On"|t('craft-ai') }}</th>
+                <th>{{ "Name"|t('craft-ai') }}</th>
+                <th>{{ "Prompt"|t('craft-ai') }}</th>
+                <th class="thin"></th>
+            </tr>
+        </thead>
+        <tbody data-craftai-commands-body>
+            {% for i, cmd in settings.getCommands() %}
+                {% include 'craft-ai/_command_row.twig' with {
+                    index: i,
+                    cmd: cmd,
+                } only %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="craftai-commands__actions">
+        <button
+            type="button"
+            class="btn add icon"
+            data-craftai-add-command
+        >{{ "Add a slash command"|t('craft-ai') }}</button>
+    </div>
+
+    <template data-craftai-command-template>
+        {% include 'craft-ai/_command_row.twig' with {
+            index: '__INDEX__',
+            cmd: null,
+        } only %}
+    </template>
+</div>
+
+<script>
+    (function () {
+        var root = document.querySelector('[data-craftai-commands]');
+        if (!root) return;
+        var body = root.querySelector('[data-craftai-commands-body]');
+        var tpl = root.querySelector('[data-craftai-command-template]');
+        var addBtn = root.querySelector('[data-craftai-add-command]');
+
+        function wire(row) {
+            var removeBtn = row.querySelector('[data-craftai-remove]');
+            if (removeBtn) {
+                removeBtn.addEventListener('click', function () { row.remove(); });
+            }
+        }
+
+        Array.prototype.forEach.call(body.querySelectorAll('[data-craftai-command-row]'), wire);
+
+        var nextIndex = body.querySelectorAll('[data-craftai-command-row]').length;
+
+        addBtn.addEventListener('click', function () {
+            var html = tpl.innerHTML.replace(/__INDEX__/g, String(nextIndex++));
+            var temp = document.createElement('tbody');
+            temp.innerHTML = html;
+            var row = temp.firstElementChild;
+            if (!row) return;
+            body.appendChild(row);
+            wire(row);
+        });
+    })();
+</script>

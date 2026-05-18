@@ -37,6 +37,7 @@ function readBootstrap(): WidgetBootstrap | null {
 
 function normalizeContext(value: unknown): PageContext {
   const empty: PageContext = {
+    surface: "site",
     url: null,
     path: null,
     query: {},
@@ -64,10 +65,15 @@ function normalizeContext(value: unknown): PageContext {
         id: e.id,
         title: typeof e.title === "string" ? e.title : null,
         sectionHandle: typeof e.sectionHandle === "string" ? e.sectionHandle : null,
+        isDraft: e.isDraft === true,
+        draftId: typeof e.draftId === "number" ? e.draftId : null,
+        canonicalId: typeof e.canonicalId === "number" ? e.canonicalId : null,
       };
     }
   }
+  const surface = obj.surface === "cp" ? "cp" : "site";
   return {
+    surface,
     url: typeof obj.url === "string" ? obj.url : null,
     path: typeof obj.path === "string" ? obj.path : null,
     query,

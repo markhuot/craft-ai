@@ -14,7 +14,14 @@ export interface Comment {
   isDraft: boolean;
   fieldHandle: string | null;
   blockPath: string | null;
+  /** Raw markdown source as the agent wrote it. */
   body: string;
+  /**
+   * Sanitized HTML rendering of `body` — produced server-side via
+   * cebe/markdown + HTMLPurifier. Safe to drop directly into innerHTML.
+   * Empty string when `body` is empty.
+   */
+  bodyHtml: string;
   status: "open" | "resolved";
   resolvedAt: string | null;
   resolvedBy: "user" | "agent" | null;

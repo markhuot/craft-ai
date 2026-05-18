@@ -79,27 +79,54 @@ class AutomationDispatcher
     }
 
     /**
-     * Section filter applies to entries only. Asset/entry-delete rules
-     * leave it empty so they fire site-wide. Empty handle on an entry
-     * rule also fires for every section — the filter is purely additive.
+     * Apply the rule's scope filter against the triggering element. The
+     * filter kind (section vs. volume) is derived from the event itself
+     * via {@see Automation::scopeFor()} so the dispatcher and the
+     * settings UI agree on which handle is relevant.
+     *
+     * Empty handles short-circuit to "any" — the filter is purely
+     * additive. Mismatched element types (e.g. a section-scoped rule
+     * receiving an Asset) fail the filter outright; in practice the
+     * event-key match runs before this and won't let that happen, but the
+     * extra guard keeps the dispatcher robust if the data is hand-edited.
      */
     private function matchesElementFilter(Automation $auto, ElementInterface $element): bool
     {
-        if ($auto->sectionHandle === '') {
-            return true;
+        $scope = Automation::scopeFor($auto->event);
+
+        if ($scope === 'section') {
+            if ($auto->sectionHandle === '') {
+                return true;
+            }
+            if (! $element instanceof Entry) {
+                return false;
+            }
+            try {
+                $section = $element->getSection();
+            } catch (\Throwable) {
+                return false;
+            }
+            return $section !== null && $section->handle === $auto->sectionHandle;
         }
 
-        if (! $element instanceof Entry) {
-            return false;
+        if ($scope === 'volume') {
+            if ($auto->volumeHandle === '') {
+                return true;
+            }
+            if (! $element instanceof Asset) {
+                return false;
+            }
+            try {
+                $volume = $element->getVolume();
+            } catch (\Throwable) {
+                return false;
+            }
+            return $volume->handle === $auto->volumeHandle;
         }
 
-        try {
-            $section = $element->getSection();
-        } catch (\Throwable) {
-            return false;
-        }
-
-        return $section !== null && $section->handle === $auto->sectionHandle;
+        // No scope kind defined for this event — accept anything matching
+        // the event-key filter we already passed.
+        return true;
     }
 
     private function fire(Automation $auto, ElementInterface $element): void

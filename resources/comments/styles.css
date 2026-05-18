@@ -130,7 +130,94 @@
 
 .craftai-comments-popover__body {
   margin: 0 0 6px 0;
-  white-space: pre-wrap;
+}
+
+/*
+ * Rendered-markdown styles. The server emits real HTML (paragraphs, lists,
+ * code, links, blockquotes, tables) via cebe/markdown + HTMLPurifier, and
+ * this block gives those tags compact, popover-friendly typography. We
+ * mirror the chat's react-markdown styling at a smaller scale so reviewers
+ * see the same shape (lists indented, code in a tinted box, links underlined)
+ * without dragging in the Tailwind prose plugin.
+ */
+.craftai-comments-popover__body > :first-child {
+  margin-top: 0;
+}
+
+.craftai-comments-popover__body > :last-child {
+  margin-bottom: 0;
+}
+
+.craftai-comments-popover__body p {
+  margin: 0 0 6px 0;
+}
+
+.craftai-comments-popover__body ul,
+.craftai-comments-popover__body ol {
+  margin: 0 0 6px 0;
+  padding-left: 18px;
+}
+
+.craftai-comments-popover__body li {
+  margin: 2px 0;
+}
+
+.craftai-comments-popover__body code {
+  background: #f1f3f5;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.craftai-comments-popover__body pre {
+  background: #f1f3f5;
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-x: auto;
+}
+
+.craftai-comments-popover__body pre code {
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+}
+
+.craftai-comments-popover__body a {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.craftai-comments-popover__body blockquote {
+  margin: 0 0 6px 0;
+  padding: 2px 10px;
+  border-left: 3px solid #d6d9dc;
+  color: #475467;
+}
+
+.craftai-comments-popover__body h1,
+.craftai-comments-popover__body h2,
+.craftai-comments-popover__body h3,
+.craftai-comments-popover__body h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+
+.craftai-comments-popover__body table {
+  border-collapse: collapse;
+  margin: 0 0 6px 0;
+  font-size: 12px;
+}
+
+.craftai-comments-popover__body th,
+.craftai-comments-popover__body td {
+  border: 1px solid #d6d9dc;
+  padding: 4px 6px;
+  text-align: left;
 }
 
 .craftai-comments-popover__meta {

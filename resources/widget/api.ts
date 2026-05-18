@@ -45,6 +45,14 @@ export class WidgetApi {
   async createSession(): Promise<string> {
     const body = new FormData();
     body.append(this.bootstrap.csrfTokenName, this.bootstrap.csrfTokenValue);
+    // Explicitly identify ourselves as the widget surface so the server
+    // doesn't fall back to inferring "cp" purely from the request being
+    // a CP request. The widget is injected on CP pages too (so editors
+    // can prompt "review this" while on a draft) and we don't want it to
+    // pick up preview-pane / dedicated-chat-only tools — the LLM would
+    // call them and get stuck in an error loop since the widget has no
+    // iframe to drive.
+    body.append("clientType", "widget");
 
     const res = await this.fetchImpl(this.bootstrap.newSessionUrl, {
       method: "POST",

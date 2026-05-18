@@ -65,6 +65,79 @@ it('renders a system note that mentions URL, site, template, and element', funct
     expect($note)->toContain('</page-context>');
 });
 
+it('frames the prelude as a control-panel page when surface is "cp"', function () {
+    $note = PageContextSerializer::toSystemNote([
+        'surface' => 'cp',
+        'url' => 'https://example.com/admin/entries/blog/42-some-slug',
+        'path' => 'admin/entries/blog/42-some-slug',
+        'siteHandle' => 'default',
+        // CP renders pass an internal Craft layout name here that doesn't
+        // tell the agent anything useful, so the serializer suppresses it.
+        'template' => '_layouts/cp.twig',
+        'query' => [],
+        'element' => [
+            'type' => 'entry',
+            'id' => 42,
+            'title' => 'Pricing',
+            'sectionHandle' => 'blog',
+            'isDraft' => false,
+            'draftId' => null,
+            'canonicalId' => null,
+        ],
+    ]);
+
+    expect($note)->toContain('control-panel page');
+    expect($note)->not->toContain('front-end of the site');
+    expect($note)->not->toContain('Template:');
+    expect($note)->toContain('Element: entry #42 "Pricing"');
+    // Non-draft entries get a get_entry call-target hint.
+    expect($note)->toContain('Use `get_entry` with entryId=42');
+});
+
+it('points a CP draft edit page at get_draft', function () {
+    $note = PageContextSerializer::toSystemNote([
+        'surface' => 'cp',
+        'url' => 'https://example.com/admin/entries/blog/42-some-slug',
+        'path' => 'admin/entries/blog/42-some-slug',
+        'siteHandle' => 'default',
+        'template' => null,
+        'query' => ['draftId' => '17'],
+        'element' => [
+            'type' => 'entry',
+            'id' => 42,
+            'title' => 'Pricing',
+            'sectionHandle' => 'blog',
+            'isDraft' => true,
+            'draftId' => 17,
+            'canonicalId' => 42,
+        ],
+    ]);
+
+    expect($note)->toContain('Element: draft of entry #42 "Pricing"');
+    expect($note)->toContain('draftId: 17');
+    expect($note)->toContain('Use `get_draft` with draftId=17');
+    expect($note)->not->toContain('Use `get_entry`');
+});
+
+it('does not emit the "no element matched" fallback on CP pages', function () {
+    // CP routes that don't map to an element (settings, dashboard, etc.)
+    // shouldn't produce a noisy "no element matched this URL" line — that
+    // wording is misleading because we don't even try to match elements
+    // by URL in the CP.
+    $note = PageContextSerializer::toSystemNote([
+        'surface' => 'cp',
+        'url' => 'https://example.com/admin/dashboard',
+        'path' => 'admin/dashboard',
+        'siteHandle' => 'default',
+        'template' => null,
+        'query' => [],
+        'element' => null,
+    ]);
+
+    expect($note)->toContain('control-panel page');
+    expect($note)->not->toContain('Element:');
+});
+
 it('marks the element as missing when the URL did not match one', function () {
     $note = PageContextSerializer::toSystemNote([
         'url' => 'https://example.com/raw-route',

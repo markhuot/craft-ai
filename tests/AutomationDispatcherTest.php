@@ -3,6 +3,8 @@
 use Craft;
 use craft\elements\User;
 use markhuot\craftai\agent\ClientType;
+use markhuot\craftai\agent\providers\LlmProvider;
+use markhuot\craftai\agent\providers\ProviderResponse;
 use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\models\Automation;
 use markhuot\craftai\models\Settings;
@@ -11,12 +13,31 @@ use markhuot\craftai\queue\AgentJob;
 use markhuot\craftai\records\MessageRecord;
 use markhuot\craftai\records\SessionRecord;
 use markhuot\craftai\services\AutomationDispatcher;
+use markhuot\craftpest\factories\Asset;
 use markhuot\craftpest\factories\Entry;
 use markhuot\craftpest\factories\Section;
+use markhuot\craftpest\factories\Volume;
+
+/**
+ * Inert LLM provider used by the dispatcher tests. We bind this in place of
+ * the real provider singleton so the container can construct {@see AgentLoop}
+ * (the dispatcher resolves it at fire time) without requiring a configured
+ * API key — none of the tests actually drive the agent loop, they just assert
+ * on the records the dispatcher writes before the job is queued.
+ */
+final class DispatcherTestNoopProvider implements LlmProvider
+{
+    public function createMessage(array $messages, array $tools = [], ?string $system = null): ProviderResponse
+    {
+        return new ProviderResponse(id: 'noop', content: [], stopReason: 'end_turn');
+    }
+}
 
 beforeEach(function () {
     Section::factory()->name('Posts')->handle('posts')->create();
     Section::factory()->name('News')->handle('news')->create();
+    Volume::factory()->name('Uploads')->handle('uploads')->create();
+    Volume::factory()->name('Library')->handle('library')->create();
 
     $user = new User();
     $user->id = 1;
@@ -25,13 +46,48 @@ beforeEach(function () {
     $user->email = 'admin@example.com';
     Craft::$app->getUser()->setIdentity($user);
 
-    // Most tests want the dispatcher to actually fire, so clear the
-    // shared ToolContext that TestCase::setUp primes. Tests that need
-    // to verify the recursion guard re-prime it explicitly.
+    // The Plugin globally listens on Entry::EVENT_AFTER_SAVE etc., so any
+    // factory-driven save would itself dispatch. We keep the test-session
+    // context primed (from TestCase::setUp) during fixture construction so
+    // those listeners short-circuit on the recursion guard. Each test calls
+    // dispatchManually() to deliberately end the context for the one call it
+    // wants to measure.
+    /** @var ToolContext $ctx */
+    $ctx = Craft::$container->get(ToolContext::class);
+    if ($ctx->getSessionId() === null) {
+        $ctx->begin('test-session', null, ClientType::CP);
+    }
+
+    // Override the LLM provider binding so AgentLoop construction succeeds
+    // even when the test config has no apiKey. The dispatcher never invokes
+    // the loop's send path here — it only writes seed messages — so an inert
+    // provider is enough.
+    Craft::$container->setSingleton(LlmProvider::class, fn () => new DispatcherTestNoopProvider());
+});
+
+/**
+ * End the ambient recursion-guard context and run the dispatcher once. Tests
+ * use this rather than calling `$dispatcher->dispatch()` directly so factory
+ * setup runs under the recursion guard (no spurious sessions) while the
+ * single intentional dispatch under test still fires.
+ */
+function dispatchManually(string $eventKey, \craft\base\ElementInterface $element): void
+{
     /** @var ToolContext $ctx */
     $ctx = Craft::$container->get(ToolContext::class);
     $ctx->end();
-});
+
+    try {
+        /** @var AutomationDispatcher $dispatcher */
+        $dispatcher = Craft::$container->get(AutomationDispatcher::class);
+        $dispatcher->dispatch($eventKey, $element);
+    } finally {
+        // Re-prime the recursion guard so any subsequent factory saves in
+        // the same test (e.g. the section/volume filter tests, which call
+        // dispatchManually twice with different elements) stay quiet.
+        $ctx->begin('test-session', null, ClientType::CP);
+    }
+}
 
 function applySettings(array $automations): Settings
 {
@@ -40,9 +96,11 @@ function applySettings(array $automations): Settings
 
     // Inject the settings into the plugin instance so the dispatcher
     // sees them when it reads via Plugin::getInstance()->getSettings().
+    // The base Plugin stores its lazily-created model in $_settings on the
+    // parent class, so we reflect against the base class to find the
+    // property rather than the subclass.
     $plugin = Plugin::getInstance();
-    $reflection = new \ReflectionObject($plugin);
-    $prop = $reflection->getProperty('settings');
+    $prop = (new \ReflectionClass(\craft\base\Plugin::class))->getProperty('_settings');
     $prop->setAccessible(true);
     $prop->setValue($plugin, $settings);
 
@@ -72,9 +130,7 @@ it('dispatches an automation when the matching event fires', function () {
     $entry = Entry::factory()->section('posts')->title('Canonical')->create();
     $draft = Craft::$app->drafts->createDraft($entry, 1);
 
-    /** @var AutomationDispatcher $dispatcher */
-    $dispatcher = Craft::$container->get(AutomationDispatcher::class);
-    $dispatcher->dispatch(Automation::EVENT_DRAFT_SAVED, $draft);
+    dispatchManually(Automation::EVENT_DRAFT_SAVED, $draft);
 
     $sessions = SessionRecord::find()->all();
     expect($sessions)->toHaveCount(1);
@@ -108,11 +164,52 @@ it('skips disabled automations', function () {
     $entry = Entry::factory()->section('posts')->create();
     $draft = Craft::$app->drafts->createDraft($entry, 1);
 
-    /** @var AutomationDispatcher $dispatcher */
-    $dispatcher = Craft::$container->get(AutomationDispatcher::class);
-    $dispatcher->dispatch(Automation::EVENT_DRAFT_SAVED, $draft);
+    dispatchManually(Automation::EVENT_DRAFT_SAVED, $draft);
 
-    expect(SessionRecord::find()->count())->toBe('0');
+    expect(SessionRecord::find()->all())->toHaveCount(0);
+});
+
+it('respects the volume filter for asset-saved events', function () {
+    applySettings([
+        [
+            'event' => Automation::EVENT_ASSET_SAVED,
+            'volumeHandle' => 'library',
+            'prompt' => 'library only',
+            'enabled' => true,
+        ],
+    ]);
+
+    $uploadAsset = Asset::factory()->volume('uploads')->create();
+    dispatchManually(Automation::EVENT_ASSET_SAVED, $uploadAsset);
+
+    expect(SessionRecord::find()->all())->toHaveCount(0);
+
+    $libraryAsset = Asset::factory()->volume('library')->create();
+    dispatchManually(Automation::EVENT_ASSET_SAVED, $libraryAsset);
+
+    expect(SessionRecord::find()->all())->toHaveCount(1);
+});
+
+it('ignores volumeHandle on entry-shaped events', function () {
+    applySettings([
+        [
+            'event' => Automation::EVENT_DRAFT_SAVED,
+            // Hand-edited config could leave a stale volumeHandle on a rule
+            // whose event was swapped to a section-shaped one. The dispatcher
+            // should consult sectionHandle only and ignore the volume.
+            'sectionHandle' => '',
+            'volumeHandle' => 'library',
+            'prompt' => 'fire anyway',
+            'enabled' => true,
+        ],
+    ]);
+
+    $entry = Entry::factory()->section('posts')->create();
+    $draft = Craft::$app->drafts->createDraft($entry, 1);
+
+    dispatchManually(Automation::EVENT_DRAFT_SAVED, $draft);
+
+    expect(SessionRecord::find()->all())->toHaveCount(1);
 });
 
 it('respects the section filter', function () {
@@ -128,17 +225,15 @@ it('respects the section filter', function () {
     $postsEntry = Entry::factory()->section('posts')->create();
     $postsDraft = Craft::$app->drafts->createDraft($postsEntry, 1);
 
-    /** @var AutomationDispatcher $dispatcher */
-    $dispatcher = Craft::$container->get(AutomationDispatcher::class);
-    $dispatcher->dispatch(Automation::EVENT_DRAFT_SAVED, $postsDraft);
+    dispatchManually(Automation::EVENT_DRAFT_SAVED, $postsDraft);
 
-    expect(SessionRecord::find()->count())->toBe('0');
+    expect(SessionRecord::find()->all())->toHaveCount(0);
 
     $newsEntry = Entry::factory()->section('news')->create();
     $newsDraft = Craft::$app->drafts->createDraft($newsEntry, 1);
-    $dispatcher->dispatch(Automation::EVENT_DRAFT_SAVED, $newsDraft);
+    dispatchManually(Automation::EVENT_DRAFT_SAVED, $newsDraft);
 
-    expect(SessionRecord::find()->count())->toBe('1');
+    expect(SessionRecord::find()->all())->toHaveCount(1);
 });
 
 it('bails when invoked inside an active tool context (recursion guard)', function () {
@@ -150,7 +245,11 @@ it('bails when invoked inside an active tool context (recursion guard)', functio
         ],
     ]);
 
-    // Simulate "we're inside an agent loop" by priming the shared context.
+    // Simulate "we're inside an agent loop" by priming the shared context to
+    // a session id distinct from TestCase::setUp's test-session. The dispatch
+    // call goes directly to the dispatcher because dispatchManually() ends
+    // the ambient context — which is exactly what we want to verify isn't
+    // happening here.
     /** @var ToolContext $ctx */
     $ctx = Craft::$container->get(ToolContext::class);
     $ctx->begin('agent-session', 'tu-x', ClientType::CP);
@@ -162,7 +261,7 @@ it('bails when invoked inside an active tool context (recursion guard)', functio
     $dispatcher = Craft::$container->get(AutomationDispatcher::class);
     $dispatcher->dispatch(Automation::EVENT_DRAFT_SAVED, $draft);
 
-    expect(SessionRecord::find()->count())->toBe('0');
+    expect(SessionRecord::find()->all())->toHaveCount(0);
 });
 
 it('matches the correct event key, ignoring unrelated rules', function () {
@@ -184,9 +283,7 @@ it('matches the correct event key, ignoring unrelated rules', function () {
     $entry = Entry::factory()->section('posts')->create();
     $draft = Craft::$app->drafts->createDraft($entry, 1);
 
-    /** @var AutomationDispatcher $dispatcher */
-    $dispatcher = Craft::$container->get(AutomationDispatcher::class);
-    $dispatcher->dispatch(Automation::EVENT_DRAFT_SAVED, $draft);
+    dispatchManually(Automation::EVENT_DRAFT_SAVED, $draft);
 
     $sessions = SessionRecord::find()->all();
     expect($sessions)->toHaveCount(1);
@@ -212,9 +309,7 @@ it('creates one session per matching rule when several apply', function () {
     $entry = Entry::factory()->section('posts')->create();
     $draft = Craft::$app->drafts->createDraft($entry, 1);
 
-    /** @var AutomationDispatcher $dispatcher */
-    $dispatcher = Craft::$container->get(AutomationDispatcher::class);
-    $dispatcher->dispatch(Automation::EVENT_DRAFT_SAVED, $draft);
+    dispatchManually(Automation::EVENT_DRAFT_SAVED, $draft);
 
     $titles = array_map(static fn ($s) => $s->title, SessionRecord::find()->all());
     expect($titles)->toHaveCount(2);

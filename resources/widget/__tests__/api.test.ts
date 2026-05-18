@@ -17,6 +17,7 @@ function bootstrap(): WidgetBootstrap {
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
     context: {
+      surface: "site",
       url: null,
       path: null,
       query: {},
@@ -102,6 +103,11 @@ describe("WidgetApi", () => {
 
     const body = lastInit?.body as FormData;
     expect(body.get("CRAFT_CSRF")).toBe("tok");
+    // The widget identifies itself explicitly so the server doesn't
+    // bucket it as the CP full-chat surface when injected on a CP page.
+    // Without this, `get_preview` / `open_preview` would land on the
+    // session's tool roster and the LLM would loop on them.
+    expect(body.get("clientType")).toBe("widget");
   });
 
   test("createSession throws when the response is missing the sessionId", async () => {

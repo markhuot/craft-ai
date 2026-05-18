@@ -36,6 +36,14 @@ export interface WidgetBootstrap {
 }
 
 export interface PageContext {
+  /**
+   * `'cp'` when the widget was injected on a Craft control-panel page,
+   * `'site'` when it was injected on the front-end. The chat surface
+   * forwards this to the server-side context serializer so the LLM
+   * sees an appropriate "you are looking at the CP" vs. "front-end"
+   * framing.
+   */
+  surface: "cp" | "site";
   url: string | null;
   path: string | null;
   query: Record<string, string | number | boolean | null>;
@@ -49,4 +57,10 @@ export interface PageContextElement {
   id: number;
   title: string | null;
   sectionHandle: string | null;
+  /** True when the element is a draft (only meaningful for entries). */
+  isDraft: boolean;
+  /** Set when `isDraft` is true so the agent can call `get_draft`. */
+  draftId: number | null;
+  /** Set when `isDraft` is true so the agent can compare to the canonical. */
+  canonicalId: number | null;
 }

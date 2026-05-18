@@ -173,9 +173,18 @@ function renderCommentItem(
   item.className = "craftai-comments-popover__item";
   item.dataset.commentId = String(comment.id);
 
-  const body = document.createElement("p");
+  // bodyHtml comes pre-rendered + sanitized from the server (see
+  // CommentMarkdown::render) so we can drop it in via innerHTML to match
+  // the rich rendering the main chat does. Fall back to textContent when
+  // the server didn't ship a bodyHtml — older deploys, or a future API
+  // shape that omits the field — so the popover always shows _something_.
+  const body = document.createElement("div");
   body.className = "craftai-comments-popover__body";
-  body.textContent = comment.body;
+  if (typeof comment.bodyHtml === "string" && comment.bodyHtml !== "") {
+    body.innerHTML = comment.bodyHtml;
+  } else {
+    body.textContent = comment.body;
+  }
   item.appendChild(body);
 
   const meta = document.createElement("p");

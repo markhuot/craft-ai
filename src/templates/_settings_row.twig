@@ -1,0 +1,96 @@
+{% import "_includes/forms" as forms %}
+
+{#
+  One automation row. Used both for existing rows in the table body and
+  as a clone source inside a <template>. When invoked as a template, the
+  caller passes `index = '__INDEX__'` and `auto = null` — the JS swaps
+  `__INDEX__` for a real index before mounting the clone.
+
+  Parameters:
+    index:          int|string — the row index, or '__INDEX__' for the template.
+    auto:           Automation|null — populated from the model, or null for a fresh row.
+    eventChoices:   array<string, string> — value => label.
+    sectionOptions: list of {label, value} dicts.
+    volumeOptions:  list of {label, value} dicts.
+#}
+
+{% set uid = auto ? auto.uid : '' %}
+{% set name = auto ? auto.name : '' %}
+{% set eventValue = auto ? auto.event : 'draft.saved' %}
+{% set sectionHandle = auto ? auto.sectionHandle : '' %}
+{% set volumeHandle = auto ? auto.volumeHandle : '' %}
+{% set prompt = auto ? auto.prompt : '' %}
+{% set enabled = auto ? auto.enabled : true %}
+
+{% set base = 'automations[' ~ index ~ ']' %}
+
+<tr data-craftai-automation-row>
+    <td class="thin">
+        {# Empty-string hidden input ensures unchecked rows still POST a value so
+           Settings::setAutomations sees the row instead of dropping it as missing. #}
+        <input type="hidden" name="{{ base }}[enabled]" value="">
+        <input
+            type="checkbox"
+            name="{{ base }}[enabled]"
+            value="1"
+            {% if enabled %}checked{% endif %}
+        >
+        <input type="hidden" name="{{ base }}[uid]" value="{{ uid }}">
+    </td>
+    <td>
+        {{ forms.text({
+            name: base ~ '[name]',
+            value: name,
+            placeholder: 'Review drafts'|t('craft-ai'),
+        }) }}
+    </td>
+    <td>
+        <div class="select">
+            <select name="{{ base }}[event]" data-craftai-event>
+                {% for value, label in eventChoices %}
+                    <option value="{{ value }}"{% if value == eventValue %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </td>
+    <td class="craftai-automations__scope-cell">
+        <div
+            class="select craftai-automations__scope-input"
+            data-craftai-scope="section"
+            hidden
+        >
+            <select name="{{ base }}[sectionHandle]">
+                {% for opt in sectionOptions %}
+                    <option value="{{ opt.value }}"{% if opt.value == sectionHandle %} selected{% endif %}>{{ opt.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div
+            class="select craftai-automations__scope-input"
+            data-craftai-scope="volume"
+            hidden
+        >
+            <select name="{{ base }}[volumeHandle]">
+                {% for opt in volumeOptions %}
+                    <option value="{{ opt.value }}"{% if opt.value == volumeHandle %} selected{% endif %}>{{ opt.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </td>
+    <td>
+        <textarea
+            name="{{ base }}[prompt]"
+            rows="2"
+            placeholder="{{ 'Review this draft for clarity and tone.'|t('craft-ai') }}"
+            class="text fullwidth"
+        >{{ prompt }}</textarea>
+    </td>
+    <td class="thin">
+        <button
+            type="button"
+            class="delete icon craftai-automations__remove"
+            aria-label="{{ 'Remove'|t('craft-ai') }}"
+            data-craftai-remove
+        ></button>
+    </td>
+</tr>

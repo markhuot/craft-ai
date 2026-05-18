@@ -43,6 +43,8 @@ class PageContextSerializer
             return self::toCodeComponentFieldNote($fieldAuthor, $context);
         }
 
+        $surface = self::stringOrNull($context['surface'] ?? null);
+        $isCp = $surface === 'cp';
         $url = self::stringOrNull($context['url'] ?? null);
         $path = self::stringOrNull($context['path'] ?? null);
         $template = self::stringOrNull($context['template'] ?? null);
@@ -59,7 +61,11 @@ class PageContextSerializer
         if ($siteHandle !== null) {
             $lines[] = "Site: {$siteHandle}";
         }
-        if ($template !== null) {
+        if (! $isCp && $template !== null) {
+            // Template name only makes sense for site renders. In the CP
+            // the rendered template is an internal Craft layout that
+            // doesn't tell the agent anything useful about what the user
+            // is doing.
             $lines[] = "Template: {$template}";
         }
         if ($query !== []) {
@@ -73,16 +79,24 @@ class PageContextSerializer
             if ($rendered !== null) {
                 $lines[] = "Element: {$rendered}";
             }
-        } else {
+            $callTarget = self::renderElementCallTarget($element);
+            if ($callTarget !== null) {
+                $lines[] = $callTarget;
+            }
+        } elseif (! $isCp) {
             $lines[] = 'Element: (no element matched this URL)';
         }
 
         $body = implode("\n", $lines);
 
-        return "<page-context>\nThe user is viewing this page on the front-end of the site. "
-            ."Use it as background when relevant; call tools if you need more detail.\n\n"
-            .$body
-            ."\n</page-context>";
+        $prelude = $isCp
+            ? 'The user is on a Craft control-panel page (logged-in editor). '
+                .'Use the context below to figure out what they are looking at; '
+                .'call tools if you need more detail.'
+            : 'The user is viewing this page on the front-end of the site. '
+                .'Use it as background when relevant; call tools if you need more detail.';
+
+        return "<page-context>\n".$prelude."\n\n".$body."\n</page-context>";
     }
 
     /**
@@ -94,13 +108,18 @@ class PageContextSerializer
         $id = $element['id'] ?? null;
         $title = self::stringOrNull($element['title'] ?? null);
         $sectionHandle = self::stringOrNull($element['sectionHandle'] ?? null);
+        $isDraft = (bool) ($element['isDraft'] ?? false);
+        $draftId = self::intOrNull($element['draftId'] ?? null);
+        $canonicalId = self::intOrNull($element['canonicalId'] ?? null);
 
         if ($type === null && $id === null) {
             return null;
         }
 
         $parts = [];
-        $parts[] = $type ?? 'element';
+        // Draft state is part of the headline so the agent reads it before
+        // it scans for the call-target line further down.
+        $parts[] = $isDraft ? ('draft of '.($type ?? 'element')) : ($type ?? 'element');
         if (is_int($id) || (is_string($id) && $id !== '')) {
             $parts[] = "#{$id}";
         }
@@ -113,8 +132,42 @@ class PageContextSerializer
         if ($sectionHandle !== null && $sectionHandle !== '') {
             $tail[] = "section: {$sectionHandle}";
         }
+        if ($draftId !== null) {
+            $tail[] = "draftId: {$draftId}";
+        }
+        if ($canonicalId !== null && $canonicalId !== $id) {
+            $tail[] = "canonical: #{$canonicalId}";
+        }
 
         return $tail === [] ? $head : $head.' ('.implode(', ', $tail).')';
+    }
+
+    /**
+     * Build the explicit call-target hint for entry-shaped elements so the
+     * agent doesn't have to guess between `get_entry` and `get_draft`.
+     * Non-entries (assets, users, etc.) don't get a hint — those tools
+     * take the element id directly and the type is already in the headline.
+     *
+     * @param array<array-key, mixed> $element
+     */
+    private static function renderElementCallTarget(array $element): ?string
+    {
+        $type = self::stringOrNull($element['type'] ?? null);
+        if ($type !== 'entry') {
+            return null;
+        }
+
+        $isDraft = (bool) ($element['isDraft'] ?? false);
+        $draftId = self::intOrNull($element['draftId'] ?? null);
+        $id = self::intOrNull($element['id'] ?? null);
+
+        if ($isDraft && $draftId !== null) {
+            return "→ Use `get_draft` with draftId={$draftId} to read the current state.";
+        }
+        if (! $isDraft && $id !== null) {
+            return "→ Use `get_entry` with entryId={$id} to read the current state.";
+        }
+        return null;
     }
 
     /**
@@ -163,6 +216,17 @@ class PageContextSerializer
         if (is_string($value)) {
             $trimmed = trim($value);
             return $trimmed === '' ? null : $trimmed;
+        }
+        return null;
+    }
+
+    private static function intOrNull(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            return $value;
+        }
+        if (is_string($value) && ctype_digit($value)) {
+            return (int) $value;
         }
         return null;
     }

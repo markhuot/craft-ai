@@ -359,22 +359,30 @@ HTML;
     }
 
     /**
-     * Append the front-end chat widget to a rendered site template when the
-     * current visitor is a CP-capable user. We hook the post-render event
-     * (rather than {% hook %} or EVENT_END_BODY) so the widget appears on
-     * every site response without requiring template authors to opt in.
+     * Append the chat widget to a rendered page. Originally a front-end-only
+     * thing, but the CP needs the same affordance so editors can prompt
+     * "review this" while looking at a draft — and have the page context
+     * carry through to the LLM the same way the front-end widget already does
+     * for site visitors. We hook the post-render event (rather than {% hook %}
+     * or EVENT_END_BODY) so the widget appears on every response without
+     * requiring template authors to opt in.
+     *
+     * Skipped on the CP chat surfaces themselves so we don't double-render a
+     * floating chat on top of the full-page one.
      */
     private function maybeInjectWidget(TemplateEvent $event): void
     {
-        if ($event->templateMode !== View::TEMPLATE_MODE_SITE) {
-            return;
-        }
-
         $request = Craft::$app->getRequest();
         if (! $request instanceof \craft\web\Request) {
             return;
         }
-        if ($request->getIsCpRequest() || $request->getIsAjax()) {
+        if ($request->getIsAjax()) {
+            return;
+        }
+
+        $isCp = $event->templateMode === View::TEMPLATE_MODE_CP;
+        $isSite = $event->templateMode === View::TEMPLATE_MODE_SITE;
+        if (! $isCp && ! $isSite) {
             return;
         }
 
@@ -382,8 +390,22 @@ HTML;
         if ($user->getIsGuest()) {
             return;
         }
-        if (! $user->checkPermission('accessCp')) {
-            return;
+
+        if ($isSite) {
+            // Site templates serve the public — gate by CP access so we
+            // don't expose the widget to anonymous-but-logged-in members.
+            if (! $user->checkPermission('accessCp')) {
+                return;
+            }
+        } else {
+            // CP page that IS the chat. The widget would float on top of the
+            // full-page chat — suppress to avoid duplicate UI. The single-
+            // session view path is `ai/session/<uuid>`; the index is
+            // `ai/sessions`. Both start with `ai/session`.
+            $path = (string) $request->getPathInfo();
+            if (str_starts_with($path, 'ai/session')) {
+                return;
+            }
         }
 
         if ($event->output === '') {
@@ -458,12 +480,22 @@ HTML;
      * minimal on purpose — the agent can call tools to look up anything
      * deeper (custom fields, related elements, etc.) once it knows the IDs.
      *
-     * @return array{url: ?string, path: ?string, query: array<string, mixed>, siteHandle: ?string, template: ?string, element: ?array{type: string, id: int, title: ?string, sectionHandle: ?string}}
+     * Front-end pages: the matched element comes from the URL manager's
+     * routed element. CP pages: there is no matched element (controller
+     * routes don't run that path), so we recover one by inspecting the
+     * route params Craft's CP route table populates — `elementId` is the
+     * common name across entry/asset/category/user edit pages — and look
+     * the element up in the DB. `draftId` (from the query string) is
+     * honored when present so a draft edit page resolves to the actual
+     * draft, not its canonical.
+     *
+     * @return array{surface: string, url: ?string, path: ?string, query: array<string, mixed>, siteHandle: ?string, template: ?string, element: ?array{type: string, id: int, title: ?string, sectionHandle: ?string, isDraft: bool, draftId: ?int, canonicalId: ?int}}
      */
     private function gatherPageContext(\craft\web\Request $request): array
     {
         $url = $this->safeAbsoluteUrl($request);
         $path = $request->getPathInfo();
+        $isCp = $request->getIsCpRequest();
 
         /** @var array<string, mixed> $rawQuery */
         $rawQuery = $request->getQueryParams();
@@ -477,17 +509,12 @@ HTML;
             // currentSite isn't always available outside of a request — fall through.
         }
 
-        $element = null;
-        try {
-            $matched = Craft::$app->getUrlManager()->getMatchedElement();
-            if ($matched !== null) {
-                $element = $this->summarizeElement($matched);
-            }
-        } catch (\Throwable) {
-            // Some plugins or routes resolve outside the URL manager — ignore.
-        }
+        $element = $isCp
+            ? $this->resolveCpRouteElement($request)
+            : $this->resolveSiteRouteElement();
 
         return [
+            'surface' => $isCp ? 'cp' : 'site',
             'url' => $url,
             'path' => $path !== '' ? $path : null,
             'query' => $query,
@@ -495,6 +522,116 @@ HTML;
             'template' => $this->lastRenderedTemplate,
             'element' => $element,
         ];
+    }
+
+    /**
+     * @return array{type: string, id: int, title: ?string, sectionHandle: ?string, isDraft: bool, draftId: ?int, canonicalId: ?int}|null
+     */
+    private function resolveSiteRouteElement(): ?array
+    {
+        try {
+            $matched = Craft::$app->getUrlManager()->getMatchedElement();
+            if ($matched !== null) {
+                return $this->summarizeElement($matched);
+            }
+        } catch (\Throwable) {
+            // Some plugins or routes resolve outside the URL manager — ignore.
+        }
+        return null;
+    }
+
+    /**
+     * Look at the CP route params + query string to recover the element being
+     * edited. Craft's bundled CP routes all funnel through `elements/edit`
+     * with an `elementId` route param, so reading that one key covers entry /
+     * asset / category edit pages (and any third-party plugin that follows
+     * the same convention). Draft edits add `?draftId=X` to the URL — we
+     * prefer the draft element when present so the widget reports the user's
+     * actual working copy.
+     *
+     * @return array{type: string, id: int, title: ?string, sectionHandle: ?string, isDraft: bool, draftId: ?int, canonicalId: ?int}|null
+     */
+    private function resolveCpRouteElement(\craft\web\Request $request): ?array
+    {
+        try {
+            /** @var array<string, mixed> $routeParams */
+            $routeParams = Craft::$app->getUrlManager()->getRouteParams();
+        } catch (\Throwable) {
+            $routeParams = [];
+        }
+
+        $elementId = $this->intOrNull($routeParams['elementId'] ?? null);
+        // Some CP routes name the param differently — `userId` for user
+        // edit pages on team/pro editions. Fall back to those in priority
+        // order rather than walking the whole array, so we don't grab a
+        // numeric value (like `siteId`) that doesn't represent an element.
+        if ($elementId === null) {
+            $elementId = $this->intOrNull($routeParams['userId'] ?? null);
+        }
+        if ($elementId === null) {
+            return null;
+        }
+
+        $draftId = $this->intOrNull($request->getQueryParam('draftId'));
+        $siteId = $this->intOrNull($request->getQueryParam('siteId'))
+            ?? $this->intOrNull($routeParams['siteId'] ?? null);
+
+        try {
+            // Canonical first — gives us the element class, which we then
+            // use to query for the draft. (draftId in the URL refers to
+            // the drafts-table row, not the elements-table id, so a
+            // plain getElementById($draftId) would miss.)
+            $canonical = Craft::$app->getElements()->getElementById($elementId, null, $siteId);
+            if (! $canonical instanceof \craft\base\ElementInterface) {
+                return null;
+            }
+
+            if ($draftId !== null) {
+                /** @var class-string<\craft\base\ElementInterface> $class */
+                $class = $canonical::class;
+                /** @var \craft\elements\db\ElementQueryInterface $query */
+                $query = $class::find();
+                if (method_exists($query, 'draftId')) {
+                    $query->draftId($draftId);
+                }
+                if (method_exists($query, 'provisionalDrafts')) {
+                    // null = include both provisional and non-provisional
+                    // drafts (provisionalDrafts(true) would exclude the
+                    // explicit-save ones).
+                    $query->provisionalDrafts(null);
+                }
+                if ($siteId !== null && method_exists($query, 'siteId')) {
+                    $query->siteId($siteId);
+                }
+                if (method_exists($query, 'status')) {
+                    $query->status(null);
+                }
+                $draft = $query->one();
+                if ($draft instanceof \craft\base\ElementInterface) {
+                    return $this->summarizeElement($draft);
+                }
+            }
+
+            return $this->summarizeElement($canonical);
+        } catch (\Throwable) {
+            // Element lookups can throw if the table is missing or the id
+            // points at a deleted row — fall through so the widget still
+            // gets a page context, just without an element.
+        }
+
+        return null;
+    }
+
+    private function intOrNull(mixed $value): ?int
+    {
+        if (is_int($value)) {
+            return $value > 0 ? $value : null;
+        }
+        if (is_string($value) && ctype_digit($value)) {
+            $int = (int) $value;
+            return $int > 0 ? $int : null;
+        }
+        return null;
     }
 
     private function safeAbsoluteUrl(\craft\web\Request $request): ?string
@@ -529,7 +666,7 @@ HTML;
     }
 
     /**
-     * @return array{type: string, id: int, title: ?string, sectionHandle: ?string}
+     * @return array{type: string, id: int, title: ?string, sectionHandle: ?string, isDraft: bool, draftId: ?int, canonicalId: ?int}
      */
     private function summarizeElement(\craft\base\ElementInterface $element): array
     {
@@ -559,11 +696,27 @@ HTML;
             $title = $element->title ?? null;
         }
 
+        // Draft/canonical info lets the agent pick the right tool
+        // (`get_draft` vs `get_entry`) without having to guess from the type.
+        // Non-draftable elements (assets, users, etc.) always report
+        // isDraft=false and skip the id pair.
+        $isDraft = false;
+        $draftId = null;
+        $canonicalId = null;
+        if (method_exists($element, 'getIsDraft') && $element->getIsDraft()) {
+            $isDraft = true;
+            $draftId = isset($element->draftId) ? (int) $element->draftId : null;
+            $canonicalId = isset($element->canonicalId) ? (int) $element->canonicalId : null;
+        }
+
         return [
             'type' => $type,
             'id' => (int) $element->id,
             'title' => is_string($title) && $title !== '' ? $title : null,
             'sectionHandle' => $sectionHandle,
+            'isDraft' => $isDraft,
+            'draftId' => $draftId,
+            'canonicalId' => $canonicalId,
         ];
     }
 
@@ -1011,9 +1164,28 @@ HTML;
             return null;
         }
 
+        $eventChoices = Automation::eventChoices();
+        $scopeByEvent = [];
+        foreach (array_keys($eventChoices) as $event) {
+            $scopeByEvent[$event] = Automation::scopeFor($event);
+        }
+
+        $sectionOptions = [['label' => Craft::t('craft-ai', '— Any section —'), 'value' => '']];
+        foreach (Craft::$app->getEntries()->getAllSections() as $section) {
+            $sectionOptions[] = ['label' => $section->name, 'value' => $section->handle];
+        }
+
+        $volumeOptions = [['label' => Craft::t('craft-ai', '— Any volume —'), 'value' => '']];
+        foreach (Craft::$app->getVolumes()->getAllVolumes() as $volume) {
+            $volumeOptions[] = ['label' => $volume->name, 'value' => $volume->handle];
+        }
+
         return Craft::$app->getView()->renderTemplate('craft-ai/settings', [
             'settings' => $settings,
-            'eventChoices_source' => Automation::eventChoices(),
+            'eventChoices' => $eventChoices,
+            'scopeByEvent' => $scopeByEvent,
+            'sectionOptions' => $sectionOptions,
+            'volumeOptions' => $volumeOptions,
         ]);
     }
 

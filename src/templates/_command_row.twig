@@ -1,58 +1,47 @@
-{% import "_includes/forms" as forms %}
-
 {#
-  One slash-command row. Used both for existing rows in the table body
-  and as a clone source inside a <template>. When invoked as a template,
-  the caller passes `index = '__INDEX__'` and `cmd = null` — the JS swaps
-  `__INDEX__` for a real index before mounting the clone.
+  One slash-command row on the plugin settings page. Read-only display +
+  edit/delete actions — the actual edit form lives on a dedicated screen
+  (`ai/commands/<uid>`) so the prompt textarea isn't cramped into a cell.
+
+  The row also re-emits the current command state as hidden inputs scoped
+  under `commands[<i>]`. Reason: the parent settings form saves via
+  Craft's PluginsController, which writes `plugins.craft-ai.settings` as
+  a full project-config replacement. Without these hidden inputs, saving
+  the automations table above would silently wipe the persisted commands.
 
   Parameters:
-    index: int|string — the row index, or '__INDEX__' for the template.
-    cmd:   Command|null — populated from the model, or null for a fresh row.
+    index: int|string — row index used for the hidden-input array keys.
+    cmd:   Command    — the model being displayed (always set; the index
+                        page only renders rows for persisted commands).
 #}
-
-{% set uid = cmd ? cmd.uid : '' %}
-{% set name = cmd ? cmd.name : '' %}
-{% set prompt = cmd ? cmd.prompt : '' %}
-{% set enabled = cmd ? cmd.enabled : true %}
 
 {% set base = 'commands[' ~ index ~ ']' %}
 
-<tr data-craftai-command-row>
-    <td class="thin">
-        {# Empty-string hidden input ensures unchecked rows still POST a value so
-           Settings::setCommands sees the row instead of dropping it as missing. #}
-        <input type="hidden" name="{{ base }}[enabled]" value="">
-        <input
-            type="checkbox"
-            name="{{ base }}[enabled]"
-            value="1"
-            {% if enabled %}checked{% endif %}
-        >
-        <input type="hidden" name="{{ base }}[uid]" value="{{ uid }}">
-    </td>
+<tr>
     <td class="craftai-commands__name">
-        {{ forms.text({
-            name: base ~ '[name]',
-            value: name,
-            placeholder: 'editorial-review'|t('craft-ai'),
-            class: 'code',
-        }) }}
+        <a href="{{ url('ai/commands/' ~ cmd.uid) }}">/{{ cmd.name }}</a>
     </td>
     <td>
-        <textarea
-            name="{{ base }}[prompt]"
-            rows="3"
-            placeholder="{{ 'Review this entry for clarity and tone…'|t('craft-ai') }}"
-            class="text fullwidth"
-        >{{ prompt }}</textarea>
+        <div class="craftai-commands__prompt">{{ cmd.prompt }}</div>
     </td>
     <td class="thin">
-        <button
-            type="button"
-            class="delete icon craftai-commands__remove"
-            aria-label="{{ 'Remove'|t('craft-ai') }}"
-            data-craftai-remove
-        ></button>
+        {% if cmd.enabled %}
+            <span class="status enabled" aria-label="{{ 'Enabled'|t('craft-ai') }}"></span>
+        {% else %}
+            <span class="status" aria-label="{{ 'Disabled'|t('craft-ai') }}"></span>
+        {% endif %}
+    </td>
+    <td class="thin">
+        <span class="craftai-commands__row-actions">
+            <a class="btn small" href="{{ url('ai/commands/' ~ cmd.uid) }}">{{ "Edit"|t('craft-ai') }}</a>
+        </span>
+        {# Round-trip hidden inputs so the parent settings save doesn't drop
+           commands — see template header for the full reasoning. They sit
+           inside this cell because the table parser would otherwise re-
+           parent loose <input> elements out of <tbody>. #}
+        <input type="hidden" name="{{ base }}[uid]" value="{{ cmd.uid }}">
+        <input type="hidden" name="{{ base }}[name]" value="{{ cmd.name }}">
+        <input type="hidden" name="{{ base }}[prompt]" value="{{ cmd.prompt }}">
+        <input type="hidden" name="{{ base }}[enabled]" value="{{ cmd.enabled ? '1' : '' }}">
     </td>
 </tr>

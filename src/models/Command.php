@@ -141,12 +141,21 @@ class Command extends Model
      * stop appearing. This sidesteps the "delete the default, see it
      * reappear on next request" loop.
      *
+     * The UIDs are hardcoded rather than minted on each {@see fromArray}
+     * call. Why: the dedicated edit screen routes by UID
+     * (`ai/commands/<uid>`), so the link rendered on the settings page
+     * and the lookup performed by the edit controller need to agree on
+     * the same identifier across requests. A user who hasn't saved
+     * anything yet still sees the seeded rows; without stable UIDs, each
+     * page render would mint fresh ones and clicking through would 404.
+     *
      * @return list<array<string, mixed>>
      */
     public static function defaults(): array
     {
         return [
             [
+                'uid' => 'craft-ai--default-translate',
                 'name' => 'translate',
                 'prompt' => <<<'PROMPT'
                 Translate the current entry's content into the language the user names in their message (default: Spanish if no language is given). Preserve formatting, links, and inline references. Produce a draft of the translated entry; do not overwrite the original.
@@ -154,6 +163,7 @@ class Command extends Model
                 'enabled' => true,
             ],
             [
+                'uid' => 'craft-ai--default-editorial-review',
                 'name' => 'editorial-review',
                 'prompt' => <<<'PROMPT'
                 Perform an editorial review of the current entry. Evaluate clarity, structure, tone, and factual consistency. Flag passive voice that obscures the actor, awkward phrasing, repeated words, and missing context. Suggest concrete rewrites — not just observations — and leave inline comments on the specific fields that need attention.

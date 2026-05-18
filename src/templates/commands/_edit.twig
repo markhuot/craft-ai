@@ -1,0 +1,90 @@
+{% extends "_layouts/cp.twig" %}
+{% import "_includes/forms.twig" as forms %}
+
+{#
+  Dedicated edit screen for a single slash command. Linked from the plugin
+  settings page's read-only commands list so that the prompt — which can
+  be long — gets a full-width textarea instead of a one-row cell.
+
+  Saves post to `craft-ai/commands/save` and round-trip the entire
+  Settings payload server-side (commands + automations) because the
+  project-config write at `plugins.craft-ai.settings` is a full replace.
+  See CommandsController::actionSave for the full reasoning.
+
+  Parameters:
+    command: Command — the model being edited (a brand-new one for "new").
+    isNew:   bool    — toggles title/labels and hides the delete action.
+#}
+
+{% set title = isNew
+    ? "New slash command"|t('craft-ai')
+    : command.name ? "/" ~ command.name : "Edit slash command"|t('craft-ai') %}
+
+{% set fullPageForm = true %}
+
+{% set crumbs = [
+    { label: "Settings"|t('app'), url: url('settings') },
+    { label: "Craft AI"|t('craft-ai'), url: url('settings/plugins/craft-ai') },
+] %}
+
+{% if not isNew %}
+    {% set actionMenu = disclosureMenu([
+        {
+            icon: 'trash',
+            label: 'Delete'|t('craft-ai'),
+            destructive: true,
+            action: 'craft-ai/commands/delete',
+            params: {uid: command.uid},
+            confirm: 'Delete this slash command? It will stop autocompleting in chat and any saved invocations of /{name} will fall through to “unknown command”.'|t('craft-ai', {name: command.name}),
+            redirect: 'settings/plugins/craft-ai',
+        },
+    ], {
+        hiddenLabel: 'Actions'|t('app'),
+        buttonAttributes: {
+            class: ['action-btn'],
+            title: 'Actions'|t('app'),
+        },
+    }) %}
+{% endif %}
+
+{% block content %}
+    {{ actionInput('craft-ai/commands/save') }}
+    {{ redirectInput('settings/plugins/craft-ai') }}
+    {{ hiddenInput('uid', command.uid) }}
+
+    {{ forms.textField({
+        first: true,
+        label: "Name"|t('craft-ai'),
+        instructions: "Slug-safe handle (lowercase letters, digits, dashes). Editors invoke this command from the chat input by typing /name."|t('craft-ai'),
+        id: 'name',
+        name: 'name',
+        value: command.name,
+        errors: command.getErrors('name'),
+        class: 'code',
+        autocorrect: false,
+        autocapitalize: false,
+        placeholder: 'editorial-review',
+        required: true,
+        autofocus: isNew,
+    }) }}
+
+    {{ forms.textareaField({
+        label: "Prompt"|t('craft-ai'),
+        instructions: "Instruction substituted in for the user's /name message. Supports a {tag} placeholder; if absent and the user typed args after the slash command, they're appended on a trailing line."|t('craft-ai', {tag: '{args}'}),
+        id: 'prompt',
+        name: 'prompt',
+        value: command.prompt,
+        errors: command.getErrors('prompt'),
+        rows: 18,
+        placeholder: 'Review this entry for clarity and tone…'|t('craft-ai'),
+        required: true,
+    }) }}
+
+    {{ forms.lightswitchField({
+        label: "Enabled"|t('craft-ai'),
+        instructions: "Disabled commands stay configured but don't surface in the chat autocomplete."|t('craft-ai'),
+        id: 'enabled',
+        name: 'enabled',
+        on: command.enabled,
+    }) }}
+{% endblock %}

@@ -1,0 +1,156 @@
+{% extends "_layouts/cp.twig" %}
+{% import "_includes/forms.twig" as forms %}
+
+{#
+  Dedicated edit screen for a single automation. Linked from the plugin
+  settings page's read-only automations list so that the prompt — which
+  can be long — gets a full-width textarea instead of a two-row cell.
+
+  The scope picker swaps between a section select and a volume select
+  based on the chosen event, mirroring the prior inline-table behavior.
+  We do the swap client-side because the alternative — a round-trip per
+  event change — would feel terrible.
+
+  Parameters:
+    automation:     Automation — the model being edited (a fresh one for "new").
+    isNew:          bool        — toggles title and hides the delete action.
+    eventChoices:   array<string, string>
+    scopeByEvent:   array<string, ?string>  event => 'section'|'volume'|null
+    sectionOptions: list<{label, value}>
+    volumeOptions:  list<{label, value}>
+#}
+
+{% set title = isNew
+    ? "New automation"|t('craft-ai')
+    : (automation.name ?: eventChoices[automation.event] ?? "Edit automation"|t('craft-ai')) %}
+
+{% set fullPageForm = true %}
+
+{% set crumbs = [
+    { label: "Settings"|t('app'), url: url('settings') },
+    { label: "Craft AI"|t('craft-ai'), url: url('settings/plugins/craft-ai') },
+] %}
+
+{% if not isNew %}
+    {% set actionMenu = disclosureMenu([
+        {
+            icon: 'trash',
+            label: 'Delete'|t('craft-ai'),
+            destructive: true,
+            action: 'craft-ai/automations/delete',
+            params: {uid: automation.uid},
+            confirm: 'Delete this automation? The event will keep firing in Craft but this rule will no longer respond.'|t('craft-ai'),
+            redirect: 'settings/plugins/craft-ai',
+        },
+    ], {
+        hiddenLabel: 'Actions'|t('app'),
+        buttonAttributes: {
+            class: ['action-btn'],
+            title: 'Actions'|t('app'),
+        },
+    }) %}
+{% endif %}
+
+{% block content %}
+    {{ actionInput('craft-ai/automations/save') }}
+    {{ redirectInput('settings/plugins/craft-ai') }}
+    {{ hiddenInput('uid', automation.uid) }}
+
+    {{ forms.textField({
+        first: true,
+        label: "Name"|t('craft-ai'),
+        instructions: "Optional human label. Surfaces in session titles and logs so you can tell which rule fired."|t('craft-ai'),
+        id: 'name',
+        name: 'name',
+        value: automation.name,
+        errors: automation.getErrors('name'),
+        placeholder: "Review drafts"|t('craft-ai'),
+        autofocus: isNew,
+    }) }}
+
+    {{ forms.selectField({
+        label: "Event"|t('craft-ai'),
+        instructions: "Which Craft event should fire this automation."|t('craft-ai'),
+        id: 'event',
+        name: 'event',
+        options: eventChoices,
+        value: automation.event,
+        errors: automation.getErrors('event'),
+        required: true,
+        toggle: true,
+        inputAttributes: {
+            'data-craftai-event': true,
+        },
+    }) }}
+
+    {#
+      Both scope pickers render but only one is visible at a time. The
+      JS controller below flips `hidden` based on the current event's
+      scope kind. Rendering both up-front (instead of injecting on
+      change) means the selected handle survives an event-type switch
+      and back without us tracking state.
+    #}
+    <div data-craftai-scope-wrap>
+        <div data-craftai-scope="section">
+            {{ forms.selectField({
+                label: "Section"|t('craft-ai'),
+                instructions: "Narrow this rule to one section. Leave on “Any section” to fire across the whole site."|t('craft-ai'),
+                id: 'sectionHandle',
+                name: 'sectionHandle',
+                options: sectionOptions,
+                value: automation.sectionHandle,
+            }) }}
+        </div>
+        <div data-craftai-scope="volume">
+            {{ forms.selectField({
+                label: "Volume"|t('craft-ai'),
+                instructions: "Narrow this rule to one asset volume. Leave on “Any volume” to fire across all volumes."|t('craft-ai'),
+                id: 'volumeHandle',
+                name: 'volumeHandle',
+                options: volumeOptions,
+                value: automation.volumeHandle,
+            }) }}
+        </div>
+    </div>
+
+    {{ forms.textareaField({
+        label: "Prompt"|t('craft-ai'),
+        instructions: "Sent to the agent when the event fires. The triggering element is appended automatically so the agent can fetch and act on it."|t('craft-ai'),
+        id: 'prompt',
+        name: 'prompt',
+        value: automation.prompt,
+        errors: automation.getErrors('prompt'),
+        rows: 14,
+        placeholder: "Review this draft for clarity and tone."|t('craft-ai'),
+        required: true,
+    }) }}
+
+    {{ forms.lightswitchField({
+        label: "Enabled"|t('craft-ai'),
+        instructions: "Disabled automations stay configured but won't fire on matching events."|t('craft-ai'),
+        id: 'enabled',
+        name: 'enabled',
+        on: automation.enabled,
+    }) }}
+{% endblock %}
+
+{% js %}
+(function () {
+    var scopeByEvent = {{ scopeByEvent|json_encode|raw }};
+    var eventSelect = document.getElementById('event');
+    var wrap = document.querySelector('[data-craftai-scope-wrap]');
+    if (!eventSelect || !wrap) return;
+
+    var sectionWrap = wrap.querySelector('[data-craftai-scope="section"]');
+    var volumeWrap = wrap.querySelector('[data-craftai-scope="volume"]');
+
+    function apply() {
+        var kind = scopeByEvent[eventSelect.value] || null;
+        if (sectionWrap) sectionWrap.hidden = kind !== 'section';
+        if (volumeWrap) volumeWrap.hidden = kind !== 'volume';
+    }
+
+    eventSelect.addEventListener('change', apply);
+    apply();
+})();
+{% endjs %}

@@ -158,6 +158,46 @@ class Settings extends Model
     }
 
     /**
+     * Route the post-data path through our setters so the stored shape is
+     * the canonical, normalized form (UIDs minted, empty rows dropped,
+     * etc.) rather than whatever raw key set the form submitted.
+     *
+     * Why this is necessary: `automations` and `commands` are declared as
+     * typed public properties. Yii's {@see \yii\base\Component::__set}
+     * would route writes through the setter — but PHP only invokes
+     * `__set` for inaccessible/undefined properties, so a write to a
+     * public typed property goes straight to the property without ever
+     * touching the magic. That means Yii's base
+     * {@see \yii\base\Model::setAttributes} (which does `$this->$name =
+     * $value`) silently bypasses {@see setCommands}/{@see setAutomations}.
+     *
+     * The user-visible breakage was that command UIDs would change on
+     * every read: setCommands generates them, but bypassing the setter
+     * meant the raw `[name, prompt]` rows from a form post were stored
+     * uid-less. {@see getCommands} would mint a fresh UID per render,
+     * so the dedicated edit page couldn't look a command up reliably.
+     *
+     * Overriding here is narrower than switching to private properties
+     * with magic getters — `toArray()` and validation still see the
+     * canonical attribute names without any extra wiring.
+     */
+    public function setAttributes($values, $safeOnly = true): void
+    {
+        if (is_array($values)) {
+            if (array_key_exists('commands', $values)) {
+                $this->setCommands($values['commands']);
+                unset($values['commands']);
+            }
+            if (array_key_exists('automations', $values)) {
+                $this->setAutomations($values['automations'] ?? []);
+                unset($values['automations']);
+            }
+        }
+
+        parent::setAttributes($values, $safeOnly);
+    }
+
+    /**
      * @return array<int, array<int|string, mixed>>
      */
     protected function defineRules(): array

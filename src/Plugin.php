@@ -237,6 +237,28 @@ class Plugin extends BasePlugin
                 $event->rules['ai/comments'] = 'craft-ai/comments/index';
                 $event->rules['POST ai/comments/resolve'] = 'craft-ai/comments/resolve';
                 $event->rules['POST ai/comments/reply'] = 'craft-ai/comments/reply';
+
+                // Dedicated edit screen for a single slash command. The
+                // plugin settings page links here from each row in its
+                // (read-only) commands list, because a slash-command
+                // prompt can grow longer than a settings-table cell
+                // comfortably renders. UID is constrained to a UUID
+                // shape so the route doesn't shadow `new`.
+                $event->rules['ai/commands/new'] = 'craft-ai/commands/edit';
+                // Pattern is broader than just a UUID so it also matches the
+                // hardcoded UIDs on seeded defaults (see Command::defaults).
+                // `new` is registered above so it short-circuits this rule.
+                $event->rules['ai/commands/<uid:[A-Za-z0-9\-]+>'] = 'craft-ai/commands/edit';
+                $event->rules['POST ai/commands/save'] = 'craft-ai/commands/save';
+                $event->rules['POST ai/commands/delete'] = 'craft-ai/commands/delete';
+
+                // Automation rules: dedicated edit screen mirrors the
+                // slash-command flow above. Same `new`-first ordering so
+                // the literal route short-circuits the parameterized one.
+                $event->rules['ai/automations/new'] = 'craft-ai/automations/edit';
+                $event->rules['ai/automations/<uid:[A-Za-z0-9\-]+>'] = 'craft-ai/automations/edit';
+                $event->rules['POST ai/automations/save'] = 'craft-ai/automations/save';
+                $event->rules['POST ai/automations/delete'] = 'craft-ai/automations/delete';
             },
         );
 
@@ -1154,8 +1176,9 @@ HTML;
     /**
      * Render the CP settings form. Craft hands us a partial-page surface
      * (the outer `<form>` and save button are provided by the framework's
-     * settings layout), so the template only needs to render the editable
-     * automation table.
+     * settings layout), so the template only needs to render the read-
+     * only automations + commands lists. Actual editing happens on
+     * dedicated screens under `ai/automations/*` and `ai/commands/*`.
      */
     protected function settingsHtml(): ?string
     {
@@ -1164,28 +1187,19 @@ HTML;
             return null;
         }
 
+        // The read-only rows only need labels + scope kinds to render —
+        // the section/volume option lists live on the dedicated edit
+        // controllers, which build them per-request.
         $eventChoices = Automation::eventChoices();
         $scopeByEvent = [];
         foreach (array_keys($eventChoices) as $event) {
             $scopeByEvent[$event] = Automation::scopeFor($event);
         }
 
-        $sectionOptions = [['label' => Craft::t('craft-ai', '— Any section —'), 'value' => '']];
-        foreach (Craft::$app->getEntries()->getAllSections() as $section) {
-            $sectionOptions[] = ['label' => $section->name, 'value' => $section->handle];
-        }
-
-        $volumeOptions = [['label' => Craft::t('craft-ai', '— Any volume —'), 'value' => '']];
-        foreach (Craft::$app->getVolumes()->getAllVolumes() as $volume) {
-            $volumeOptions[] = ['label' => $volume->name, 'value' => $volume->handle];
-        }
-
         return Craft::$app->getView()->renderTemplate('craft-ai/settings', [
             'settings' => $settings,
             'eventChoices' => $eventChoices,
             'scopeByEvent' => $scopeByEvent,
-            'sectionOptions' => $sectionOptions,
-            'volumeOptions' => $volumeOptions,
         ]);
     }
 

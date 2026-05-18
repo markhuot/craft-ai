@@ -1,96 +1,67 @@
-{% import "_includes/forms" as forms %}
-
 {#
-  One automation row. Used both for existing rows in the table body and
-  as a clone source inside a <template>. When invoked as a template, the
-  caller passes `index = '__INDEX__'` and `auto = null` — the JS swaps
-  `__INDEX__` for a real index before mounting the clone.
+  One automation row on the plugin settings page. Read-only display +
+  edit/delete actions — the actual edit form lives on a dedicated screen
+  (`ai/automations/<uid>`) so the prompt textarea has room to breathe.
+
+  The row also re-emits the current automation state as hidden inputs
+  scoped under `automations[<i>]`. Reason: the parent settings form
+  saves via Craft's PluginsController, which writes
+  `plugins.craft-ai.settings` as a full project-config replacement.
+  Without these hidden inputs, saving the slash-commands section below
+  would silently wipe the persisted automations.
 
   Parameters:
-    index:          int|string — the row index, or '__INDEX__' for the template.
-    auto:           Automation|null — populated from the model, or null for a fresh row.
-    eventChoices:   array<string, string> — value => label.
-    sectionOptions: list of {label, value} dicts.
-    volumeOptions:  list of {label, value} dicts.
+    index:        int|string — row index used for the hidden-input array keys.
+    auto:         Automation — the model being displayed.
+    eventChoices: array<string, string> — event => human label.
+    scopeByEvent: array<string, ?string> — event => 'section'|'volume'|null.
 #}
 
-{% set uid = auto ? auto.uid : '' %}
-{% set name = auto ? auto.name : '' %}
-{% set eventValue = auto ? auto.event : 'draft.saved' %}
-{% set sectionHandle = auto ? auto.sectionHandle : '' %}
-{% set volumeHandle = auto ? auto.volumeHandle : '' %}
-{% set prompt = auto ? auto.prompt : '' %}
-{% set enabled = auto ? auto.enabled : true %}
-
 {% set base = 'automations[' ~ index ~ ']' %}
+{% set scopeKind = scopeByEvent[auto.event] ?? null %}
 
-<tr data-craftai-automation-row>
-    <td class="thin">
-        {# Empty-string hidden input ensures unchecked rows still POST a value so
-           Settings::setAutomations sees the row instead of dropping it as missing. #}
-        <input type="hidden" name="{{ base }}[enabled]" value="">
-        <input
-            type="checkbox"
-            name="{{ base }}[enabled]"
-            value="1"
-            {% if enabled %}checked{% endif %}
-        >
-        <input type="hidden" name="{{ base }}[uid]" value="{{ uid }}">
+<tr>
+    <td>
+        {% if auto.name %}
+            <a href="{{ url('ai/automations/' ~ auto.uid) }}">{{ auto.name }}</a>
+        {% else %}
+            <a href="{{ url('ai/automations/' ~ auto.uid) }}" class="light">{{ "(no name)"|t('craft-ai') }}</a>
+        {% endif %}
+    </td>
+    <td>{{ eventChoices[auto.event] ?? auto.event }}</td>
+    <td>
+        {% if scopeKind == 'section' %}
+            {{ auto.sectionHandle ?: '— Any section —'|t('craft-ai') }}
+        {% elseif scopeKind == 'volume' %}
+            {{ auto.volumeHandle ?: '— Any volume —'|t('craft-ai') }}
+        {% else %}
+            <span class="light">—</span>
+        {% endif %}
     </td>
     <td>
-        {{ forms.text({
-            name: base ~ '[name]',
-            value: name,
-            placeholder: 'Review drafts'|t('craft-ai'),
-        }) }}
-    </td>
-    <td>
-        <div class="select">
-            <select name="{{ base }}[event]" data-craftai-event>
-                {% for value, label in eventChoices %}
-                    <option value="{{ value }}"{% if value == eventValue %} selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-        </div>
-    </td>
-    <td class="craftai-automations__scope-cell">
-        <div
-            class="select craftai-automations__scope-input"
-            data-craftai-scope="section"
-            hidden
-        >
-            <select name="{{ base }}[sectionHandle]">
-                {% for opt in sectionOptions %}
-                    <option value="{{ opt.value }}"{% if opt.value == sectionHandle %} selected{% endif %}>{{ opt.label }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div
-            class="select craftai-automations__scope-input"
-            data-craftai-scope="volume"
-            hidden
-        >
-            <select name="{{ base }}[volumeHandle]">
-                {% for opt in volumeOptions %}
-                    <option value="{{ opt.value }}"{% if opt.value == volumeHandle %} selected{% endif %}>{{ opt.label }}</option>
-                {% endfor %}
-            </select>
-        </div>
-    </td>
-    <td>
-        <textarea
-            name="{{ base }}[prompt]"
-            rows="2"
-            placeholder="{{ 'Review this draft for clarity and tone.'|t('craft-ai') }}"
-            class="text fullwidth"
-        >{{ prompt }}</textarea>
+        <div class="craftai-automations__prompt">{{ auto.prompt }}</div>
     </td>
     <td class="thin">
-        <button
-            type="button"
-            class="delete icon craftai-automations__remove"
-            aria-label="{{ 'Remove'|t('craft-ai') }}"
-            data-craftai-remove
-        ></button>
+        {% if auto.enabled %}
+            <span class="status enabled" aria-label="{{ 'Enabled'|t('craft-ai') }}"></span>
+        {% else %}
+            <span class="status" aria-label="{{ 'Disabled'|t('craft-ai') }}"></span>
+        {% endif %}
+    </td>
+    <td class="thin">
+        <span class="craftai-automations__row-actions">
+            <a class="btn small" href="{{ url('ai/automations/' ~ auto.uid) }}">{{ "Edit"|t('craft-ai') }}</a>
+        </span>
+        {# Round-trip hidden inputs so the parent settings save doesn't
+           drop automations — see template header for the full reasoning.
+           They sit inside this cell because the table parser would
+           otherwise re-parent loose <input> elements out of <tbody>. #}
+        <input type="hidden" name="{{ base }}[uid]" value="{{ auto.uid }}">
+        <input type="hidden" name="{{ base }}[name]" value="{{ auto.name }}">
+        <input type="hidden" name="{{ base }}[event]" value="{{ auto.event }}">
+        <input type="hidden" name="{{ base }}[sectionHandle]" value="{{ auto.sectionHandle }}">
+        <input type="hidden" name="{{ base }}[volumeHandle]" value="{{ auto.volumeHandle }}">
+        <input type="hidden" name="{{ base }}[prompt]" value="{{ auto.prompt }}">
+        <input type="hidden" name="{{ base }}[enabled]" value="{{ auto.enabled ? '1' : '' }}">
     </td>
 </tr>

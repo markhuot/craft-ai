@@ -9,6 +9,7 @@ import type { WidgetBootstrap } from "./types";
 type ViewMode = "closed" | "chat" | "sessions";
 
 const STORAGE_KEY = "craftai-widget:active-session";
+const OPEN_STORAGE_KEY = "craftai-widget:open";
 
 export interface WidgetProps {
   bootstrap: WidgetBootstrap;
@@ -24,7 +25,13 @@ export function Widget({ bootstrap, api: apiOverride, storage }: WidgetProps) {
   const api = useMemo(() => apiOverride ?? new WidgetApi({ bootstrap }), [apiOverride, bootstrap]);
   const store = storage ?? (typeof window !== "undefined" ? window.localStorage : undefined);
 
-  const [view, setView] = useState<ViewMode>("closed");
+  // Initial view is computed synchronously from localStorage so a previously
+  // open widget renders the panel on first paint (no bubble flash before the
+  // effect runs). The actual session resolution still happens async in the
+  // mount effect below.
+  const [view, setView] = useState<ViewMode>(() =>
+    store?.getItem(OPEN_STORAGE_KEY) === "true" ? "chat" : "closed",
+  );
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() =>
     store ? store.getItem(STORAGE_KEY) : null,
@@ -39,6 +46,10 @@ export function Widget({ bootstrap, api: apiOverride, storage }: WidgetProps) {
   const [targeting, setTargeting] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<TargetSelection | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // Guards the mount-time restoration effect against StrictMode's double-fire,
+  // which would otherwise call openWidget twice and (when the user has no
+  // sessions) provision two of them back-to-back.
+  const restoredRef = useRef(false);
 
   // Exclude the widget itself from picker hits. The hook climbs from the
   // shadow host upward, but elementFromPoint on the host page only ever
@@ -90,6 +101,18 @@ export function Widget({ bootstrap, api: apiOverride, storage }: WidgetProps) {
     [store],
   );
 
+  const persistOpen = useCallback(
+    (open: boolean) => {
+      if (!store) return;
+      if (open) {
+        store.setItem(OPEN_STORAGE_KEY, "true");
+      } else {
+        store.removeItem(OPEN_STORAGE_KEY);
+      }
+    },
+    [store],
+  );
+
   const loadSessions = useCallback(async (): Promise<SessionListItem[]> => {
     try {
       const list = await api.fetchSessions();
@@ -123,6 +146,7 @@ export function Widget({ bootstrap, api: apiOverride, storage }: WidgetProps) {
 
   const openWidget = useCallback(async () => {
     setView("chat");
+    persistOpen(true);
     setError(null);
     const list = await loadSessions();
 
@@ -144,10 +168,24 @@ export function Widget({ bootstrap, api: apiOverride, storage }: WidgetProps) {
       }
     }
     await startNewSession();
-  }, [loadSessions, persistSession, startNewSession, store]);
+  }, [loadSessions, persistOpen, persistSession, startNewSession, store]);
 
   const closeWidget = useCallback(() => {
     setView("closed");
+    persistOpen(false);
+  }, [persistOpen]);
+
+  // If the widget was open on the previous page (per localStorage), the
+  // initial view state above already renders the panel. Kick off the same
+  // session-resolution work that `openWidget` does so the user lands on the
+  // right session without having to click the bubble again. Runs once on
+  // mount; the open/closed state thereafter is driven by user clicks.
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    if (view !== "chat") return;
+    void openWidget();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const showSessions = useCallback(() => {

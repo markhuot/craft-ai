@@ -22,6 +22,7 @@ function bootstrap(): WidgetBootstrap {
     csrfTokenName: "CRAFT_CSRF",
     csrfTokenValue: "tok",
     context: {
+      surface: "site",
       url: null,
       path: null,
       query: {},
@@ -281,6 +282,69 @@ describe("<Widget />", () => {
       expect(storage.snapshot()["craftai-widget:active-session"]).toBe("session-fresh");
       expect(screen.getByTestId("widget-root").getAttribute("data-view")).toBe("chat");
     });
+  });
+
+  test("restores the open state from localStorage on mount", async () => {
+    const storage = makeStorage({
+      "craftai-widget:open": "true",
+      "craftai-widget:active-session": "session-recent",
+    });
+    const api = makeApi({
+      fetchSessions: async () => sampleSessions,
+    });
+
+    await act(async () => {
+      render(<Widget bootstrap={bootstrap()} api={api} storage={storage} />);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("widget-root").getAttribute("data-view")).toBe("chat");
+    });
+    expect(screen.getByTestId("widget-panel")).toBeTruthy();
+    expect(screen.queryByTestId("widget-bubble")).toBeNull();
+  });
+
+  test("stays closed on mount when no open state is persisted", () => {
+    const storage = makeStorage();
+    render(<Widget bootstrap={bootstrap()} api={makeApi()} storage={storage} />);
+    expect(screen.getByTestId("widget-root").getAttribute("data-view")).toBe("closed");
+    expect(screen.getByTestId("widget-bubble")).toBeTruthy();
+  });
+
+  test("persists open=true to localStorage when the bubble is clicked", async () => {
+    const storage = makeStorage();
+    const api = makeApi({ fetchSessions: async () => sampleSessions });
+
+    render(<Widget bootstrap={bootstrap()} api={api} storage={storage} />);
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("widget-bubble"));
+    });
+
+    await waitFor(() => {
+      expect(storage.snapshot()["craftai-widget:open"]).toBe("true");
+    });
+  });
+
+  test("clears the open flag when the widget is closed", async () => {
+    const storage = makeStorage({
+      "craftai-widget:open": "true",
+      "craftai-widget:active-session": "session-recent",
+    });
+    const api = makeApi({ fetchSessions: async () => sampleSessions });
+
+    await act(async () => {
+      render(<Widget bootstrap={bootstrap()} api={api} storage={storage} />);
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("widget-root").getAttribute("data-view")).toBe("chat"),
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("widget-close"));
+    });
+
+    expect(storage.snapshot()["craftai-widget:open"]).toBeUndefined();
+    expect(screen.getByTestId("widget-root").getAttribute("data-view")).toBe("closed");
   });
 
   test("surfaces an error message when sessions fail to load", async () => {

@@ -98,11 +98,92 @@ PROMPT;
     ];
 
     /**
+     * Merge built-in commands with user-defined commands from plugin
+     * settings. Built-ins win on name collision so an editor can't shadow
+     * `/compact` or `/review` (the {@see \markhuot\craftai\models\Command}
+     * validator also rejects those names, but we re-enforce the priority
+     * here so a hand-edited project-config file can't smuggle one
+     * through). Disabled user commands are filtered out.
+     *
      * @return array<string, array{description: string, takesArgs: bool}>
      */
     public static function availableSlashCommands(): array
     {
-        return self::SLASH_COMMANDS;
+        $commands = self::SLASH_COMMANDS;
+        foreach (self::userSlashCommands() as $name => $meta) {
+            if (isset($commands[$name])) {
+                continue;
+            }
+            $commands[$name] = $meta;
+        }
+        return $commands;
+    }
+
+    /**
+     * Load the user-defined slash commands from plugin settings. Returns
+     * an empty list when the plugin/settings aren't available (e.g. during
+     * a console boot before the plugin has been fully resolved) so callers
+     * can rely on the built-ins always being there.
+     *
+     * @return array<string, array{description: string, takesArgs: bool}>
+     */
+    private static function userSlashCommands(): array
+    {
+        try {
+            $settings = Plugin::getInstance()->getSettings();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (! $settings instanceof \markhuot\craftai\models\Settings) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($settings->getCommands() as $cmd) {
+            if (! $cmd->enabled) {
+                continue;
+            }
+            if ($cmd->name === '') {
+                continue;
+            }
+            // Truncate the prompt for the autocomplete blurb so the menu
+            // stays scannable. The full prompt still drives execution.
+            $description = trim(preg_replace('/\s+/', ' ', $cmd->prompt) ?? $cmd->prompt);
+            if (mb_strlen($description) > 120) {
+                $description = mb_substr($description, 0, 117).'…';
+            }
+            $out[$cmd->name] = [
+                'description' => $description,
+                'takesArgs' => true,
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Look up a single user-defined command by name. Returns null when
+     * the command isn't configured or is disabled — callers route to the
+     * "unknown command" reply in that case.
+     */
+    private static function findUserCommand(string $name): ?\markhuot\craftai\models\Command
+    {
+        try {
+            $settings = Plugin::getInstance()->getSettings();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (! $settings instanceof \markhuot\craftai\models\Settings) {
+            return null;
+        }
+
+        foreach ($settings->getCommands() as $cmd) {
+            if ($cmd->name === $name && $cmd->enabled) {
+                return $cmd;
+            }
+        }
+        return null;
     }
 
     /**
@@ -168,7 +249,19 @@ PROMPT;
         $args = isset($parts[1]) ? trim((string) $parts[1]) : '';
 
         if (! isset(self::SLASH_COMMANDS[$name])) {
-            $known = implode(', ', array_map(static fn (string $n): string => "/{$n}", array_keys(self::SLASH_COMMANDS)));
+            // Fall through to the user-defined command catalog. Anything
+            // not in the built-ins and not in the user catalog gets the
+            // "unknown" reply below — same behavior as before, but the
+            // user-defined commands now sit between the two.
+            $userCmd = self::findUserCommand($name);
+            if ($userCmd !== null) {
+                return $this->dispatchUserCommand($sessionId, $userCmd, $args);
+            }
+
+            $known = implode(', ', array_map(
+                static fn (string $n): string => "/{$n}",
+                array_keys(self::availableSlashCommands()),
+            ));
             $this->saveMessage($sessionId, 'assistant', [[
                 'type' => 'text',
                 'text' => "Unknown command `/{$name}`. Available: {$known}.",
@@ -287,6 +380,34 @@ PROMPT;
             NOTE,
         );
 
+        return false;
+    }
+
+    /**
+     * Expand a user-defined slash command into its configured prompt and
+     * fall through to the LLM. Mirrors {@see dispatchReview}: the literal
+     * `/name …` text gets replaced with the persisted prompt so the rest
+     * of the loop (compaction, history loading, tool execution) doesn't
+     * need to know slash commands exist.
+     *
+     * Argument handling:
+     *   - If the prompt contains a `{args}` placeholder, it's replaced
+     *     with whatever the user typed after the command name (empty
+     *     string when nothing followed).
+     *   - Otherwise non-empty args are appended on a separate line as
+     *     "Additional input: …" so the agent still sees the intent.
+     */
+    private function dispatchUserCommand(string $sessionId, \markhuot\craftai\models\Command $cmd, string $args): bool
+    {
+        $prompt = $cmd->prompt;
+
+        if (str_contains($prompt, '{args}')) {
+            $prompt = str_replace('{args}', $args, $prompt);
+        } elseif ($args !== '') {
+            $prompt .= "\n\nAdditional input: ".$args;
+        }
+
+        $this->rewriteLatestUserMessage($sessionId, $prompt);
         return false;
     }
 

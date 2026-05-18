@@ -1,0 +1,58 @@
+{% import "_includes/forms" as forms %}
+
+{#
+  One slash-command row. Used both for existing rows in the table body
+  and as a clone source inside a <template>. When invoked as a template,
+  the caller passes `index = '__INDEX__'` and `cmd = null` — the JS swaps
+  `__INDEX__` for a real index before mounting the clone.
+
+  Parameters:
+    index: int|string — the row index, or '__INDEX__' for the template.
+    cmd:   Command|null — populated from the model, or null for a fresh row.
+#}
+
+{% set uid = cmd ? cmd.uid : '' %}
+{% set name = cmd ? cmd.name : '' %}
+{% set prompt = cmd ? cmd.prompt : '' %}
+{% set enabled = cmd ? cmd.enabled : true %}
+
+{% set base = 'commands[' ~ index ~ ']' %}
+
+<tr data-craftai-command-row>
+    <td class="thin">
+        {# Empty-string hidden input ensures unchecked rows still POST a value so
+           Settings::setCommands sees the row instead of dropping it as missing. #}
+        <input type="hidden" name="{{ base }}[enabled]" value="">
+        <input
+            type="checkbox"
+            name="{{ base }}[enabled]"
+            value="1"
+            {% if enabled %}checked{% endif %}
+        >
+        <input type="hidden" name="{{ base }}[uid]" value="{{ uid }}">
+    </td>
+    <td class="craftai-commands__name">
+        {{ forms.text({
+            name: base ~ '[name]',
+            value: name,
+            placeholder: 'editorial-review'|t('craft-ai'),
+            class: 'code',
+        }) }}
+    </td>
+    <td>
+        <textarea
+            name="{{ base }}[prompt]"
+            rows="3"
+            placeholder="{{ 'Review this entry for clarity and tone…'|t('craft-ai') }}"
+            class="text fullwidth"
+        >{{ prompt }}</textarea>
+    </td>
+    <td class="thin">
+        <button
+            type="button"
+            class="delete icon craftai-commands__remove"
+            aria-label="{{ 'Remove'|t('craft-ai') }}"
+            data-craftai-remove
+        ></button>
+    </td>
+</tr>

@@ -1,0 +1,165 @@
+<?php
+
+namespace markhuot\craftai\models;
+
+use craft\base\Model;
+use craft\helpers\StringHelper;
+
+/**
+ * A user-defined slash command.
+ *
+ * Each command pairs a slug-safe `name` (used at the prompt as `/name`)
+ * with a `prompt` that gets substituted into the conversation when the
+ * editor invokes it. Commands live in plugin settings — and therefore in
+ * project config — so an org can version-control the prompts the same way
+ * it version-controls other configuration.
+ *
+ * The plugin ships with two seeded commands (`translate`, `editorial-review`),
+ * defined in {@see self::defaults()}. They appear pre-populated on first
+ * settings load and can be edited or deleted like any other row.
+ */
+class Command extends Model
+{
+    /**
+     * Slug-safe command name regex. Mirrors the character set Craft uses
+     * for handles (lowercase letters, digits, dashes) so the value round-
+     * trips through URLs, YAML, and the prompt input without escaping
+     * surprises.
+     */
+    public const NAME_PATTERN = '/^[a-z0-9][a-z0-9-]*$/';
+
+    /**
+     * Reserved names that collide with built-in slash commands. The
+     * dispatcher would route a built-in before a user command anyway,
+     * but we reject the name at validate time so an editor doesn't sink
+     * time into a `/compact` override that silently never fires.
+     */
+    private const RESERVED_NAMES = ['compact', 'review'];
+
+    /**
+     * Stable identifier for this command. Persisted so the settings UI
+     * can preserve ordering across saves.
+     */
+    public string $uid = '';
+
+    /** Slug-safe name. Surfaces in the prompt input as `/name`. */
+    public string $name = '';
+
+    /**
+     * Instruction substituted in for the user's `/name` message when the
+     * command is invoked. Supports a `{args}` placeholder; if absent and
+     * the user typed args after the slash command, they get appended on
+     * a trailing line.
+     */
+    public string $prompt = '';
+
+    public bool $enabled = true;
+
+    public function init(): void
+    {
+        parent::init();
+
+        if ($this->uid === '') {
+            $this->uid = StringHelper::UUID();
+        }
+    }
+
+    /**
+     * @return array<int, array<int|string, mixed>>
+     */
+    protected function defineRules(): array
+    {
+        return [
+            [['name', 'prompt'], 'required'],
+            [['name'], 'match', 'pattern' => self::NAME_PATTERN, 'message' => 'Name must contain only lowercase letters, digits, and dashes (no spaces).'],
+            [['name'], 'string', 'max' => 64],
+            [['name'], function (string $attribute): void {
+                if (in_array($this->$attribute, self::RESERVED_NAMES, true)) {
+                    $this->addError($attribute, "“{$this->$attribute}” is a built-in slash command. Pick a different name.");
+                }
+            }],
+            [['prompt'], 'string', 'max' => 8000],
+            [['enabled'], 'boolean'],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function toConfigArray(): array
+    {
+        return [
+            'uid' => $this->uid,
+            'name' => $this->name,
+            'prompt' => $this->prompt,
+            'enabled' => $this->enabled,
+        ];
+    }
+
+    /**
+     * Inflate from a raw associative array. Tolerates missing keys so a
+     * partial CP form post (the "+" stub row) doesn't blow up before the
+     * Settings filter has a chance to drop it.
+     *
+     * @param array<string, mixed> $data
+     */
+    public static function fromArray(array $data): self
+    {
+        $cmd = new self();
+        $cmd->uid = is_string($data['uid'] ?? null) && $data['uid'] !== '' ? $data['uid'] : StringHelper::UUID();
+        $cmd->name = is_string($data['name'] ?? null) ? self::normalizeName($data['name']) : '';
+        $cmd->prompt = is_string($data['prompt'] ?? null) ? $data['prompt'] : '';
+        $rawEnabled = $data['enabled'] ?? true;
+        $cmd->enabled = filter_var($rawEnabled, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true;
+        return $cmd;
+    }
+
+    /**
+     * Coerce a user-entered name into the slug-safe shape we persist:
+     * lowercase, ASCII, dashes for whitespace/underscores, no leading
+     * dash. We do this on read rather than reject so a CP user who types
+     * "Editorial Review" gets `editorial-review` instead of a hard
+     * validation failure they have to clean up themselves.
+     */
+    public static function normalizeName(string $raw): string
+    {
+        $name = strtolower(trim($raw));
+        $name = preg_replace('/[\s_]+/', '-', $name) ?? $name;
+        $name = preg_replace('/[^a-z0-9-]/', '', $name) ?? $name;
+        $name = preg_replace('/-+/', '-', $name) ?? $name;
+        return trim($name, '-');
+    }
+
+    /**
+     * Default commands seeded into a fresh install. Surfaced when the
+     * persisted list is empty (see {@see Settings::getCommands()}) so a
+     * new install always shows editors a useful starting point — and so
+     * the rules they trigger on stay version-controlled once they save.
+     *
+     * Editors can delete or rename either default; once the persisted
+     * list contains *anything* (even just one custom row), the defaults
+     * stop appearing. This sidesteps the "delete the default, see it
+     * reappear on next request" loop.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function defaults(): array
+    {
+        return [
+            [
+                'name' => 'translate',
+                'prompt' => <<<'PROMPT'
+                Translate the current entry's content into the language the user names in their message (default: Spanish if no language is given). Preserve formatting, links, and inline references. Produce a draft of the translated entry; do not overwrite the original.
+                PROMPT,
+                'enabled' => true,
+            ],
+            [
+                'name' => 'editorial-review',
+                'prompt' => <<<'PROMPT'
+                Perform an editorial review of the current entry. Evaluate clarity, structure, tone, and factual consistency. Flag passive voice that obscures the actor, awkward phrasing, repeated words, and missing context. Suggest concrete rewrites — not just observations — and leave inline comments on the specific fields that need attention.
+                PROMPT,
+                'enabled' => true,
+            ],
+        ];
+    }
+}

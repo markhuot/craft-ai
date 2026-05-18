@@ -4,6 +4,7 @@ import {
   buildPopover,
   buildTopLevelBanner,
   ensureOverlayHost,
+  findBlockContainer,
   findFieldContainer,
   readElementContext,
 } from "./dom";
@@ -71,25 +72,36 @@ class CommentsOverlay {
 
     if (this.comments.length === 0) return;
 
-    // Bucket comments by their target: top-level (no fieldHandle) goes
-    // into a page-top banner, everything else groups by fieldHandle and
-    // mounts a dot indicator on that field's heading.
-    const byField = new Map<string, Comment[]>();
+    // Bucket by (elementId, fieldHandle). A comment with no fieldHandle
+    // whose elementId matches the page is a whole-entry note → banner.
+    // A comment whose elementId differs is targeting a nested Matrix
+    // block — find the block container by data-id and mount the dot on
+    // the inner field there. Field-scoped page-level comments are the
+    // existing simple case (dot on the field heading).
     const topLevel: Comment[] = [];
+    const byKey = new Map<string, Comment[]>();
+
     for (const c of this.comments) {
-      if (!c.fieldHandle) {
+      const onPageElement = c.elementId === this.elementId;
+      if (onPageElement && !c.fieldHandle) {
         topLevel.push(c);
         continue;
       }
-      const arr = byField.get(c.fieldHandle) ?? [];
+      // Field comments — including nested-block comments. The bucket key
+      // is element+field so two comments on the same block+field merge
+      // into one indicator, but different blocks stay separate even when
+      // they share an inner-field handle (e.g. `blogHeadingText` in
+      // every blogHeading block).
+      const key = `${c.elementId}:${c.fieldHandle ?? ""}`;
+      const arr = byKey.get(key) ?? [];
       arr.push(c);
-      byField.set(c.fieldHandle, arr);
+      byKey.set(key, arr);
     }
 
     if (topLevel.length > 0) this.renderBanner(topLevel);
 
-    for (const [handle, comments] of byField) {
-      this.renderFieldIndicator(handle, comments);
+    for (const comments of byKey.values()) {
+      this.renderFieldIndicator(comments);
     }
   }
 
@@ -103,11 +115,30 @@ class CommentsOverlay {
     this.mountedBanner = banner;
   }
 
-  private renderFieldIndicator(handle: string, comments: Comment[]): void {
-    const container = findFieldContainer(handle);
+  private renderFieldIndicator(comments: Comment[]): void {
+    // Every comment in this bucket shares (elementId, fieldHandle), so
+    // we can use the first as the lookup key.
+    const first = comments[0];
+    if (!first) return;
+
+    // For nested-block comments the container is *inside* the matrix
+    // block — scope the field lookup to that block so we don't
+    // accidentally land on the outer Matrix field heading.
+    const scope = first.elementId === this.elementId
+      ? null
+      : findBlockContainer(first.elementId, first.elementUid);
+
+    // Top-level field comments (elementId === page element) just need
+    // the field handle. Nested-block field comments need both the
+    // scope and the inner handle. A nested-block comment without a
+    // fieldHandle means "feedback on the whole block" → indicator on
+    // the block's titlebar.
+    const container = first.fieldHandle
+      ? findFieldContainer(first.fieldHandle, scope)
+      : scope;
     if (!container) return;
 
-    const heading = container.querySelector<HTMLElement>(".heading, .field-heading, label") ?? container;
+    const heading = container.querySelector<HTMLElement>(".heading, .field-heading, label, .titlebar") ?? container;
     const indicator = buildIndicator(comments);
     indicator.addEventListener("click", (e) => {
       e.stopPropagation();

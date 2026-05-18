@@ -206,7 +206,12 @@ class AutomationDispatcher
                 Use {$fetchTool} to read the element. Apply the user prompt
                 above to it. If you find issues that should surface inline
                 in the CP, use `leave_comment` with the matching field
-                handle so they appear next to the relevant fields.
+                handle so they appear next to the relevant fields. For
+                feedback on a field inside a Matrix block, pass the
+                block's own entry id as `entryId` and the inner field
+                handle as `fieldHandle` — Matrix blocks are entries in
+                Craft 5, so the keys nested under a Matrix field in the
+                response are valid `entryId` values.
                 NOTE;
         }
 

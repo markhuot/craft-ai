@@ -8,6 +8,7 @@ use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
 use markhuot\craftai\binders\Draft as DraftBinder;
 use markhuot\craftai\binders\Entry as EntryBinder;
+use markhuot\craftai\helpers\CommentScope;
 use markhuot\craftai\records\CommentRecord;
 use markhuot\craftai\validators\ExistingDraft;
 use markhuot\craftai\validators\ExistingEntry;
@@ -20,6 +21,11 @@ use markhuot\craftai\validators\ExistingEntry;
  * follow-up review to see what's still outstanding from a prior session.
  * Use `status: "all"` to retrieve resolved comments too, e.g. when the
  * user is asking why something was changed.
+ *
+ * The scope is recursive: passing a page entry returns comments on the
+ * entry itself plus comments on any Matrix block (or nested-matrix block)
+ * inside it. Each row carries its own `elementId` so you can tell which
+ * level the comment lives on.
  */
 class GetComments extends Tool
 {
@@ -64,9 +70,19 @@ class GetComments extends Tool
         $isDraft = $draftId instanceof Entry;
         $targetId = $isDraft ? (int) $element->draftId : (int) $element->id;
 
+        $pairs = CommentScope::pairsFor($targetId, $isDraft);
+
         $query = CommentRecord::find()
-            ->where(['elementId' => $targetId, 'isDraft' => $isDraft])
             ->orderBy(['id' => SORT_ASC]);
+
+        // OR of (elementId, isDraft) pairs — we can't just use IN on the
+        // IDs because a canonical id and a draftId share the same integer
+        // namespace and only the boolean disambiguates them.
+        $orClauses = ['or'];
+        foreach ($pairs as [$id, $pairIsDraft]) {
+            $orClauses[] = ['and', ['elementId' => $id], ['isDraft' => $pairIsDraft]];
+        }
+        $query->andWhere($orClauses);
 
         if ($status !== 'all') {
             $query->andWhere(['status' => $status]);
@@ -78,8 +94,9 @@ class GetComments extends Tool
         $comments = array_map(static fn (CommentRecord $r): array => [
             'id' => (int) $r->id,
             'sessionId' => $r->sessionId,
+            'elementId' => (int) $r->elementId,
+            'isDraft' => (bool) $r->isDraft,
             'fieldHandle' => $r->fieldHandle,
-            'blockPath' => $r->blockPath,
             'body' => $r->body,
             'status' => $r->status,
             'resolvedAt' => $r->resolvedAt,

@@ -110,7 +110,6 @@ class ResolveComment extends Tool
             'elementId' => (int) $record->elementId,
             'isDraft' => (bool) $record->isDraft,
             'fieldHandle' => $record->fieldHandle,
-            'blockPath' => $record->blockPath,
             'body' => $record->body,
             'status' => $record->status,
             'resolvedAt' => $record->resolvedAt,

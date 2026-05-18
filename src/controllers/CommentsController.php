@@ -9,6 +9,7 @@ use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\helpers\CommentMarkdown;
+use markhuot\craftai\helpers\CommentScope;
 use markhuot\craftai\records\CommentRecord;
 use markhuot\craftai\records\MessageRecord;
 use yii\web\BadRequestHttpException;
@@ -61,9 +62,20 @@ class CommentsController extends Controller
             throw new BadRequestHttpException('status must be one of: open, resolved, all.');
         }
 
+        // Matrix blocks are entries: a comment on a field inside a block
+        // is filed against the block's own elementId, not the page entry.
+        // Walk the tree so the CP overlay can render dots on every level
+        // in a single fetch.
+        $pairs = CommentScope::pairsFor($elementId, $isDraft);
+
         $query = CommentRecord::find()
-            ->where(['elementId' => $elementId, 'isDraft' => $isDraft])
             ->orderBy(['id' => SORT_ASC]);
+
+        $orClauses = ['or'];
+        foreach ($pairs as [$id, $pairIsDraft]) {
+            $orClauses[] = ['and', ['elementId' => $id], ['isDraft' => $pairIsDraft]];
+        }
+        $query->andWhere($orClauses);
 
         if ($status !== 'all') {
             $query->andWhere(['status' => $status]);
@@ -247,6 +259,7 @@ class CommentsController extends Controller
     {
         $title = null;
         $editUrl = null;
+        $elementUid = null;
 
         $entry = $record->isDraft
             ? Entry::find()->draftId((int) $record->elementId)->status(null)->one()
@@ -254,6 +267,11 @@ class CommentsController extends Controller
 
         if ($entry instanceof Entry) {
             $title = $entry->title;
+            // Element UID. For Matrix-nested entries this is the value Craft
+            // stamps onto `.matrixblock[data-uid="…"]`, so the CP overlay
+            // can pin the indicator to the right block when `data-id`
+            // matching isn't enough (e.g. cloned blocks awaiting save).
+            $elementUid = $entry->uid;
             try {
                 $editUrl = $entry->getCpEditUrl();
             } catch (\Throwable) {
@@ -278,9 +296,9 @@ class CommentsController extends Controller
             // comments. The popover shows this next to the comment row.
             'replyCount' => self::replyCount($record),
             'elementId' => (int) $record->elementId,
+            'elementUid' => $elementUid,
             'isDraft' => (bool) $record->isDraft,
             'fieldHandle' => $record->fieldHandle,
-            'blockPath' => $record->blockPath,
             // `body` stays the raw markdown source so the agent-side tools
             // and any future surface can re-render it however they want.
             // `bodyHtml` is the pre-rendered, sanitized markup the comment

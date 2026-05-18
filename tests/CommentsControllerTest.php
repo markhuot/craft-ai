@@ -2,12 +2,18 @@
 
 use Craft;
 use craft\elements\User;
+use craft\fields\PlainText;
 use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\agent\providers\ProviderResponse;
 use markhuot\craftai\records\CommentRecord;
 use markhuot\craftai\records\MessageRecord;
 use markhuot\craftai\records\SessionRecord;
+use markhuot\craftai\tools\ToolRegistry;
+use markhuot\craftai\tools\UpsertEntry;
 use markhuot\craftpest\factories\Entry;
+use markhuot\craftpest\factories\EntryType;
+use markhuot\craftpest\factories\Field;
+use markhuot\craftpest\factories\MatrixField as MatrixFieldFactory;
 use markhuot\craftpest\factories\Section;
 
 beforeEach(function () {
@@ -88,6 +94,54 @@ it('returns the list of open comments scoped to an element', function () {
 
     $response->assertOk();
     $response->assertJsonCount(2, 'comments');
+});
+
+it('also returns comments on Matrix-nested entries when scoped to the parent', function () {
+    // Build a section with a Matrix field containing a heading block type.
+    $headingField = Field::factory()->name('Heading Text')->handle('headingText')->type(PlainText::class);
+    $headingBlock = EntryType::factory()
+        ->name('Heading')
+        ->handle('heading')
+        ->hasTitleField(false)
+        ->fields($headingField);
+    $matrix = MatrixFieldFactory::factory()
+        ->name('Body')
+        ->handle('body')
+        ->entryTypes($headingBlock)
+        ->create();
+    Section::factory()->name('Blog')->handle('blog')->fields($matrix)->create();
+
+    $upsert = new ToolRegistry();
+    $upsert->register(UpsertEntry::class);
+    $created = decode($upsert->execute('upsert_entry', [
+        'section' => 'blog',
+        'title' => 'A post',
+        'fields' => [
+            'body' => [
+                'new1' => ['type' => 'heading', 'fields' => ['headingText' => 'A heading']],
+            ],
+        ],
+    ]));
+    $parentId = (int) $created['data']['entry']['id'];
+    $parent = \craft\elements\Entry::find()->id($parentId)->status(null)->one();
+    $blockId = (int) $parent->body->all()[0]->id;
+
+    makeStoredComment(['elementId' => $parentId, 'body' => 'top-level note', 'fieldHandle' => 'title']);
+    makeStoredComment(['elementId' => $blockId, 'body' => 'nested note', 'fieldHandle' => 'headingText']);
+
+    $response = test()->get('admin?action=craft-ai/comments&elementId='.$parentId.'&isDraft=0');
+
+    $response->assertOk();
+    $body = json_decode((string) $response->content, true);
+    $bodies = array_map(fn ($c) => $c['body'], $body['comments']);
+    expect($bodies)->toContain('top-level note');
+    expect($bodies)->toContain('nested note');
+
+    // Each row carries its own elementId + elementUid so the overlay
+    // can pin the dot to the right block container.
+    $nested = collect($body['comments'])->firstWhere('body', 'nested note');
+    expect($nested['elementId'])->toBe($blockId);
+    expect($nested['elementUid'])->toBeString();
 });
 
 it('marks a comment resolved by user and appends a system note to the session', function () {

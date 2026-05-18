@@ -10,7 +10,6 @@ use craft\db\ActiveRecord;
  * @property int $elementId
  * @property bool $isDraft
  * @property string|null $fieldHandle
- * @property string|null $blockPath
  * @property string $body
  * @property string $status
  * @property string|null $resolvedAt

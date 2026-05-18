@@ -37,27 +37,78 @@ export function readElementContext(): ElementContext | null {
 }
 
 /**
- * Locate the DOM node for a given field handle on the current edit page.
- * Craft's field renderer uses a few different id/class patterns depending
- * on the Craft version and the field placement (top-level vs. inside a
- * tab vs. nested in a Matrix block), so we try several selectors in
- * priority order and return the first match.
+ * Locate the DOM node for a given field handle, optionally scoped to a
+ * specific container (e.g. a Matrix block). Craft's field renderer uses a
+ * few different id/class patterns depending on the Craft version and the
+ * field placement (top-level vs. inside a tab vs. nested in a Matrix
+ * block), so we try several selectors in priority order and return the
+ * first match.
  *
- * Returns null when the field is on a tab we haven't switched to yet —
- * the indicator just won't appear until that tab is opened. (Future
- * improvement: subscribe to tab-change events.)
+ * When `scope` is null, looks across the whole page (top-level fields).
+ * When scope is a block container, restricts the search to that block —
+ * needed so a comment on a block's inner `blogHeadingText` lands on the
+ * heading inside that specific block, not on a same-named field
+ * elsewhere on the page. Inside a block the namespaced field id ends in
+ * `…-fields-{handle}-field`, so the id-suffix lookup handles that
+ * naturally without us having to reconstruct the full namespaced id.
+ *
+ * Returns null when the field is on a tab we haven't switched to yet, or
+ * when the block has been collapsed — the indicator just won't appear
+ * until the field becomes visible.
  */
-export function findFieldContainer(handle: string): HTMLElement | null {
-  const selectors = [
-    `#fields-${cssEscape(handle)}-field`,
-    `#fields-${cssEscape(handle)}`,
-    `[data-handle="${cssAttrEscape(handle)}"]`,
-    `[data-field-handle="${cssAttrEscape(handle)}"]`,
-  ];
+export function findFieldContainer(
+  handle: string,
+  scope: HTMLElement | null = null,
+): HTMLElement | null {
+  const root: ParentNode = scope ?? document;
+  const escaped = cssEscape(handle);
+  const attr = cssAttrEscape(handle);
+
+  const selectors = scope
+    ? [
+        `[id$="-fields-${escaped}-field"]`,
+        `[id$="-fields-${escaped}"]`,
+        `[data-handle="${attr}"]`,
+        `[data-field-handle="${attr}"]`,
+      ]
+    : [
+        `#fields-${escaped}-field`,
+        `#fields-${escaped}`,
+        `[data-handle="${attr}"]`,
+        `[data-field-handle="${attr}"]`,
+      ];
+
   for (const sel of selectors) {
-    const el = document.querySelector<HTMLElement>(sel);
+    const el = root.querySelector<HTMLElement>(sel);
     if (el) return el;
   }
+  return null;
+}
+
+/**
+ * Locate the `.matrixblock` element for a nested entry. Craft stamps the
+ * block's numeric entry id on `data-id` and its UID on `data-uid` (see
+ * Craft's `_components/fieldtypes/Matrix/block.twig`), so we try id
+ * first and fall back to uid. Returns null when the block hasn't been
+ * rendered on this page (collapsed, on another tab, or part of a
+ * Matrix-on-Matrix tree the user hasn't expanded yet).
+ */
+export function findBlockContainer(
+  elementId: number,
+  elementUid: string | null,
+): HTMLElement | null {
+  const byId = document.querySelector<HTMLElement>(
+    `.matrixblock[data-id="${cssAttrEscape(String(elementId))}"]`,
+  );
+  if (byId) return byId;
+
+  if (elementUid) {
+    const byUid = document.querySelector<HTMLElement>(
+      `.matrixblock[data-uid="${cssAttrEscape(elementUid)}"]`,
+    );
+    if (byUid) return byUid;
+  }
+
   return null;
 }
 

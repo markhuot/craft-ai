@@ -21,9 +21,15 @@ export interface Comment {
   /** User reply count in the fork — zero until the comment is opened. */
   replyCount: number;
   elementId: number;
+  /**
+   * UID of `elementId`. For Matrix-nested entries this is the value Craft
+   * sets on `.matrixblock[data-uid="…"]`, so the overlay can locate the
+   * right block container when `data-id` lookups aren't sufficient
+   * (e.g. across draft/canonical id collisions).
+   */
+  elementUid: string | null;
   isDraft: boolean;
   fieldHandle: string | null;
-  blockPath: string | null;
   /** Raw markdown source as the agent wrote it. */
   body: string;
   /**

@@ -359,6 +359,14 @@ PROMPT;
                top-level note (omit fieldHandle) only for issues that span
                the whole entry. Keep comment bodies specific and
                actionable — they will be read verbatim by the editor.
+               When commenting on a field _inside_ a Matrix block, target
+               the block itself: Matrix blocks are entries in Craft 5, so
+               the keys nested under each Matrix field in the
+               `{$fetchTool}` response (e.g. `"192"`, `"193"`) are valid
+               `entryId` values. Pass the block's id as `entryId` and the
+               inner field handle (e.g. `blogHeadingText`) as
+               `fieldHandle` — don't reuse the outer Matrix field handle
+               for inner-block feedback.
             4. Don't comment on fields that look good. A short review is
                fine; quality over quantity.
             5. When you're done, summarize what you flagged in a few

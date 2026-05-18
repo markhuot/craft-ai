@@ -27,6 +27,14 @@ use markhuot\craftai\validators\ExistingEntry;
  * Pass exactly one of `entryId` (a canonical entry) or `draftId` (a draft
  * in progress). Omit `fieldHandle` to leave a top-level note about the
  * entry as a whole rather than scoping it to one field.
+ *
+ * Matrix blocks are first-class entries in Craft 5: when a `get_entry`
+ * response nests blocks under a Matrix field (keyed by their numeric
+ * IDs), each of those IDs is itself a valid `entryId` for this tool.
+ * To leave feedback on a field _inside_ a Matrix block, pass the block's
+ * own entry ID as `entryId` and the inner field handle as `fieldHandle`
+ * — don't target the outer Matrix field on the parent entry. The dot
+ * will then land on the right field inside the right block.
  */
 class LeaveComment extends Tool
 {
@@ -57,13 +65,9 @@ class LeaveComment extends Tool
         #[Bind(DraftBinder::class)]
         Entry|int|null $draftId = null,
 
-        #[Description('Field handle the comment scopes to (e.g. "title", "bodyContent"). Omit to attach a top-level note covering the whole entry.')]
+        #[Description('Field handle the comment scopes to (e.g. "title", "bodyContent"). Omit to attach a top-level note covering the whole entry. For a field inside a Matrix block, set this to the inner field handle and target the block as `entryId`/`draftId` — Matrix blocks are entries.')]
         #[Validate('string', max: 255)]
         ?string $fieldHandle = null,
-
-        #[Description('Optional dot-path identifying a nested block within a Matrix/super-table field, e.g. "matrixField/12345/headline". Use for comments scoped to one block inside a repeater rather than the field as a whole.')]
-        #[Validate('string', max: 1024)]
-        ?string $blockPath = null,
     ): array|ToolOutput {
         if ($entryId !== null && $draftId !== null) {
             return new ToolOutput(
@@ -97,7 +101,6 @@ class LeaveComment extends Tool
         $record->elementId = $targetId;
         $record->isDraft = $isDraft;
         $record->fieldHandle = $fieldHandle !== null && $fieldHandle !== '' ? $fieldHandle : null;
-        $record->blockPath = $blockPath !== null && $blockPath !== '' ? $blockPath : null;
         $record->body = $body;
         $record->status = CommentRecord::STATUS_OPEN;
         // Pin to the assistant turn that emitted this tool_use so a
@@ -132,7 +135,6 @@ class LeaveComment extends Tool
                 'elementId' => (int) $record->elementId,
                 'isDraft' => (bool) $record->isDraft,
                 'fieldHandle' => $record->fieldHandle,
-                'blockPath' => $record->blockPath,
                 'body' => $record->body,
                 'status' => $record->status,
             ],

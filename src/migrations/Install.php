@@ -109,7 +109,6 @@ class Install extends Migration
             'elementId' => $this->integer()->notNull(),
             'isDraft' => $this->boolean()->notNull()->defaultValue(false),
             'fieldHandle' => $this->string()->null(),
-            'blockPath' => $this->string()->null(),
             'body' => $this->text()->notNull(),
             'status' => $this->string(16)->notNull()->defaultValue('open'),
             'resolvedAt' => $this->dateTime()->null(),

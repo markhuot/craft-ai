@@ -1,9 +1,14 @@
 <?php
 
+use craft\fields\PlainText;
 use markhuot\craftai\records\CommentRecord;
 use markhuot\craftai\tools\GetComments;
 use markhuot\craftai\tools\ToolRegistry;
+use markhuot\craftai\tools\UpsertEntry;
 use markhuot\craftpest\factories\Entry;
+use markhuot\craftpest\factories\EntryType;
+use markhuot\craftpest\factories\Field;
+use markhuot\craftpest\factories\MatrixField as MatrixFieldFactory;
 use markhuot\craftpest\factories\Section;
 
 beforeEach(function () {
@@ -67,6 +72,52 @@ it('separates draft comments from canonical comments by isDraft', function () {
     expect($canonical['data'][0]['body'])->toBe('on canonical');
     expect($draftOnly['data'])->toHaveCount(1);
     expect($draftOnly['data'][0]['body'])->toBe('on draft');
+});
+
+it('includes comments on nested Matrix block entries when scoped to the parent entry', function () {
+    $headingField = Field::factory()->name('Heading Text')->handle('headingText')->type(PlainText::class);
+    $headingBlock = EntryType::factory()
+        ->name('Heading')
+        ->handle('heading')
+        ->hasTitleField(false)
+        ->fields($headingField);
+    $matrix = MatrixFieldFactory::factory()
+        ->name('Body')
+        ->handle('body')
+        ->entryTypes($headingBlock)
+        ->create();
+    Section::factory()->name('Blog')->handle('blog')->fields($matrix)->create();
+
+    $upsert = new ToolRegistry();
+    $upsert->register(UpsertEntry::class);
+    $created = decode($upsert->execute('upsert_entry', [
+        'section' => 'blog',
+        'title' => 'Post',
+        'fields' => [
+            'body' => [
+                'new1' => ['type' => 'heading', 'fields' => ['headingText' => 'Heading']],
+            ],
+        ],
+    ]));
+    $parentId = (int) $created['data']['entry']['id'];
+    $parent = \craft\elements\Entry::find()->id($parentId)->status(null)->one();
+    $blockId = (int) $parent->body->all()[0]->id;
+
+    seedComment($parentId, ['body' => 'on parent', 'fieldHandle' => 'title']);
+    seedComment($blockId, ['body' => 'on block', 'fieldHandle' => 'headingText']);
+
+    $output = $this->registry->execute('get_comments', ['entryId' => $parentId]);
+    expect($output->isError)->toBeFalse($output->text);
+    $payload = decode($output);
+
+    $bodies = array_map(fn ($c) => $c['body'], $payload['data']);
+    expect($bodies)->toContain('on parent');
+    expect($bodies)->toContain('on block');
+
+    // Each row carries elementId so the agent can tell which level the
+    // comment lives on.
+    $nested = collect($payload['data'])->firstWhere('body', 'on block');
+    expect($nested['elementId'])->toBe($blockId);
 });
 
 it('errors when neither entryId nor draftId is provided', function () {

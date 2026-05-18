@@ -19,7 +19,7 @@ function readBootstrap(): CommentsBootstrap | null {
     return {
       listUrl: String(parsed.listUrl ?? ""),
       resolveUrl: String(parsed.resolveUrl ?? ""),
-      replyUrl: String(parsed.replyUrl ?? ""),
+      openThreadUrl: String(parsed.openThreadUrl ?? ""),
       csrfTokenName: String(parsed.csrfTokenName ?? "CRAFT_CSRF_TOKEN"),
       csrfTokenValue: String(parsed.csrfTokenValue ?? ""),
     };
@@ -127,12 +127,21 @@ class CommentsOverlay {
         await this.api.resolve(commentId);
         await this.refresh();
       },
-      onReply: async (commentId, message) => {
-        const { sessionUrl } = await this.api.reply(commentId, message);
-        const note = document.createElement("p");
-        note.className = "craftai-comments-popover__meta";
-        note.innerHTML = `Reply sent. <a href="${escapeHtml(sessionUrl)}">Watch the response in chat →</a>`;
-        popover.appendChild(note);
+      onOpenInChat: async (comment) => {
+        try {
+          const { threadSessionId } = await this.api.openThread(comment.id);
+          // Hand off to the existing chat widget so we don't ship a
+          // second chat surface — the widget already handles sessions,
+          // messages, attachments, and the agent loop.
+          document.dispatchEvent(
+            new CustomEvent("craftai:open-session", {
+              detail: { sessionId: threadSessionId },
+            }),
+          );
+          this.closePopover();
+        } catch (err) {
+          console.warn("[craft-ai] failed to open comment thread", err);
+        }
       },
     });
 
@@ -173,12 +182,6 @@ class CommentsOverlay {
     }
     this.closePopover();
   }
-}
-
-function escapeHtml(s: string): string {
-  const div = document.createElement("div");
-  div.textContent = s;
-  return div.innerHTML;
 }
 
 async function mount(): Promise<void> {

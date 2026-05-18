@@ -117,16 +117,18 @@ export function buildTopLevelBanner(comments: Comment[]): HTMLElement {
 }
 
 /**
- * Render the comment-thread popover content. The popover itself is the
- * shared overlay host; this builds the body for one specific group of
- * comments (all comments scoped to the same field, plus any sibling
- * top-level comments the caller decided to include).
+ * Render the comment-thread popover content. The popover lists each
+ * comment scoped to the trigger (a field or the top-level banner) as a
+ * clickable row — the row itself is the "open in chat" affordance, with
+ * a resolve button tucked to the side. There is intentionally no inline
+ * reply textarea here: replies live inside the chat widget so we don't
+ * fork a second chat surface.
  */
 export function buildPopover(
   comments: Comment[],
   callbacks: {
     onResolve: (commentId: number) => void;
-    onReply: (commentId: number, message: string) => void;
+    onOpenInChat: (comment: Comment) => void;
     onClose: () => void;
   },
 ): HTMLElement {
@@ -166,12 +168,28 @@ function renderCommentItem(
   comment: Comment,
   callbacks: {
     onResolve: (commentId: number) => void;
-    onReply: (commentId: number, message: string) => void;
+    onOpenInChat: (comment: Comment) => void;
   },
 ): HTMLLIElement {
   const item = document.createElement("li");
   item.className = "craftai-comments-popover__item";
   item.dataset.commentId = String(comment.id);
+
+  // The whole row is the "open the chat thread" target. We use a real
+  // <button> so keyboard focus + Enter activation come for free, and the
+  // inner content stays semantic (the body markdown renders as normal
+  // block elements rather than a click-target's flat text).
+  const rowBtn = document.createElement("button");
+  rowBtn.type = "button";
+  rowBtn.className = "craftai-comments-popover__row";
+  rowBtn.setAttribute(
+    "aria-label",
+    `Open chat thread for comment ${comment.id}`,
+  );
+  rowBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    callbacks.onOpenInChat(comment);
+  });
 
   // bodyHtml comes pre-rendered + sanitized from the server (see
   // CommentMarkdown::render) so we can drop it in via innerHTML to match
@@ -185,56 +203,50 @@ function renderCommentItem(
   } else {
     body.textContent = comment.body;
   }
-  item.appendChild(body);
+  rowBtn.appendChild(body);
 
   const meta = document.createElement("p");
   meta.className = "craftai-comments-popover__meta";
   const metaParts: string[] = [`comment #${comment.id}`];
   if (comment.fieldHandle) metaParts.push(`field: ${comment.fieldHandle}`);
-  meta.textContent = metaParts.join(" · ");
-  if (comment.sessionUrl) {
-    const link = document.createElement("a");
-    link.href = comment.sessionUrl;
-    link.textContent = "Open chat";
-    link.className = "craftai-comments-popover__link";
-    meta.appendChild(document.createTextNode(" · "));
-    meta.appendChild(link);
+  if (comment.replyCount > 0) {
+    metaParts.push(
+      comment.replyCount === 1 ? "1 reply" : `${comment.replyCount} replies`,
+    );
+  } else if (comment.threadSessionId) {
+    metaParts.push("thread open");
   }
-  item.appendChild(meta);
+  meta.textContent = metaParts.join(" · ");
+  rowBtn.appendChild(meta);
 
-  const replyForm = document.createElement("form");
-  replyForm.className = "craftai-comments-popover__form";
-  const textarea = document.createElement("textarea");
-  textarea.placeholder = "Reply…";
-  textarea.rows = 2;
-  textarea.className = "craftai-comments-popover__textarea";
-  replyForm.appendChild(textarea);
+  item.appendChild(rowBtn);
 
   const actions = document.createElement("div");
   actions.className = "craftai-comments-popover__actions";
 
-  const replyBtn = document.createElement("button");
-  replyBtn.type = "submit";
-  replyBtn.className = "btn submit";
-  replyBtn.textContent = "Reply";
-  actions.appendChild(replyBtn);
+  const openBtn = document.createElement("button");
+  openBtn.type = "button";
+  openBtn.className = "btn submit";
+  openBtn.textContent = comment.replyCount > 0 || comment.threadSessionId
+    ? "Continue chat"
+    : "Reply in chat";
+  openBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    callbacks.onOpenInChat(comment);
+  });
+  actions.appendChild(openBtn);
 
   const resolveBtn = document.createElement("button");
   resolveBtn.type = "button";
   resolveBtn.className = "btn";
   resolveBtn.textContent = "Resolve";
-  resolveBtn.addEventListener("click", () => callbacks.onResolve(comment.id));
+  resolveBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    callbacks.onResolve(comment.id);
+  });
   actions.appendChild(resolveBtn);
 
-  replyForm.appendChild(actions);
-  replyForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const text = textarea.value.trim();
-    if (text === "") return;
-    callbacks.onReply(comment.id, text);
-    textarea.value = "";
-  });
-  item.appendChild(replyForm);
+  item.appendChild(actions);
 
   return item;
 }

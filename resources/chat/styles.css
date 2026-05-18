@@ -44,3 +44,22 @@
   height: var(--craftai-shell-height, calc(100dvh - 200px));
   min-height: 320px;
 }
+
+/*
+ * Comment-thread forks render the copied parent history at low opacity so
+ * the user can see exactly where their reply discussion begins. Applied
+ * to the wrapper div the transcript loop emits for every message with id
+ * ≤ forkPivotMessageId. The transition smooths over the poll cycle that
+ * may flip a message from "still loading" to "pre-fork" once metadata
+ * lands. 0.3 keeps text legible (so the user can re-read the lead-up to
+ * the comment) but visually disjoint from the live discussion below;
+ * hover fades it back to 0.7 in case the user wants to re-read context.
+ */
+.craftai-pre-fork {
+  opacity: 0.3;
+  transition: opacity 150ms ease-out;
+}
+
+.craftai-pre-fork:hover {
+  opacity: 0.7;
+}

@@ -24,12 +24,15 @@ class ToolContext
 
     private ?string $toolUseId = null;
 
+    private ?int $messageId = null;
+
     private ?ClientType $client = null;
 
-    public function begin(?string $sessionId, ?string $toolUseId, ?ClientType $client): void
+    public function begin(?string $sessionId, ?string $toolUseId, ?ClientType $client, ?int $messageId = null): void
     {
         $this->sessionId = $sessionId;
         $this->toolUseId = $toolUseId;
+        $this->messageId = $messageId;
         $this->client = $client;
     }
 
@@ -37,6 +40,7 @@ class ToolContext
     {
         $this->sessionId = null;
         $this->toolUseId = null;
+        $this->messageId = null;
         $this->client = null;
     }
 
@@ -48,6 +52,17 @@ class ToolContext
     public function getToolUseId(): ?string
     {
         return $this->toolUseId;
+    }
+
+    /**
+     * MessageRecord id of the assistant turn that emitted the current
+     * tool_use, when known. Set by the agent loop right after the turn
+     * is persisted; null inside surfaces (e.g. MCP) that dispatch tools
+     * without an enclosing message row.
+     */
+    public function getMessageId(): ?int
+    {
+        return $this->messageId;
     }
 
     public function getClient(): ?ClientType

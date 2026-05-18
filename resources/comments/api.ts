@@ -3,6 +3,7 @@ import type {
   CommentListResponse,
   CommentsBootstrap,
   ElementContext,
+  OpenThreadResponse,
 } from "./types";
 
 /**
@@ -45,19 +46,24 @@ export class CommentsApi {
     return payload.comment;
   }
 
-  async reply(commentId: number, message: string): Promise<{ sessionUrl: string }> {
+  /**
+   * Lazily fork the comment's originating session so the popover can
+   * open the chat widget against a private thread. Idempotent: a
+   * follow-up call after the fork exists returns the same session id
+   * without copying again.
+   */
+  async openThread(commentId: number): Promise<OpenThreadResponse> {
     const body = new FormData();
     body.set("commentId", String(commentId));
-    body.set("message", message);
     body.set(this.bootstrap.csrfTokenName, this.bootstrap.csrfTokenValue);
 
-    const res = await fetch(this.bootstrap.replyUrl, {
+    const res = await fetch(this.bootstrap.openThreadUrl, {
       method: "POST",
       headers: { Accept: "application/json" },
       credentials: "same-origin",
       body,
     });
-    if (!res.ok) throw new Error(`comments.reply failed: ${res.status}`);
-    return (await res.json()) as { sessionUrl: string };
+    if (!res.ok) throw new Error(`comments.openThread failed: ${res.status}`);
+    return (await res.json()) as OpenThreadResponse;
   }
 }

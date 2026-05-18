@@ -160,6 +160,20 @@ export interface MessagesResponse {
    * entry when the server payload is missing (older deployments).
    */
   slashCommands?: SlashCommand[];
+  /**
+   * Session-level metadata for fork-aware rendering. Today this just
+   * tells the chat surface whether the session is a comment-thread
+   * fork and where the boundary between copied parent history and the
+   * new discussion sits. Null fields = a top-level (non-forked)
+   * session; the UI then skips any fork-specific styling.
+   */
+  session?: ChatSessionMeta;
+}
+
+export interface ChatSessionMeta {
+  parentSessionId: string | null;
+  originatingCommentId: number | null;
+  forkPivotMessageId: number | null;
 }
 
 export interface SlashCommand {

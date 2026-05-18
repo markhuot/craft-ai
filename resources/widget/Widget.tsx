@@ -202,6 +202,28 @@ export function Widget({ bootstrap, api: apiOverride, storage }: WidgetProps) {
     [persistSession],
   );
 
+  // External "open this specific session" hook. The CP comments overlay
+  // dispatches `craftai:open-session` when the user clicks a comment in
+  // the popover; we honour it by switching to chat view and pinning the
+  // requested session. Refreshing the sidebar list is best-effort — if
+  // the request fails the chat still mounts against the supplied id and
+  // the user can interact normally.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ sessionId?: unknown }>).detail;
+      const sessionId =
+        detail && typeof detail.sessionId === "string" ? detail.sessionId : null;
+      if (!sessionId) return;
+      setView("chat");
+      persistOpen(true);
+      setActiveSessionId(sessionId);
+      persistSession(sessionId);
+      void loadSessions();
+    };
+    document.addEventListener("craftai:open-session", handler);
+    return () => document.removeEventListener("craftai:open-session", handler);
+  }, [loadSessions, persistOpen, persistSession]);
+
   // Close on Escape from anywhere within the widget. We intentionally listen
   // on the shadow root's owner document so the host page's other Escape
   // handlers still fire too. Suppressed while targeting — the picker hook

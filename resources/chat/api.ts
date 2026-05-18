@@ -192,6 +192,7 @@ function parseMessagesResponse(data: unknown): MessagesResponse {
       lastPreviewUrl: null,
       contextWindow: null,
       slashCommands: undefined,
+      session: undefined,
     };
   }
   if (typeof data !== "object" || data === null) {
@@ -201,6 +202,7 @@ function parseMessagesResponse(data: unknown): MessagesResponse {
       lastPreviewUrl: null,
       contextWindow: null,
       slashCommands: undefined,
+      session: undefined,
     };
   }
   const obj = data as {
@@ -209,6 +211,7 @@ function parseMessagesResponse(data: unknown): MessagesResponse {
     lastPreviewUrl?: unknown;
     contextWindow?: unknown;
     slashCommands?: unknown;
+    session?: unknown;
   };
   const messages = Array.isArray(obj.messages) ? (obj.messages as ChatMessage[]) : [];
   const lastPreviewUrl =
@@ -225,6 +228,22 @@ function parseMessagesResponse(data: unknown): MessagesResponse {
     lastPreviewUrl,
     contextWindow,
     slashCommands: parseSlashCommands(obj.slashCommands),
+    session: parseSessionMeta(obj.session),
+  };
+}
+
+function parseSessionMeta(value: unknown): MessagesResponse["session"] {
+  if (typeof value !== "object" || value === null) return undefined;
+  const obj = value as Record<string, unknown>;
+  return {
+    parentSessionId:
+      typeof obj.parentSessionId === "string" && obj.parentSessionId !== ""
+        ? obj.parentSessionId
+        : null,
+    originatingCommentId:
+      typeof obj.originatingCommentId === "number" ? obj.originatingCommentId : null,
+    forkPivotMessageId:
+      typeof obj.forkPivotMessageId === "number" ? obj.forkPivotMessageId : null,
   };
 }
 

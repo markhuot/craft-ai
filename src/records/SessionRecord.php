@@ -14,6 +14,9 @@ use craft\db\ActiveRecord;
  * @property string|null $enabledTools JSON-encoded list<string> of tool names (only meaningful when toolMode = 'custom')
  * @property string $clientType Surface this session was created from ('cp', 'widget', 'mcp', 'code-component-field'); used to filter tools by their declared `ALLOWED_CLIENTS`
  * @property int|null $compactionPivotId MessageRecord id of the latest summary row; messages before it are skipped when loading
+ * @property string|null $parentSessionId When this session was forked from another (today only used for comment threads), the parent's session id
+ * @property int|null $originatingCommentId CommentRecord id that triggered the fork, when this session is a comment-thread fork
+ * @property int|null $forkPivotMessageId Id of the last copied message on a fork session; messages with a higher id belong to the comment discussion, not the parent transcript
  * @property string $dateCreated
  * @property string $dateUpdated
  * @property string $uid

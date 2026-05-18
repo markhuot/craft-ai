@@ -53,6 +53,15 @@ class Install extends Migration
             // boundary used to keep the conversation under the model's context
             // window without losing context entirely.
             'compactionPivotId' => $this->integer()->null(),
+            // When this session is a fork of another (today only used for
+            // comment threads), parentSessionId points at the originating
+            // session and originatingCommentId at the CommentRecord that
+            // triggered the fork. Both null for top-level sessions.
+            'parentSessionId' => $this->string(36)->null(),
+            'originatingCommentId' => $this->integer()->null(),
+            // Boundary id between copied parent history and new replies on
+            // a fork session — see m260518_000001 for the rationale.
+            'forkPivotMessageId' => $this->integer()->null(),
             'dateCreated' => $this->dateTime()->notNull(),
             'dateUpdated' => $this->dateTime()->notNull(),
             'uid' => $this->uid(),
@@ -106,6 +115,10 @@ class Install extends Migration
             'resolvedAt' => $this->dateTime()->null(),
             'resolvedBy' => $this->string(16)->null(),
             'authorMessageId' => $this->integer()->null(),
+            // Set on the first user interaction with this comment — points
+            // at the forked session that carries the comment's discussion.
+            // Null until the user clicks the comment to open a thread.
+            'threadSessionId' => $this->string(36)->null(),
             'dateCreated' => $this->dateTime()->notNull(),
             'dateUpdated' => $this->dateTime()->notNull(),
             'uid' => $this->uid(),

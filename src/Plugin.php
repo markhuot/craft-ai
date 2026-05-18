@@ -231,12 +231,15 @@ class Plugin extends BasePlugin
                 $event->rules['ai/session/<uuid:[A-Za-z0-9\-]+>'] = 'craft-ai/sessions/view';
 
                 // Review-comments endpoints. Lookup runs on entry edit
-                // page load, resolve/reply when the user interacts with
-                // the popover. All scoped under `ai/comments/*` so a host
-                // site can disable them with a single rule override.
+                // page load, resolve/open-thread when the user interacts
+                // with the popover. All scoped under `ai/comments/*` so a
+                // host site can disable them with a single rule override.
+                // `open-thread` lazily forks the comment's originating
+                // session so the discussion in the chat widget stays
+                // isolated from the main agent run.
                 $event->rules['ai/comments'] = 'craft-ai/comments/index';
                 $event->rules['POST ai/comments/resolve'] = 'craft-ai/comments/resolve';
-                $event->rules['POST ai/comments/reply'] = 'craft-ai/comments/reply';
+                $event->rules['POST ai/comments/open-thread'] = 'craft-ai/comments/open-thread';
 
                 // Dedicated edit screen for a single slash command. The
                 // plugin settings page links here from each row in its
@@ -351,7 +354,7 @@ class Plugin extends BasePlugin
         $bootstrap = [
             'listUrl' => UrlHelper::cpUrl('ai/comments'),
             'resolveUrl' => UrlHelper::actionUrl('craft-ai/comments/resolve'),
-            'replyUrl' => UrlHelper::actionUrl('craft-ai/comments/reply'),
+            'openThreadUrl' => UrlHelper::actionUrl('craft-ai/comments/open-thread'),
             'csrfTokenName' => Craft::$app->getConfig()->getGeneral()->csrfTokenName,
             'csrfTokenValue' => $request->getCsrfToken(),
         ];

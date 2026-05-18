@@ -187,6 +187,12 @@ export function Chat({
   // poll; the default keeps the autocomplete usable before the first poll
   // (or against older backends that don't surface the catalog yet).
   const [slashCommands, setSlashCommands] = useState<SlashCommand[]>(DEFAULT_SLASH_COMMANDS);
+  // Boundary id between copied parent history and new replies for fork
+  // sessions (today: only comment threads). Drives the dim-history
+  // styling: messages with id ≤ pivot render at lower opacity so the
+  // user sees where their reply discussion begins. Null on top-level
+  // sessions — no dimming applied.
+  const [forkPivotMessageId, setForkPivotMessageId] = useState<number | null>(null);
   // Highlighted index within the *filtered* slash command list. Bounded
   // by the filtered length on every draft change; reset to 0 when the
   // filter changes so the highlight always lands on the top entry first.
@@ -271,6 +277,10 @@ export function Chat({
       if (Array.isArray(fetched.slashCommands)) {
         setSlashCommands(fetched.slashCommands);
       }
+      // Track the fork pivot so the renderer can dim history. Always
+      // overwrite (including back to null): if the user switches to a
+      // non-forked session mid-app the previous pivot must clear.
+      setForkPivotMessageId(fetched.session?.forkPivotMessageId ?? null);
     } catch {
       // transient — keep polling
     }
@@ -688,7 +698,22 @@ export function Chat({
               No messages yet — say something to start the conversation.
             </p>
           ) : (
-            messages.map((m) => <RenderedMessage key={m.id} message={m} />)
+            messages.map((m) => {
+              // Dim everything copied from the parent transcript so the
+              // user can see where the comment-thread discussion starts.
+              // forkPivotMessageId is null on top-level sessions, in
+              // which case this comparison falls through to undimmed.
+              const isPreFork =
+                forkPivotMessageId !== null && m.id <= forkPivotMessageId;
+              return (
+                <div
+                  key={m.id}
+                  className={isPreFork ? "craftai-pre-fork" : undefined}
+                >
+                  <RenderedMessage message={m} />
+                </div>
+              );
+            })
           )}
           {status === "streaming" && (
             <p data-testid="chat-thinking" className="ai:text-xs ai:text-craftai-muted">

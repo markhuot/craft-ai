@@ -520,6 +520,176 @@ PROMPT;
         $this->saveMessage($sessionId, 'system', [['type' => 'text', 'text' => $note]]);
     }
 
+    /**
+     * Branch a session into a new child session that contains a copy of the
+     * parent's history up to and including `throughMessageId`. Used to give
+     * each review comment its own conversation surface: when the user opens
+     * a comment to discuss it, we fork at the assistant turn that left the
+     * comment so the resulting back-and-forth is isolated from the main
+     * agent run (and from any sibling comment threads).
+     *
+     * Notes on the copy:
+     *  - Messages are append-only, so the copy is a straight insert of new
+     *    rows pointing at the fork's session id. The original rows are left
+     *    untouched.
+     *  - We deliberately skip `compactionPivotId` on the fork. The pivot is
+     *    a message id from the parent transcript; even if we tried to remap
+     *    it, the fork has its own clean slate and the next compaction will
+     *    set a fresh pivot if needed.
+     *  - Token usage columns are copied verbatim. The fork inherits the
+     *    parent's spend so the context gauge stays consistent, but no
+     *    further charges accrue until the fork actually runs.
+     *  - Per-message `assetIds` are preserved so attached assets stay
+     *    accessible from inside the fork.
+     */
+    public function forkSession(string $parentSessionId, int $throughMessageId, int $originatingCommentId): ?string
+    {
+        $parent = SessionRecord::findOne(['id' => $parentSessionId]);
+        if ($parent === null) {
+            return null;
+        }
+
+        $forkId = \craft\helpers\StringHelper::UUID();
+
+        $fork = new SessionRecord();
+        $fork->id = $forkId;
+        $fork->active = false;
+        $fork->stopRequested = false;
+        $fork->title = $parent->title;
+        $fork->userId = $parent->userId;
+        $fork->toolMode = $parent->toolMode;
+        $fork->enabledTools = $parent->enabledTools;
+        $fork->clientType = $parent->clientType;
+        $fork->parentSessionId = $parentSessionId;
+        $fork->originatingCommentId = $originatingCommentId;
+        $fork->save();
+
+        /** @var list<MessageRecord> $rows */
+        $rows = MessageRecord::find()
+            ->where(['sessionId' => $parentSessionId])
+            ->andWhere(['<=', 'id', $throughMessageId])
+            ->orderBy(['id' => SORT_ASC])
+            ->all();
+
+        // If the last copied assistant turn has tool_use blocks, the
+        // matching tool_results live on the immediately following user
+        // turn — pull that in too so the fork doesn't start its life
+        // with an orphan tool_use (the next provider call would reject
+        // it). We chase forward as long as the trailing assistant turn
+        // is still emitting tool_use blocks: a single agent turn can
+        // emit N tool_uses across N round-trips before settling on
+        // text, and we want the fork to inherit the whole settled
+        // round.
+        $rows = $this->extendFork($parentSessionId, $rows);
+
+        $lastCopiedId = null;
+        foreach ($rows as $row) {
+            $copy = new MessageRecord();
+            $copy->sessionId = $forkId;
+            $copy->role = $row->role;
+            $copy->content = $row->content;
+            $copy->rawResponse = $row->rawResponse;
+            $copy->assetIds = $row->assetIds;
+            $copy->inputTokens = $row->inputTokens;
+            $copy->outputTokens = $row->outputTokens;
+            $copy->save();
+            $lastCopiedId = (int) $copy->id;
+        }
+
+        // Remember the boundary so the popover can show a precise reply
+        // count without diffing against the parent. Sessions never copy
+        // again, so this pointer is set once and stable for the life of
+        // the fork.
+        if ($lastCopiedId !== null) {
+            $fork->forkPivotMessageId = $lastCopiedId;
+            $fork->save();
+        }
+
+        return $forkId;
+    }
+
+    /**
+     * Walk forward from the last copied row to capture any trailing
+     * tool_result rows whose tool_use was already pulled in. Without
+     * this, a fork that ends mid-round-trip (e.g. the assistant turn
+     * that called leave_comment, but not the user turn carrying the
+     * tool_result) would present the next provider call with an orphan
+     * tool_use and either trip the API's validation or get a synthetic
+     * error injected by {@see ensureToolResults()}.
+     *
+     * @param list<MessageRecord> $rows
+     * @return list<MessageRecord>
+     */
+    private function extendFork(string $parentSessionId, array $rows): array
+    {
+        while (true) {
+            $last = end($rows);
+            if (! $last instanceof MessageRecord || $last->role !== 'assistant') {
+                break;
+            }
+
+            $orphanIds = $this->unmatchedToolUseIds($last);
+            if ($orphanIds === []) {
+                break;
+            }
+
+            /** @var MessageRecord|null $next */
+            $next = MessageRecord::find()
+                ->where(['sessionId' => $parentSessionId])
+                ->andWhere(['>', 'id', (int) $last->id])
+                ->orderBy(['id' => SORT_ASC])
+                ->one();
+
+            if ($next === null || $next->role !== 'user') {
+                break;
+            }
+
+            $rows[] = $next;
+
+            // The user message we just pulled in may have triggered
+            // *another* assistant turn with its own tool_use chain (a
+            // multi-tool round-trip). Pull that in too if it exists —
+            // we want to land on a clean text-only assistant turn or
+            // the end of the conversation.
+            /** @var MessageRecord|null $afterNext */
+            $afterNext = MessageRecord::find()
+                ->where(['sessionId' => $parentSessionId])
+                ->andWhere(['>', 'id', (int) $next->id])
+                ->orderBy(['id' => SORT_ASC])
+                ->one();
+            if ($afterNext instanceof MessageRecord && $afterNext->role === 'assistant') {
+                $rows[] = $afterNext;
+                continue;
+            }
+
+            break;
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Returns the tool_use ids in the given assistant row that don't
+     * already have a matching tool_result somewhere earlier in the
+     * conversation. In practice this is the simple case where the row
+     * is the LAST one we've copied — but coding it as a general check
+     * (rather than "assume orphans") keeps the helper reusable.
+     */
+    private function unmatchedToolUseIds(MessageRecord $row): array
+    {
+        $content = json_decode((string) $row->content, true, flags: JSON_THROW_ON_ERROR);
+        if (! is_array($content)) {
+            return [];
+        }
+        $ids = [];
+        foreach ($content as $block) {
+            if (is_array($block) && ($block['type'] ?? null) === 'tool_use' && is_string($block['id'] ?? null)) {
+                $ids[$block['id']] = true;
+            }
+        }
+        return array_keys($ids);
+    }
+
     public function run(string $sessionId): void
     {
         // Reset the per-run compaction flag. AgentLoop is a singleton (see
@@ -597,7 +767,7 @@ PROMPT;
 
             $providerResponse = $response['response'];
 
-            $this->saveMessage(
+            $assistantRecord = $this->saveMessage(
                 $sessionId,
                 'assistant',
                 $providerResponse->content,
@@ -605,6 +775,7 @@ PROMPT;
                 inputTokens: $providerResponse->inputTokens,
                 outputTokens: $providerResponse->outputTokens,
             );
+            $assistantMessageId = (int) $assistantRecord->id;
             $messages[] = ['role' => 'assistant', 'content' => $providerResponse->content];
 
             if ($providerResponse->stopReason !== 'tool_use') {
@@ -648,7 +819,7 @@ PROMPT;
                 // ClientType::CP — so tools that gate on `getClient()` see
                 // the same context the LLM saw when picking from the
                 // surface-filtered tool list above.
-                $this->toolContext->begin($sessionId, $toolUseId, $sessionClient ?? ClientType::CP);
+                $this->toolContext->begin($sessionId, $toolUseId, $sessionClient ?? ClientType::CP, $assistantMessageId);
                 try {
                     $output = $this->registry->execute($name, $input);
                 } finally {

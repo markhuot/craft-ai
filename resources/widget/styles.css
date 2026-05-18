@@ -221,3 +221,18 @@ button:disabled {
 .craftai-widget-panel [data-slot="conversation"] {
   max-height: none;
 }
+
+/*
+ * Mirror the CP chat bundle's fork-history dimming inside the widget's
+ * Shadow DOM. The chat component renders the same `.craftai-pre-fork`
+ * wrapper here, but the host page's stylesheet doesn't reach into the
+ * shadow root — so the rule has to live in this bundle too.
+ */
+.craftai-pre-fork {
+  opacity: 0.3;
+  transition: opacity 150ms ease-out;
+}
+
+.craftai-pre-fork:hover {
+  opacity: 0.7;
+}

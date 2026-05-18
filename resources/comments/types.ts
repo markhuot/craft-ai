@@ -1,7 +1,7 @@
 export interface CommentsBootstrap {
   listUrl: string;
   resolveUrl: string;
-  replyUrl: string;
+  openThreadUrl: string;
   csrfTokenName: string;
   csrfTokenValue: string;
 }
@@ -10,6 +10,16 @@ export interface Comment {
   id: number;
   sessionId: string;
   sessionUrl: string;
+  /**
+   * When set, the comment has been opened for discussion and this is
+   * the forked session that carries the reply thread. The popover
+   * routes "open in chat" through this id (after a lazy fork on first
+   * open) so each comment owns its own conversation surface.
+   */
+  threadSessionId: string | null;
+  threadSessionUrl: string | null;
+  /** User reply count in the fork — zero until the comment is opened. */
+  replyCount: number;
   elementId: number;
   isDraft: boolean;
   fieldHandle: string | null;
@@ -29,6 +39,14 @@ export interface Comment {
   dateCreated: string;
   elementTitle: string | null;
   elementEditUrl: string | null;
+}
+
+export interface OpenThreadResponse {
+  ok: boolean;
+  created: boolean;
+  threadSessionId: string;
+  sessionUrl: string;
+  comment: Comment;
 }
 
 export interface CommentListResponse {

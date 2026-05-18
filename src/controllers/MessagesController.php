@@ -10,6 +10,7 @@ use markhuot\craftai\Plugin;
 use markhuot\craftai\preview\PreviewService;
 use markhuot\craftai\queue\AgentJob;
 use markhuot\craftai\records\MessageRecord;
+use markhuot\craftai\records\SessionRecord;
 use yii\web\Response;
 
 class MessagesController extends Controller
@@ -55,7 +56,39 @@ class MessagesController extends Controller
             // server is the source of truth so adding a new command
             // server-side surfaces it in the menu without a UI rebuild.
             'slashCommands' => self::slashCommandsPayload(),
+            // Fork metadata so the chat UI can dim pre-fork history.
+            // Null on top-level sessions (i.e. anything that isn't a
+            // comment-thread fork) — the frontend skips the styling
+            // entirely in that case.
+            'session' => self::sessionMeta($sessionId),
         ]);
+    }
+
+    /**
+     * Compact session-level info the chat surface uses for fork-aware
+     * rendering. Today: just the parent + pivot pointers so the chat
+     * component can render messages with id ≤ pivot at a lower opacity,
+     * making the "where the comment thread starts" boundary visible.
+     */
+    private static function sessionMeta(string $sessionId): array
+    {
+        $session = SessionRecord::findOne(['id' => $sessionId]);
+        if ($session === null) {
+            return [
+                'parentSessionId' => null,
+                'originatingCommentId' => null,
+                'forkPivotMessageId' => null,
+            ];
+        }
+        return [
+            'parentSessionId' => $session->parentSessionId,
+            'originatingCommentId' => $session->originatingCommentId === null
+                ? null
+                : (int) $session->originatingCommentId,
+            'forkPivotMessageId' => $session->forkPivotMessageId === null
+                ? null
+                : (int) $session->forkPivotMessageId,
+        ];
     }
 
     /**

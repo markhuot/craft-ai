@@ -16,6 +16,7 @@ use craft\db\ActiveRecord;
  * @property string|null $resolvedAt
  * @property string|null $resolvedBy
  * @property int|null $authorMessageId
+ * @property string|null $threadSessionId Set on first user interaction — points at the forked session that carries the comment's back-and-forth
  * @property string $dateCreated
  * @property string $dateUpdated
  * @property string $uid

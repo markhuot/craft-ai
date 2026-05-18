@@ -2,7 +2,9 @@
 
 namespace markhuot\craftai\tools;
 
+use Craft;
 use craft\helpers\Db;
+use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
@@ -65,6 +67,28 @@ class ResolveComment extends Tool
                 )),
                 isError: true,
             );
+        }
+
+        // Notify the originating session that this comment is closed.
+        // The agent is typically running inside a comment-thread fork
+        // here, not the parent — without this note the parent's next
+        // run would have no record of what happened in the fork. We
+        // post into record->sessionId, which is the session that
+        // created the comment (the parent when forks are in play).
+        try {
+            /** @var AgentLoop $loop */
+            $loop = Craft::$container->get(AgentLoop::class);
+            $scope = $record->fieldHandle !== null
+                ? "field `{$record->fieldHandle}`"
+                : 'entry-level note';
+            $loop->appendSystemContext(
+                $record->sessionId,
+                "[Comment #{$record->id} on {$scope} was resolved by the agent in its discussion thread.] Original comment: \"{$record->body}\". No further action required on this thread unless the user follows up.",
+            );
+        } catch (\Throwable) {
+            // Notification is best-effort — the comment is already
+            // marked resolved in the DB, and the parent's next run can
+            // recover from the comment table directly if needed.
         }
 
         return [

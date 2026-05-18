@@ -231,32 +231,37 @@
   text-decoration: underline;
 }
 
-.craftai-comments-popover__form {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.craftai-comments-popover__textarea {
+.craftai-comments-popover__row {
+  /*
+   * The entire comment becomes the "open chat" target. Reset the native
+   * <button> defaults so the body markdown renders normally and the row
+   * looks like a list item rather than a chunky button.
+   */
+  display: block;
   width: 100%;
-  border: 1px solid #d6d9dc;
+  text-align: left;
+  background: transparent;
+  border: none;
   border-radius: 4px;
   padding: 6px 8px;
+  margin: 0 -8px 4px -8px;
   font: inherit;
-  resize: vertical;
-  min-height: 56px;
-  box-sizing: border-box;
+  color: inherit;
+  cursor: pointer;
 }
 
-.craftai-comments-popover__textarea:focus {
+.craftai-comments-popover__row:hover {
+  background: #f4f6f8;
+}
+
+.craftai-comments-popover__row:focus-visible {
   outline: 2px solid #1d4ed8;
   outline-offset: 1px;
-  border-color: #1d4ed8;
 }
 
 .craftai-comments-popover__actions {
   display: flex;
   gap: 6px;
   justify-content: flex-end;
+  margin-top: 4px;
 }

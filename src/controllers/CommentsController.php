@@ -9,8 +9,8 @@ use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\helpers\CommentMarkdown;
-use markhuot\craftai\queue\AgentJob;
 use markhuot\craftai\records\CommentRecord;
+use markhuot\craftai\records\MessageRecord;
 use yii\web\BadRequestHttpException;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
@@ -119,19 +119,23 @@ class CommentsController extends Controller
     }
 
     /**
-     * POST craft-ai/comments/reply
+     * POST craft-ai/comments/open-thread
      *
      * Body params:
      *   - commentId (int, required)
-     *   - message   (string, required)
      *
-     * Persists the user's reply as a user-role message in the comment's
-     * original session and queues the agent loop. The agent picks up
-     * normally on the next run — its system prompt sees the conversation
-     * history including the new reply, plus the system context note that
-     * pins which comment the reply refers to.
+     * Returns the id of the forked session that carries this comment's
+     * discussion. On first call the fork is created lazily: we copy the
+     * originating session's transcript up to the assistant turn that left
+     * the comment, persist the fork id back onto the comment, and seed a
+     * single system note inside the fork that pins which comment is in
+     * play. Subsequent calls return the same fork id without copying again.
+     *
+     * The widget then opens against the returned session id and the user
+     * chats normally — there's no special "reply" surface, just the same
+     * chat UI scoped to a private fork.
      */
-    public function actionReply(): Response
+    public function actionOpenThread(): Response
     {
         $this->requirePostRequest();
         $this->requireLogin();
@@ -142,52 +146,68 @@ class CommentsController extends Controller
         }
         $commentId = (int) $commentIdRaw;
 
-        $messageRaw = $this->request->getRequiredBodyParam('message');
-        if (! is_string($messageRaw)) {
-            throw new BadRequestHttpException('message must be a string.');
-        }
-        $message = trim($messageRaw);
-
-        if ($message === '') {
-            throw new BadRequestHttpException('message must not be empty.');
-        }
-
         $record = CommentRecord::findOne(['id' => $commentId]);
         if ($record === null) {
             throw new NotFoundHttpException("No comment found with id {$commentId}.");
         }
 
-        /** @var AgentLoop $loop */
-        $loop = Craft::$container->get(AgentLoop::class);
+        $threadSessionId = $record->threadSessionId;
+        $created = false;
 
-        // Stamp the reply with a short reference so the agent knows which
-        // comment it belongs to — the LLM doesn't have direct DB access
-        // and needs the reference to pair the reply against the original
-        // tool_use that created the comment.
-        $scope = $record->fieldHandle !== null
-            ? "field `{$record->fieldHandle}`"
-            : 'entry-level note';
-        $element = $record->isDraft ? "draft #{$record->elementId}" : "entry #{$record->elementId}";
+        if ($threadSessionId === null || $threadSessionId === '') {
+            /** @var AgentLoop $loop */
+            $loop = Craft::$container->get(AgentLoop::class);
 
-        $reply = "Re: comment #{$record->id} on {$element} ({$scope}): {$message}";
+            // Pick the fork point. authorMessageId points at the assistant
+            // turn whose tool_use created this comment, which is the
+            // natural cutoff — copy everything up to and including that
+            // turn so the fork sees the comment in context. If we somehow
+            // don't have an authorMessageId (older comments predating that
+            // column), fall back to the latest message in the parent.
+            $throughMessageId = $record->authorMessageId !== null
+                ? (int) $record->authorMessageId
+                : (int) (MessageRecord::find()
+                    ->where(['sessionId' => $record->sessionId])
+                    ->max('id') ?? 0);
 
-        $loop->appendUserMessage($record->sessionId, $reply);
-        $loop->appendSystemContext(
-            $record->sessionId,
-            "[User replied to comment #{$record->id}] Original comment: \"{$record->body}\". You can mark it resolved with resolve_comment(commentId: {$record->id}) once the user's reply has been addressed.",
-        );
+            if ($throughMessageId <= 0) {
+                throw new BadRequestHttpException("Comment #{$commentId} has no anchor message to fork from.");
+            }
 
-        $identity = Craft::$app->getUser()->getIdentity();
-        Craft::$app->getQueue()->push(new AgentJob([
-            'sessionId' => $record->sessionId,
-            'userId' => $identity !== null ? (int) $identity->id : null,
-        ]));
+            $forkId = $loop->forkSession(
+                parentSessionId: $record->sessionId,
+                throughMessageId: $throughMessageId,
+                originatingCommentId: (int) $record->id,
+            );
+
+            if ($forkId === null) {
+                throw new NotFoundHttpException("Could not locate session {$record->sessionId} for comment #{$commentId}.");
+            }
+
+            // Drop a system note into the fork pinning what's under
+            // discussion. The agent's first reply will see this in the
+            // history alongside its own earlier leave_comment tool_use,
+            // and knows it can close the thread with resolve_comment.
+            $scope = $record->fieldHandle !== null
+                ? "field `{$record->fieldHandle}`"
+                : 'entry-level note';
+            $loop->appendSystemContext(
+                $forkId,
+                "[The user has opened comment #{$record->id} ({$scope}) for discussion in a dedicated thread.] Original comment body: \"{$record->body}\". Focus your responses on resolving this specific feedback. Mark it resolved with resolve_comment(commentId: {$record->id}) once the user is satisfied.",
+            );
+
+            $record->threadSessionId = $forkId;
+            $record->save();
+            $threadSessionId = $forkId;
+            $created = true;
+        }
 
         return $this->asJson([
             'ok' => true,
-            'queued' => true,
-            'sessionId' => $record->sessionId,
-            'sessionUrl' => UrlHelper::cpUrl('ai/session/'.$record->sessionId),
+            'created' => $created,
+            'threadSessionId' => $threadSessionId,
+            'sessionUrl' => UrlHelper::cpUrl('ai/session/'.$threadSessionId),
+            'comment' => self::serialize($record),
         ]);
     }
 
@@ -200,10 +220,19 @@ class CommentsController extends Controller
             ? "field `{$record->fieldHandle}`"
             : 'entry-level note';
 
-        $loop->appendSystemContext(
-            $record->sessionId,
-            "[User resolved comment #{$record->id} on {$scope}] Original comment: \"{$record->body}\". No further action required on this thread unless the user follows up.",
-        );
+        $note = "[User resolved comment #{$record->id} on {$scope}] Original comment: \"{$record->body}\". No further action required on this thread unless the user follows up.";
+
+        // Post into the originating session so the parent agent (the one
+        // that left the comment) sees the resolution next time it runs.
+        $loop->appendSystemContext($record->sessionId, $note);
+
+        // If a discussion fork was already opened for this comment,
+        // notify it too. The fork agent might be mid-discussion when
+        // the user resolved from outside, and we don't want it to keep
+        // pursuing the now-closed thread.
+        if ($record->threadSessionId !== null && $record->threadSessionId !== $record->sessionId) {
+            $loop->appendSystemContext($record->threadSessionId, $note);
+        }
     }
 
     /**
@@ -236,6 +265,18 @@ class CommentsController extends Controller
             'id' => (int) $record->id,
             'sessionId' => $record->sessionId,
             'sessionUrl' => UrlHelper::cpUrl('ai/session/'.$record->sessionId),
+            // Set once the user has opened this comment for discussion —
+            // the fork session that carries the back-and-forth. Null until
+            // first open; the popover uses this to decide whether to call
+            // open-thread before pointing the chat widget at the session.
+            'threadSessionId' => $record->threadSessionId,
+            'threadSessionUrl' => $record->threadSessionId !== null
+                ? UrlHelper::cpUrl('ai/session/'.$record->threadSessionId)
+                : null,
+            // Count of post-fork user turns — i.e. user replies the editor
+            // has actually sent into the thread. Zero for unopened
+            // comments. The popover shows this next to the comment row.
+            'replyCount' => self::replyCount($record),
             'elementId' => (int) $record->elementId,
             'isDraft' => (bool) $record->isDraft,
             'fieldHandle' => $record->fieldHandle,
@@ -256,5 +297,33 @@ class CommentsController extends Controller
             'elementTitle' => $title,
             'elementEditUrl' => $editUrl,
         ];
+    }
+
+    /**
+     * Number of user replies that have landed in the comment's fork
+     * session since the fork was created. Computed from the session's
+     * `forkPivotMessageId` — every user-role row with a higher id is a
+     * fresh reply (the rows at or below the pivot are copies of parent
+     * history).
+     *
+     * Returns 0 for comments that haven't been opened yet (no fork) or
+     * for forks that somehow lack a pivot (shouldn't happen in practice
+     * but we don't want to surface a misleading high count).
+     */
+    private static function replyCount(CommentRecord $record): int
+    {
+        if ($record->threadSessionId === null) {
+            return 0;
+        }
+
+        $session = \markhuot\craftai\records\SessionRecord::findOne(['id' => $record->threadSessionId]);
+        if ($session === null || $session->forkPivotMessageId === null) {
+            return 0;
+        }
+
+        return (int) MessageRecord::find()
+            ->where(['sessionId' => $record->threadSessionId, 'role' => 'user'])
+            ->andWhere(['>', 'id', (int) $session->forkPivotMessageId])
+            ->count();
     }
 }

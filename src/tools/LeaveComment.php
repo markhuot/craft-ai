@@ -100,6 +100,11 @@ class LeaveComment extends Tool
         $record->blockPath = $blockPath !== null && $blockPath !== '' ? $blockPath : null;
         $record->body = $body;
         $record->status = CommentRecord::STATUS_OPEN;
+        // Pin to the assistant turn that emitted this tool_use so a
+        // later open-thread can fork at exactly the message that left
+        // the comment — not "the latest message in the session at click
+        // time" (the old fallback).
+        $record->authorMessageId = $this->context->getMessageId();
 
         if (! $record->save()) {
             return new ToolOutput(

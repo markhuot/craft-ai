@@ -64,6 +64,22 @@ it('does not retry a 4xx response — that\'s our problem to fix', function () {
     expect($mock->count())->toBe(1); // 200 is still queued
 });
 
+it('retries a 429 rate-limit response and returns the eventual 200', function () {
+    $mock = new MockHandler([
+        new Response(429, [], 'slow down'),
+        new Response(429, ['Retry-After' => '0'], 'still'),
+        new Response(200, [], 'ok'),
+    ]);
+    $stack = HandlerStack::create($mock);
+    RetryMiddleware::attach($stack, fn () => 0);
+    $client = new Client(['handler' => $stack]);
+
+    $response = $client->request('POST', 'https://example.test/');
+
+    expect($response->getStatusCode())->toBe(200);
+    expect($mock->count())->toBe(0);
+});
+
 it('retries connection errors then succeeds', function () {
     $request = new Request('POST', 'https://example.test/');
     $mock = new MockHandler([
@@ -101,8 +117,18 @@ it('decider distinguishes 5xx (retry) from 4xx (no retry) from null status (no r
     expect($decider(0, $request, new Response(599), null))->toBeTrue();
     expect($decider(0, $request, new Response(400), null))->toBeFalse();
     expect($decider(0, $request, new Response(404), null))->toBeFalse();
-    expect($decider(0, $request, new Response(429), null))->toBeFalse();
+    expect($decider(0, $request, new Response(429), null))->toBeTrue();
     expect($decider(0, $request, null, null))->toBeFalse();
+});
+
+it('decider unwraps a 429 out of a BadResponseException reason', function () {
+    $decider = RetryMiddleware::decider();
+    $request = new Request('POST', 'https://example.test/');
+    // ClientException is what Guzzle's http_errors middleware throws for
+    // 4xx, which is what we'll see from the OpenAI/DeepSeek call path.
+    $exception = new GuzzleHttp\Exception\ClientException('rate limited', $request, new Response(429));
+
+    expect($decider(0, $request, null, $exception))->toBeTrue();
 });
 
 it('decider unwraps a 5xx out of a BadResponseException reason', function () {
@@ -122,4 +148,48 @@ it('exponentialBackoff grows with retry count', function () {
     expect($delay(1))->toBeGreaterThanOrEqual(2000);
     expect($delay(2))->toBeGreaterThanOrEqual(4000);
     expect($delay(3))->toBeGreaterThanOrEqual(8000);
+});
+
+it('exponentialBackoff honors integer Retry-After header', function () {
+    $delay = RetryMiddleware::exponentialBackoff();
+    $response = new Response(429, ['Retry-After' => '5']);
+
+    expect($delay(0, $response))->toBe(5000);
+    // Even if retries grew, an explicit Retry-After should still dominate.
+    expect($delay(3, $response))->toBe(5000);
+});
+
+it('exponentialBackoff honors HTTP-date Retry-After header', function () {
+    $delay = RetryMiddleware::exponentialBackoff();
+    $future = gmdate('D, d M Y H:i:s \G\M\T', time() + 4);
+    $response = new Response(429, ['Retry-After' => $future]);
+
+    $result = $delay(0, $response);
+    // Allow a 1s wobble from second-rounding between gmdate() and time().
+    expect($result)->toBeGreaterThanOrEqual(3000);
+    expect($result)->toBeLessThanOrEqual(5000);
+});
+
+it('exponentialBackoff caps Retry-After at 60s so a worker is not pinned', function () {
+    $delay = RetryMiddleware::exponentialBackoff();
+    $response = new Response(429, ['Retry-After' => '600']); // 10 minutes
+
+    expect($delay(0, $response))->toBe(60_000);
+});
+
+it('exponentialBackoff returns 0 for an already-elapsed HTTP-date Retry-After', function () {
+    $delay = RetryMiddleware::exponentialBackoff();
+    $past = gmdate('D, d M Y H:i:s \G\M\T', time() - 60);
+    $response = new Response(429, ['Retry-After' => $past]);
+
+    expect($delay(0, $response))->toBe(0);
+});
+
+it('exponentialBackoff falls through to exponential when Retry-After is unparseable', function () {
+    $delay = RetryMiddleware::exponentialBackoff();
+    $response = new Response(429, ['Retry-After' => 'whenever']);
+
+    // Falls back to the 1s floor + jitter.
+    expect($delay(0, $response))->toBeGreaterThanOrEqual(1000);
+    expect($delay(0, $response))->toBeLessThan(1500 + 1);
 });

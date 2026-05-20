@@ -1,0 +1,81 @@
+/*
+ * Inline styling for the CKEditor "Comment" plugin. Two concerns:
+ *
+ *  1. Inside the CKEditor editing view (the rich-text surface the editor
+ *     types into), commented spans get a subtle yellow highlight so
+ *     editors can see at a glance which prose has feedback attached.
+ *
+ *  2. Inside the rendered field on the entry edit screen (CKEditor
+ *     displays the actual edit surface, so the markers live in the same
+ *     DOM), the highlight also shows. We use the same class hook so
+ *     site-level CSS can override both places at once.
+ *
+ * The highlight is intentionally restrained — comments are a sidecar
+ * affordance, not the main content. Reviewers should be drawn to the
+ * indicator dot, with the highlight serving as a "this span has the
+ * conversation attached" cue when they're scanning the field body.
+ */
+
+.craft-ai-comment-mark {
+  background-color: rgba(253, 224, 71, 0.45); /* amber-300 @ ~45% */
+  border-bottom: 1px dotted rgba(202, 138, 4, 0.85); /* amber-600 */
+  border-radius: 2px;
+  padding: 0 1px;
+  /* `pointer` (not `help`) — the highlight opens a popover on click;
+   * `help` would have signalled "hover to read a tooltip" which is the
+   * wrong mental model for an interactive marker. */
+  cursor: pointer;
+}
+
+.craft-ai-comment-mark:hover {
+  background-color: rgba(253, 224, 71, 0.75);
+  outline: 1px solid rgba(202, 138, 4, 0.55);
+}
+
+/*
+ * Trailing speech-bubble badge — renders for every marker carrying
+ * our class. We deliberately don't gate it on a "the overlay matched
+ * this to an open comment" attribute because the gating relied on
+ * CKEditor's editing view preserving a data attribute round-trip,
+ * which isn't always reliable. Orphan markers (resolved comments
+ * whose span wasn't cleaned up) get fixed up server-side on the
+ * next resolve / save cycle.
+ *
+ * The badge sits inline after the highlighted text so the click
+ * target is *unambiguous* even when the highlight itself reads as
+ * "just a tooltip" to the editor. Pure CSS pseudo-element so we
+ * don't inject a real DOM node into CKEditor's contenteditable
+ * subtree (which the editor would otherwise try to manage as part
+ * of its text content).
+ */
+.craft-ai-comment-mark::after {
+  content: "";
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin: 0 0.15em 0 0.3em;
+  vertical-align: -0.1em;
+  background-color: rgba(202, 138, 4, 0.95);
+  /* Inline SVG of a speech bubble — mask so the badge color follows
+   * the amber accent and stays crisp at any zoom. */
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='black'><path fill-rule='evenodd' d='M10 2.5c-4.418 0-8 2.91-8 6.5 0 1.785.886 3.4 2.323 4.572-.117.764-.43 1.728-1.066 2.602a.5.5 0 0 0 .555.776c1.95-.488 3.198-1.27 3.92-1.864A9.71 9.71 0 0 0 10 15.5c4.418 0 8-2.91 8-6.5s-3.582-6.5-8-6.5Z' clip-rule='evenodd'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='black'><path fill-rule='evenodd' d='M10 2.5c-4.418 0-8 2.91-8 6.5 0 1.785.886 3.4 2.323 4.572-.117.764-.43 1.728-1.066 2.602a.5.5 0 0 0 .555.776c1.95-.488 3.198-1.27 3.92-1.864A9.71 9.71 0 0 0 10 15.5c4.418 0 8-2.91 8-6.5s-3.582-6.5-8-6.5Z' clip-rule='evenodd'/></svg>");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+/*
+ * Per-field indicator placement: when the overlay decides a marker is
+ * on-screen, it positions an indicator dot at the span's right edge
+ * (see resources/comments/dom.ts → buildSpanIndicator). The indicator
+ * is the same component the field-heading dots use; the only extra
+ * styling we need is a tighter offset so it hovers against the span
+ * rather than sticking out into the page margin.
+ */
+.craftai-comments-indicator--span {
+  margin-left: 4px;
+  vertical-align: baseline;
+  transform: translateY(-2px);
+}

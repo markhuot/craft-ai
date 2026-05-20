@@ -30,6 +30,15 @@ export interface Comment {
   elementUid: string | null;
   isDraft: boolean;
   fieldHandle: string | null;
+  /**
+   * Stable in-field id the CKEditor "Comment" plugin stamps onto a
+   * `<span data-craft-ai-comment-id="…">` wrapper. When set, the
+   * overlay treats the comment as span-scoped: clicks on the matching
+   * highlight open this comment, and the field-heading indicator only
+   * fires when the user wants the full list for the field. Null for
+   * field-level comments (the original shape).
+   */
+  referenceId: string | null;
   /** Raw markdown source as the agent wrote it. */
   body: string;
   /**

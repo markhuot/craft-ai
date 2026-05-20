@@ -11,6 +11,13 @@ interface Bundle {
   jsOut: string;
   cssEntry: string;
   cssOut: string;
+  /**
+   * Bare module specifiers to leave un-bundled in the emitted module.
+   * The host page resolves them via an import map at runtime. Used by
+   * the CKEditor plugin bundle so it can `import { Plugin } from
+   * "ckeditor5"` without us shipping a copy of the framework.
+   */
+  external?: string[];
 }
 
 const bundles: Bundle[] = [
@@ -46,6 +53,23 @@ const bundles: Bundle[] = [
     cssEntry: resolve(root, "resources/comments/styles.css"),
     cssOut: resolve(root, "src/web/assets/comments/dist/comments.css"),
   },
+  {
+    // CKEditor 5 plugin that adds the "Comment" toolbar button.
+    // Loaded by craftcms/ckeditor through registerCkeditorPackage(),
+    // so this bundle has to be an ESM module that stamps itself onto
+    // window.CKEditor5 at import time.
+    name: "ckeditorcomment",
+    jsEntry: resolve(root, "resources/ckeditorcomment/index.ts"),
+    jsOut: "ckeditor-comment.js",
+    cssEntry: resolve(root, "resources/ckeditorcomment/styles.css"),
+    cssOut: resolve(root, "src/web/assets/ckeditorcomment/dist/ckeditor-comment.css"),
+    // CKEditor 5's framework is loaded by Craft via an import map at
+    // runtime (see craft\ckeditor\Plugin::init). We keep the bare
+    // `ckeditor5` specifier literal in the emitted module so the
+    // browser resolves it through that map instead of bun trying to
+    // bundle a copy at build time.
+    external: ["ckeditor5"],
+  },
 ];
 
 async function buildJs(bundle: Bundle): Promise<void> {
@@ -61,6 +85,7 @@ async function buildJs(bundle: Bundle): Promise<void> {
     define: {
       "process.env.NODE_ENV": JSON.stringify("production"),
     },
+    external: bundle.external,
   });
   const ms = (performance.now() - start).toFixed(0);
   if (!result.success) {

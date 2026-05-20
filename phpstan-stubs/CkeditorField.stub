@@ -4,6 +4,39 @@ namespace craft\ckeditor;
 
 class Field extends \craft\base\Field
 {
+    public const EVENT_MODIFY_PURIFIER_CONFIG = 'modifyPurifierConfig';
+
     /** @return \craft\ckeditor\models\EntryType[] */
     public function getEntryTypes(): array { return []; }
 }
+
+namespace craft\ckeditor;
+
+class Plugin extends \craft\base\Plugin
+{
+    public static function registerCkeditorPackage(string $name, ?string $entry = null): void {}
+}
+
+namespace craft\htmlfield\events;
+
+class ModifyPurifierConfigEvent extends \yii\base\Event
+{
+    public \HTMLPurifier_Config $config;
+}
+
+namespace craft\ckeditor\web\assets;
+
+abstract class BaseCkeditorPackageAsset extends \craft\web\AssetBundle
+{
+    /** @var array<string> */
+    public array $pluginNames = [];
+
+    /** @var array<string|string[]> */
+    public array $toolbarItems = [];
+
+    public string $namespace = '';
+}
+
+namespace craft\ckeditor\web\assets\ckeditor;
+
+class CkeditorAsset extends \craft\ckeditor\web\assets\BaseCkeditorPackageAsset {}

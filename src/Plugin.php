@@ -80,6 +80,7 @@ use markhuot\craftai\tools\UpsertField;
 use markhuot\craftai\tools\UpsertFieldLayoutElement;
 use markhuot\craftai\tools\UpsertSection;
 use markhuot\craftai\tools\UpsertTemplate;
+use markhuot\craftai\web\assets\ckeditorcomment\CkeditorCommentAsset;
 use yii\base\Event;
 
 class Plugin extends BasePlugin
@@ -94,7 +95,7 @@ class Plugin extends BasePlugin
      */
     public const EVENT_REGISTER_AGENT_TOOLS = 'registerAgentTools';
 
-    public string $schemaVersion = '1.10.0';
+    public string $schemaVersion = '1.11.0';
 
     public bool $hasCpSection = true;
 
@@ -191,6 +192,8 @@ class Plugin extends BasePlugin
             new CkeditorFieldNotes(),
         );
 
+        $this->registerCkeditorCommentPlugin();
+
         Event::on(
             UserPermissions::class,
             UserPermissions::EVENT_REGISTER_PERMISSIONS,
@@ -240,6 +243,12 @@ class Plugin extends BasePlugin
                 $event->rules['ai/comments'] = 'craft-ai/comments/index';
                 $event->rules['POST ai/comments/resolve'] = 'craft-ai/comments/resolve';
                 $event->rules['POST ai/comments/open-thread'] = 'craft-ai/comments/open-thread';
+                // User-initiated span comments from the CKEditor toolbar
+                // plugin land here. The endpoint mints a fresh session
+                // (so the comment owns its own discussion thread the
+                // same way agent-created ones do) and returns the new
+                // comment payload to the editor JS for span wrapping.
+                $event->rules['POST ai/comments/create'] = 'craft-ai/comments/create';
 
                 // Dedicated edit screen for a single slash command. The
                 // plugin settings page links here from each row in its
@@ -301,6 +310,105 @@ class Plugin extends BasePlugin
             function (TemplateEvent $event): void {
                 $this->maybeInjectWidget($event);
                 $this->maybeInjectCommentsOverlay($event);
+            },
+        );
+    }
+
+    /**
+     * Wire the CKEditor "Comment" toolbar plugin when the host site has
+     * craftcms/ckeditor installed. The plugin ships as a CKEditor 5
+     * package bundle (registered via the official
+     * `Plugin::registerCkeditorPackage()` entrypoint) plus an HTML
+     * Purifier extension so the `<span data-craft-ai-comment-id="…">`
+     * marker the plugin writes survives the field's save-time sanitizer.
+     *
+     * Both hooks are conditional on the CKEditor classes being loadable
+     * — installations without the optional dependency skip out entirely
+     * and pay no init-time cost. We don't try to soft-depend at the
+     * composer level because the existing `CkeditorFieldNotes` listener
+     * already follows the same pattern (it checks `instanceof
+     * \craft\ckeditor\Field` at fire time).
+     */
+    private function registerCkeditorCommentPlugin(): void
+    {
+        if (! class_exists(\craft\ckeditor\Plugin::class)) {
+            return;
+        }
+
+        // The second arg is the entry JS file name relative to the
+        // bundle's sourcePath. CKEditor 5's import-map loader fetches
+        // this file when something imports our `$namespace`. The static
+        // registration here drives the CkeditorConfig side — the
+        // EVENT_AFTER_REGISTER_ASSET_BUNDLE listener inside
+        // craft\ckeditor's init reads `$ckeditorPackages` whenever the
+        // main CkeditorAsset registers, so it runs late enough that we
+        // don't have a load-order problem there.
+        \craft\ckeditor\Plugin::registerCkeditorPackage(
+            CkeditorCommentAsset::class,
+            'ckeditor-comment.js',
+        );
+
+        // …but the import-MAP entry (which is what makes
+        // `import { CraftAiComment } from "@markhuot/craft-ai-comment"`
+        // resolve to a real URL in the browser) gets registered inside
+        // craft\ckeditor's own init() — *once*, by iterating
+        // `$ckeditorImports` at boot. Plugin handles sort alphabetically
+        // and `ckeditor` runs before `craft-ai`, so by the time our
+        // init calls `registerCkeditorPackage` above, ckeditor's loop
+        // has already consumed an empty array and the browser ends up
+        // with no mapping for our namespace ("Module name … does not
+        // resolve to a valid URL"). Wire the import ourselves on the
+        // same event ckeditor itself uses for the rest of the package
+        // registration so the order stops mattering.
+        Event::on(
+            \craft\web\View::class,
+            \craft\web\View::EVENT_AFTER_REGISTER_ASSET_BUNDLE,
+            static function (\craft\events\AssetBundleEvent $event): void {
+                if (! $event->bundle instanceof \craft\ckeditor\web\assets\ckeditor\CkeditorAsset) {
+                    return;
+                }
+                /** @var \craft\web\View $view */
+                $view = $event->sender;
+                $assetManager = $view->getAssetManager();
+
+                // `getBundle` instantiates without registering, which is
+                // what we want here — we only need the published URL
+                // for the import map. The bundle's own `registerPackage`
+                // (and CSS / module-script tag) come from ckeditor's
+                // listener that fires alongside this one.
+                $bundle = $assetManager->getBundle(CkeditorCommentAsset::class);
+                if (! $bundle instanceof CkeditorCommentAsset) {
+                    return;
+                }
+
+                $view->registerJsImport(
+                    $bundle->namespace,
+                    $assetManager->getAssetUrl($bundle, 'ckeditor-comment.js', false),
+                );
+            },
+        );
+
+        Event::on(
+            \craft\ckeditor\Field::class,
+            \craft\ckeditor\Field::EVENT_MODIFY_PURIFIER_CONFIG,
+            static function (\craft\htmlfield\events\ModifyPurifierConfigEvent $event): void {
+                $config = $event->config;
+
+                /** @var \HTMLPurifier_HTMLDefinition|null $def */
+                $def = $config->getDefinition('HTML', true);
+                if ($def === null) {
+                    return;
+                }
+
+                // Allow our marker attribute on every `<span>` Craft
+                // already permits. The value is a UUID — HTMLPurifier's
+                // `Text` matches what we want (a token-like string) and
+                // keeps anything weird from sneaking through. We also
+                // need `class` on span so the editor's downcast can tag
+                // the marker for styling without GeneralHtmlSupport
+                // wiping the class off on round-trip.
+                $def->addAttribute('span', 'data-craft-ai-comment-id', 'Text');
+                $def->addAttribute('span', 'class', 'Text');
             },
         );
     }
@@ -475,6 +583,19 @@ HTML;
             'context' => $context,
             'contextFingerprint' => PageContextSerializer::fingerprint($context),
             'contextWindow' => $this->getSettingsArray()['contextWindow'],
+            // Where the in-widget "Leave a comment" composer (opened
+            // from the CKEditor toolbar plugin) POSTs the user's
+            // authored body. Mirrors the URL the comments overlay JS
+            // reads — keeping the widget self-contained means the
+            // composer doesn't have to reach across to the overlay's
+            // bootstrap script tag at submit time.
+            'commentsCreateUrl' => UrlHelper::actionUrl('craft-ai/comments/create'),
+            // Used by the comment composer to enrich the attachment
+            // chips after the asset picker resolves. Same endpoint the
+            // dedicated session view uses — sharing keeps the widget
+            // and the standalone chat in sync if the route is ever
+            // renamed.
+            'assetsInfoUrl' => UrlHelper::actionUrl('craft-ai/assets/info'),
         ];
 
         $bootstrapJson = Json::htmlEncode($bootstrap);

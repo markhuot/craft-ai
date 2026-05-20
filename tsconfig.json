@@ -23,6 +23,7 @@
     "resources/chat/**/*",
     "resources/widget/**/*",
     "resources/comments/**/*",
+    "resources/ckeditorcomment/**/*",
     "build.ts"
   ],
   "exclude": [
@@ -30,6 +31,7 @@
     "vendor",
     "src/web/assets/chat/dist",
     "src/web/assets/widget/dist",
-    "src/web/assets/comments/dist"
+    "src/web/assets/comments/dist",
+    "src/web/assets/ckeditorcomment/dist"
   ]
 }

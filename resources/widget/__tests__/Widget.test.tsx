@@ -366,4 +366,156 @@ describe("<Widget />", () => {
       expect(screen.getByTestId("widget-error").textContent).toContain("network down");
     });
   });
+
+  test("opens the comment composer when craftai:start-comment fires", async () => {
+    const api = makeApi({ createSession: async () => "ignored" });
+    api.fetchToolMode = async () => ({
+      toolMode: "full",
+      enabledTools: null,
+      availableTools: [],
+    });
+    api.fetchAssetInfo = async () => [];
+    render(<Widget bootstrap={bootstrap()} api={api} storage={makeStorage()} />);
+
+    await act(async () => {
+      document.dispatchEvent(
+        new CustomEvent("craftai:start-comment", {
+          detail: {
+            elementId: 42,
+            isDraft: false,
+            fieldHandle: "bodyContent",
+            referenceId: "ref-1",
+            selectionText: "the third paragraph",
+          },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("widget-compose-comment")).toBeTruthy();
+    });
+    expect(screen.getByText(/bodyContent/)).toBeTruthy();
+    expect(screen.getByText(/the third paragraph/)).toBeTruthy();
+    expect(screen.getByTestId("widget-compose-comment-textarea")).toBeTruthy();
+  });
+
+  test("submitting the composer posts the comment and dispatches craftai:comment-created", async () => {
+    const postLog: { body: string; referenceId: string; sessionId?: string }[] = [];
+    const api = makeApi({ createSession: async () => "pre-created-session" });
+    api.fetchToolMode = async () => ({
+      toolMode: "full",
+      enabledTools: null,
+      availableTools: [],
+    });
+    api.fetchAssetInfo = async () => [];
+    api.createComment = async (draft, body, opts) => {
+      postLog.push({ body, referenceId: draft.referenceId, sessionId: opts?.sessionId });
+      return {
+        id: 7,
+        referenceId: draft.referenceId,
+        sessionId: opts?.sessionId ?? "fresh-session",
+      };
+    };
+
+    const events: CustomEvent[] = [];
+    const listener = (e: Event) => events.push(e as CustomEvent);
+    document.addEventListener("craftai:comment-created", listener);
+
+    try {
+      render(<Widget bootstrap={bootstrap()} api={api} storage={makeStorage()} />);
+
+      await act(async () => {
+        document.dispatchEvent(
+          new CustomEvent("craftai:start-comment", {
+            detail: {
+              elementId: 9,
+              isDraft: false,
+              fieldHandle: "summary",
+              referenceId: "ref-xyz",
+              selectionText: "hello",
+            },
+          }),
+        );
+      });
+
+      await waitFor(() =>
+        expect(screen.getByTestId("widget-compose-comment-textarea")).toBeTruthy(),
+      );
+
+      const ta = screen.getByTestId("widget-compose-comment-textarea") as HTMLTextAreaElement;
+      await act(async () => {
+        fireEvent.change(ta, { target: { value: "rewrite this section" } });
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByTestId("widget-compose-comment-submit"));
+      });
+
+      await waitFor(() => {
+        expect(postLog.length).toBe(1);
+      });
+      expect(postLog[0]?.body).toBe("rewrite this section");
+      expect(postLog[0]?.referenceId).toBe("ref-xyz");
+      // The composer pre-creates a session on mount and reuses it
+      // for the post — sessionId should match the one createSession
+      // returned (not a server-minted one).
+      expect(postLog[0]?.sessionId).toBe("pre-created-session");
+      expect(events.length).toBe(1);
+      expect(events[0]?.detail).toMatchObject({
+        commentId: 7,
+        referenceId: "ref-xyz",
+        elementId: 9,
+        fieldHandle: "summary",
+        sessionId: "pre-created-session",
+      });
+      // Post-submit, the widget should hand the user off to the
+      // comment's own session — not back to whatever was active
+      // before — so they can continue the conversation in place.
+      await waitFor(() =>
+        expect(screen.getByTestId("widget-root").getAttribute("data-view")).toBe("chat"),
+      );
+    } finally {
+      document.removeEventListener("craftai:comment-created", listener);
+    }
+  });
+
+  test("cancel button exits the composer without posting", async () => {
+    let postCount = 0;
+    const api = makeApi({ createSession: async () => "ignored" });
+    api.fetchToolMode = async () => ({
+      toolMode: "full",
+      enabledTools: null,
+      availableTools: [],
+    });
+    api.fetchAssetInfo = async () => [];
+    api.createComment = async () => {
+      postCount += 1;
+      return { id: 1, referenceId: "ref", sessionId: "s" };
+    };
+
+    render(<Widget bootstrap={bootstrap()} api={api} storage={makeStorage()} />);
+
+    await act(async () => {
+      document.dispatchEvent(
+        new CustomEvent("craftai:start-comment", {
+          detail: {
+            elementId: 1,
+            isDraft: false,
+            fieldHandle: "f",
+            referenceId: "ref",
+            selectionText: "",
+          },
+        }),
+      );
+    });
+
+    await waitFor(() => screen.getByTestId("widget-compose-comment"));
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Cancel"));
+    });
+
+    expect(screen.queryByTestId("widget-compose-comment")).toBeNull();
+    expect(postCount).toBe(0);
+  });
 });

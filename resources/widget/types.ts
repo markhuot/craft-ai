@@ -33,6 +33,43 @@ export interface WidgetBootstrap {
    * context-window gauge. Null when the host hasn't configured one.
    */
   contextWindow?: number | null;
+  /**
+   * Endpoint the comment composer (opened from the CKEditor "Comment"
+   * toolbar plugin) POSTs to when the editor submits a span-scoped
+   * comment. Optional because the bootstrap is read on every CP page
+   * and the composer is only relevant on entry-edit screens.
+   */
+  commentsCreateUrl?: string;
+  /**
+   * GET endpoint that returns attachment metadata (label, filename,
+   * thumbUrl) for a list of asset IDs. The comment composer hits it
+   * so the chips after the upload picker show actual filenames rather
+   * than bare IDs. Optional because the widget itself doesn't use
+   * attachments outside the composer.
+   */
+  assetsInfoUrl?: string;
+}
+
+/**
+ * Payload carried by the `craftai:start-comment` event the CKEditor
+ * "Comment" toolbar plugin dispatches when the editor selects text and
+ * clicks the button. The widget reads the event, opens the composer
+ * pre-populated with the surrounding context, and posts the result back
+ * via `craftai:comment-created` so the CKEditor plugin can wrap the
+ * matching span with the new referenceId.
+ */
+export interface CommentDraftRequest {
+  elementId: number;
+  isDraft: boolean;
+  fieldHandle: string;
+  /**
+   * Client-generated UUID used as the span marker. The editor mints it
+   * before dispatching so the marker can be applied locally as soon as
+   * the create call resolves — no second server round-trip for the id.
+   */
+  referenceId: string;
+  /** Short preview of the highlighted text, shown in the composer header. */
+  selectionText: string;
 }
 
 export interface PageContext {

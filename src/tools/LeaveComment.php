@@ -35,6 +35,54 @@ use markhuot\craftai\validators\ExistingEntry;
  * own entry ID as `entryId` and the inner field handle as `fieldHandle`
  * — don't target the outer Matrix field on the parent entry. The dot
  * will then land on the right field inside the right block.
+ *
+ * ## Pinning a comment to specific text in a CKEditor (or other HTML)
+ * field
+ *
+ * For long-form fields like CKEditor, you can — and SHOULD when the
+ * feedback is about a specific paragraph, sentence, or phrase — pin
+ * the indicator to that exact range of prose instead of dotting the
+ * whole field heading. This is what the "Comment" toolbar plugin in
+ * the CP does for human editors, but **you can do the same yourself**:
+ *
+ *   1. Mint a referenceId. Any short string works (max 64 chars); a
+ *      UUID is recommended (e.g. `crypto.randomUUID()`-style format).
+ *   2. Edit the field HTML via `upsert_entry` or `upsert_draft` to
+ *      wrap the target text in:
+ *      `<span class="craft-ai-comment-mark" data-craft-ai-comment-id="<referenceId>">target text</span>`
+ *      Read the field with `get_entry`/`get_draft` first so you can
+ *      preserve the surrounding markup verbatim — only the target
+ *      range gets the new wrapper.
+ *   3. Call `leave_comment` with `entryId`/`draftId`, `fieldHandle`,
+ *      `referenceId` matching the span, and `body` for the feedback.
+ *
+ * When the comment is later resolved (via the CP or your own
+ * `resolve_comment` call) the server strips the span from the field
+ * HTML automatically, so you don't have to clean it up yourself.
+ *
+ * Worked example — adding a span-scoped comment to entry #123's
+ * `bodyContent` field on the second paragraph:
+ *
+ *   // 1. read the current HTML
+ *   get_entry(entryId=123)
+ *   // bodyContent = "<p>First paragraph…</p><p>Second paragraph that
+ *   //                buries the lede.</p><p>Third paragraph…</p>"
+ *
+ *   // 2. wrap the target range with a fresh referenceId
+ *   upsert_entry(id=123, fields={ bodyContent: "<p>First paragraph…</p>"
+ *     + "<p><span class=\"craft-ai-comment-mark\" "
+ *     + "data-craft-ai-comment-id=\"a3f1c2d8-…\">Second paragraph that "
+ *     + "buries the lede.</span></p><p>Third paragraph…</p>" })
+ *
+ *   // 3. file the comment against that referenceId
+ *   leave_comment(entryId=123, fieldHandle="bodyContent",
+ *     referenceId="a3f1c2d8-…",
+ *     body="Lead with the conclusion — this paragraph buries the lede.")
+ *
+ * Omit `referenceId` for field-level comments (the indicator dots the
+ * field heading) — that's still the default and remains correct for
+ * feedback that's about the field as a whole rather than a specific
+ * range.
  */
 class LeaveComment extends Tool
 {
@@ -68,6 +116,10 @@ class LeaveComment extends Tool
         #[Description('Field handle the comment scopes to (e.g. "title", "bodyContent"). Omit to attach a top-level note covering the whole entry. For a field inside a Matrix block, set this to the inner field handle and target the block as `entryId`/`draftId` — Matrix blocks are entries.')]
         #[Validate('string', max: 255)]
         ?string $fieldHandle = null,
+
+        #[Description('Optional stable id pinning this comment to a specific span of text inside the field. To use it: pick any short string (UUID recommended), wrap the target text in the field HTML with `<span class="craft-ai-comment-mark" data-craft-ai-comment-id="<your-id>">…</span>` via `upsert_entry`/`upsert_draft`, then pass the SAME id here. The indicator will land on that exact text instead of the field heading. Requires `fieldHandle`. Leave null for whole-field comments. The marker is automatically stripped on resolve.')]
+        #[Validate('string', max: 64)]
+        ?string $referenceId = null,
     ): array|ToolOutput {
         if ($entryId !== null && $draftId !== null) {
             return new ToolOutput(
@@ -96,11 +148,25 @@ class LeaveComment extends Tool
             );
         }
 
+        $normalizedReferenceId = $referenceId !== null && $referenceId !== '' ? $referenceId : null;
+        $normalizedFieldHandle = $fieldHandle !== null && $fieldHandle !== '' ? $fieldHandle : null;
+
+        if ($normalizedReferenceId !== null && $normalizedFieldHandle === null) {
+            // A reference id only makes sense when scoped to a specific
+            // CKEditor field. Without the handle the overlay has no
+            // anchor to scan for the marker span.
+            return new ToolOutput(
+                'leave_comment: `referenceId` requires `fieldHandle` to identify which CKEditor field the marker belongs to.',
+                isError: true,
+            );
+        }
+
         $record = new CommentRecord();
         $record->sessionId = $sessionId;
         $record->elementId = $targetId;
         $record->isDraft = $isDraft;
-        $record->fieldHandle = $fieldHandle !== null && $fieldHandle !== '' ? $fieldHandle : null;
+        $record->fieldHandle = $normalizedFieldHandle;
+        $record->referenceId = $normalizedReferenceId;
         $record->body = $body;
         $record->status = CommentRecord::STATUS_OPEN;
         // Pin to the assistant turn that emitted this tool_use so a
@@ -135,6 +201,7 @@ class LeaveComment extends Tool
                 'elementId' => (int) $record->elementId,
                 'isDraft' => (bool) $record->isDraft,
                 'fieldHandle' => $record->fieldHandle,
+                'referenceId' => $record->referenceId,
                 'body' => $record->body,
                 'status' => $record->status,
             ],

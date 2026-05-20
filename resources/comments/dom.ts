@@ -113,6 +113,28 @@ export function findBlockContainer(
 }
 
 /**
+ * Locate every CKEditor comment marker on the page for a given
+ * referenceId. The CKEditor 5 plugin (resources/ckeditorcomment) wraps
+ * commented selections in `<span data-craft-ai-comment-id="…">`; the
+ * editing view renders one such span per range, and a single comment
+ * typically only has one span — but split selections (e.g. across a
+ * line break) can produce multiple, so we return a list to be safe.
+ *
+ * Returns an empty list when the field hasn't loaded yet, the content
+ * was edited so the marker no longer exists, or the page just doesn't
+ * contain that comment's CKEditor field at all (e.g. the comment is on
+ * a draft we haven't opened). The caller falls back to heading-level
+ * placement in that case so the indicator still appears somewhere.
+ */
+export function findCommentSpans(referenceId: string): HTMLElement[] {
+  const escaped = cssAttrEscape(referenceId);
+  const nodes = document.querySelectorAll<HTMLElement>(
+    `[data-craft-ai-comment-id="${escaped}"]`,
+  );
+  return Array.from(nodes);
+}
+
+/**
  * The page-wide "open comments" floating panel target. Created lazily on
  * first use so we don't pollute the DOM on pages without comments.
  */

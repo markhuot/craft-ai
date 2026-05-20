@@ -9,6 +9,7 @@ use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
 use markhuot\craftai\binders\Comment as CommentBinder;
+use markhuot\craftai\helpers\CommentMarkerCleanup;
 use markhuot\craftai\records\CommentRecord;
 use markhuot\craftai\validators\ExistingComment;
 
@@ -90,6 +91,12 @@ class ResolveComment extends Tool
             // marked resolved in the DB, and the parent's next run can
             // recover from the comment table directly if needed.
         }
+
+        // Unwrap the marker `<span>` from the entry's saved HTML so
+        // the yellow highlight disappears on next page load. Same
+        // helper the CP popover uses for editor-driven resolves, so
+        // both paths end up with identical field markup.
+        CommentMarkerCleanup::unwrapResolved($record);
 
         return [
             '_notes' => sprintf(

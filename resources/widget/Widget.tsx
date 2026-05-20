@@ -1,12 +1,28 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, MessageCircle, Plus, X } from "lucide-react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { ArrowLeft, Loader2, MessageCircle, Paperclip, Plus, Send, X } from "lucide-react";
 import { Chat } from "../chat/Chat";
-import type { ChatBootstrap, SessionListItem, TargetSelection } from "../chat/types";
+import { PermissionMode } from "../chat/components/permission-mode";
+import { openAssetSelector } from "../chat/lib/assetSelector";
+import type {
+  Attachment,
+  AvailableTool,
+  ChatBootstrap,
+  SessionListItem,
+  TargetSelection,
+  ToolMode,
+} from "../chat/types";
 import { WidgetApi } from "./api";
 import { useElementPicker } from "./lib/useElementPicker";
-import type { WidgetBootstrap } from "./types";
+import type { CommentDraftRequest, WidgetBootstrap } from "./types";
 
-type ViewMode = "closed" | "chat" | "sessions";
+type ViewMode = "closed" | "chat" | "sessions" | "compose-comment";
 
 const STORAGE_KEY = "craftai-widget:active-session";
 const OPEN_STORAGE_KEY = "craftai-widget:open";
@@ -38,6 +54,15 @@ export function Widget({ bootstrap, api: apiOverride, storage }: WidgetProps) {
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Span-comment draft state. Populated when the CKEditor "Comment"
+  // plugin dispatches `craftai:start-comment` — the composer view
+  // reads from it and posts back via the WidgetApi.createComment. We
+  // store the entire request payload (not just the body draft) so the
+  // composer can show contextual chrome ("commenting on …") without
+  // duplicating bootstrap state.
+  const [commentDraft, setCommentDraft] = useState<CommentDraftRequest | null>(
+    null,
+  );
   // Targeting mode: while `targeting` is true the picker hook is live (mouse
   // tracking + highlight + Esc/click handling). Once the user picks an
   // element it goes into `selectedTarget` and the picker turns off again.
@@ -224,6 +249,126 @@ export function Widget({ bootstrap, api: apiOverride, storage }: WidgetProps) {
     return () => document.removeEventListener("craftai:open-session", handler);
   }, [loadSessions, persistOpen, persistSession]);
 
+  // The CKEditor "Comment" toolbar plugin dispatches this whenever the
+  // editor selects text and clicks the toolbar button. We capture the
+  // payload, switch the widget into composer mode, and pop the panel
+  // open. The composer's own submit handler is responsible for closing
+  // the loop (POST → dispatch `craftai:comment-created` → restore the
+  // panel to its previous state).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<Partial<CommentDraftRequest>>).detail;
+      if (
+        !detail ||
+        typeof detail.elementId !== "number" ||
+        typeof detail.fieldHandle !== "string" ||
+        typeof detail.referenceId !== "string"
+      ) {
+        return;
+      }
+      setCommentDraft({
+        elementId: detail.elementId,
+        isDraft: !!detail.isDraft,
+        fieldHandle: detail.fieldHandle,
+        referenceId: detail.referenceId,
+        selectionText: detail.selectionText ?? "",
+      });
+      setView("compose-comment");
+      persistOpen(true);
+      setError(null);
+    };
+    document.addEventListener("craftai:start-comment", handler);
+    return () => document.removeEventListener("craftai:start-comment", handler);
+  }, [persistOpen]);
+
+  /**
+   * Close the composer without saving. Returns to the chat surface (if
+   * one was active) or to closed — whichever feels least surprising
+   * given that opening the composer overrode the previous view.
+   */
+  const cancelComposer = useCallback(() => {
+    setCommentDraft(null);
+    // Active session was preserved through the composer detour, so
+    // landing back on the chat view (when one exists) is correct.
+    setView(activeSessionId ? "chat" : "closed");
+    if (!activeSessionId) persistOpen(false);
+  }, [activeSessionId, persistOpen]);
+
+  /**
+   * Submit the composed comment. Server creates the CommentRecord
+   * (reusing the composer's pre-created session if one was set up)
+   * and we then dispatch `craftai:comment-created` so the CKEditor
+   * plugin can wrap the matching span, plus a `craftai:comments-changed`
+   * event so the overlay refreshes its list.
+   *
+   * The full toolbar state (sessionId, assetIds, toolMode,
+   * enabledTools) flows through here from the composer because the
+   * server uses the same endpoint whether the composer pre-created a
+   * session or not — passing them along is just glue.
+   */
+  const submitComment = useCallback(
+    async (input: {
+      body: string;
+      sessionId?: string;
+      assetIds?: number[];
+      toolMode?: ToolMode;
+      enabledTools?: string[] | null;
+    }): Promise<boolean> => {
+      if (!commentDraft) return false;
+      setBusy(true);
+      setError(null);
+      try {
+        const created = await api.createComment(commentDraft, input.body, {
+          sessionId: input.sessionId,
+          assetIds: input.assetIds,
+          toolMode: input.toolMode,
+          enabledTools: input.enabledTools,
+        });
+        document.dispatchEvent(
+          new CustomEvent("craftai:comment-created", {
+            detail: {
+              commentId: created.id,
+              referenceId: created.referenceId ?? commentDraft.referenceId,
+              elementId: commentDraft.elementId,
+              isDraft: commentDraft.isDraft,
+              fieldHandle: commentDraft.fieldHandle,
+              sessionId: created.sessionId,
+            },
+          }),
+        );
+        // Nudge the overlay to refetch so the indicator dot renders
+        // even before the editor's downcast pass completes — the two
+        // event names are intentionally separate (one is "a comment
+        // exists, wrap the span," the other is "your cached list is
+        // stale") because future callers might want one without the
+        // other.
+        document.dispatchEvent(
+          new CustomEvent("craftai:comments-changed", {
+            detail: { source: "widget-composer", commentId: created.id },
+          }),
+        );
+        // Hand the user off to the session their comment just created
+        // so they can keep talking to the agent about it without an
+        // extra click. The previously-active session is preserved
+        // under the hood (loadSessions repopulates the sidebar with
+        // both) — they can switch back via the sessions list.
+        setCommentDraft(null);
+        setActiveSessionId(created.sessionId);
+        persistSession(created.sessionId);
+        setView("chat");
+        persistOpen(true);
+        void loadSessions();
+        return true;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to save the comment");
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [api, commentDraft, loadSessions, persistOpen, persistSession],
+  );
+
   // Close on Escape from anywhere within the widget. We intentionally listen
   // on the shadow root's owner document so the host page's other Escape
   // handlers still fire too. Suppressed while targeting — the picker hook
@@ -320,8 +465,23 @@ export function Widget({ bootstrap, api: apiOverride, storage }: WidgetProps) {
               <ArrowLeft aria-hidden className="ai:h-4 ai:w-4" />
             </button>
           )}
+          {view === "compose-comment" && (
+            <button
+              type="button"
+              aria-label="Cancel comment"
+              data-testid="widget-back"
+              onClick={cancelComposer}
+              className="ai:inline-flex ai:h-8 ai:w-8 ai:items-center ai:justify-center ai:rounded ai:text-craftai-fg hover:ai:bg-craftai-border/30"
+            >
+              <ArrowLeft aria-hidden className="ai:h-4 ai:w-4" />
+            </button>
+          )}
           <h2 className="ai:flex-1 ai:m-0 ai:truncate ai:text-sm ai:font-medium ai:text-craftai-fg">
-            {view === "sessions" ? "Sessions" : titleForSession(sessions, activeSessionId)}
+            {view === "compose-comment"
+              ? "Leave a comment"
+              : view === "sessions"
+                ? "Sessions"
+                : titleForSession(sessions, activeSessionId)}
           </h2>
           <button
             type="button"
@@ -345,7 +505,15 @@ export function Widget({ bootstrap, api: apiOverride, storage }: WidgetProps) {
         )}
 
         <div className="ai:flex ai:min-h-0 ai:flex-1 ai:flex-col ai:overflow-hidden">
-          {view === "sessions" ? (
+          {view === "compose-comment" && commentDraft ? (
+            <CommentComposer
+              draft={commentDraft}
+              busy={busy}
+              api={api}
+              onSubmit={submitComment}
+              onCancel={cancelComposer}
+            />
+          ) : view === "sessions" ? (
             <SessionsView
               sessions={sessions}
               activeSessionId={activeSessionId}
@@ -437,6 +605,316 @@ function SessionsView({ sessions, activeSessionId, busy, onSelect, onNew }: Sess
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+interface CommentComposerProps {
+  draft: CommentDraftRequest;
+  busy: boolean;
+  api: WidgetApi;
+  onSubmit: (input: {
+    body: string;
+    sessionId?: string;
+    assetIds?: number[];
+    toolMode?: ToolMode;
+    enabledTools?: string[] | null;
+  }) => Promise<boolean>;
+  onCancel: () => void;
+}
+
+/**
+ * Inline composer used in place of the old `window.prompt` flow.
+ *
+ * The comment is "kicking off a session" in the same way the chat
+ * widget does, so the composer mirrors the chat's prompt-input
+ * toolbar: a real multi-line textarea, an asset upload button, and a
+ * permission-mode dropdown. To make the permission mode work we
+ * pre-create the comment's session on mount — the same SessionRecord
+ * the eventual discussion thread will be forked from — and use that
+ * session id for all toolbar interactions. Cancelling leaves the
+ * empty session behind; that's a known minor cost that's much smaller
+ * than the alternative (delaying the dropdown until after submit).
+ *
+ * The selection snippet is shown read-only at the top as a reminder
+ * of what the editor highlighted. We trim and truncate it to one
+ * short line so a paragraph-length selection doesn't push the
+ * textarea off-screen — the source of truth lives in the field's HTML
+ * anyway, not in the composer.
+ */
+function CommentComposer({ draft, busy, api, onSubmit, onCancel }: CommentComposerProps) {
+  const [body, setBody] = useState("");
+  const [composerSessionId, setComposerSessionId] = useState<string | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([]);
+  const [toolMode, setToolMode] = useState<ToolMode>("full");
+  const [enabledTools, setEnabledTools] = useState<string[] | null>(null);
+  const [availableTools, setAvailableTools] = useState<AvailableTool[]>([]);
+  const [toolModeLoaded, setToolModeLoaded] = useState(false);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Guards the bootstrap effect from running twice in dev under React's
+  // StrictMode (which would otherwise mint two orphan sessions per open).
+  const bootstrappedRef = useRef(false);
+
+  useEffect(() => {
+    if (bootstrappedRef.current) return;
+    bootstrappedRef.current = true;
+
+    (async () => {
+      try {
+        const sessionId = await api.createSession();
+        setComposerSessionId(sessionId);
+        // Best-effort toolbar hydration. A failed tool-mode fetch
+        // shouldn't block the user from leaving a comment — the
+        // server defaults to "full" anyway, and we'll just hide the
+        // permission dropdown until the data arrives (or forever).
+        try {
+          const payload = await api.fetchToolMode(sessionId);
+          setToolMode(payload.toolMode);
+          setEnabledTools(payload.enabledTools);
+          setAvailableTools(payload.availableTools);
+          setToolModeLoaded(true);
+        } catch {
+          // swallow — composer stays usable without the dropdown
+        }
+      } catch (err) {
+        setBootstrapError(
+          err instanceof Error ? err.message : "Failed to start a session",
+        );
+      }
+    })();
+  }, [api]);
+
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
+
+  const trimmedBody = body.trim();
+  const canSubmit = !busy && trimmedBody !== "" && composerSessionId !== null;
+
+  const submit = useCallback(async () => {
+    if (!canSubmit || !composerSessionId) return;
+    const ok = await onSubmit({
+      body: trimmedBody,
+      sessionId: composerSessionId,
+      assetIds: pendingAttachments.map((a) => a.id),
+      toolMode,
+      enabledTools: toolMode === "custom" ? (enabledTools ?? []) : null,
+    });
+    if (ok) {
+      setBody("");
+      setPendingAttachments([]);
+    }
+  }, [
+    canSubmit,
+    composerSessionId,
+    enabledTools,
+    onSubmit,
+    pendingAttachments,
+    toolMode,
+    trimmedBody,
+  ]);
+
+  const handleKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+      // Enter alone submits, Shift+Enter keeps the textarea behavior of
+      // inserting a newline. Matches the existing chat composer so
+      // editors don't need to learn a second muscle pattern.
+      if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        void submit();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        onCancel();
+      }
+    },
+    [onCancel, submit],
+  );
+
+  const onAddAttachments = useCallback(async () => {
+    const ids = await openAssetSelector({ multiSelect: true });
+    if (ids.length === 0) return;
+    try {
+      // De-dupe against anything already pending so a repeat pick
+      // doesn't double-stack the same asset.
+      const seen = new Set(pendingAttachments.map((a) => a.id));
+      const fresh = ids.filter((id) => !seen.has(id));
+      if (fresh.length === 0) return;
+      const info = await api.fetchAssetInfo(fresh);
+      setPendingAttachments((prev) => [...prev, ...info]);
+    } catch (err) {
+      console.warn("[craft-ai] composer: failed to fetch asset info", err);
+      // Even without enriched metadata, ship a minimal chip so the
+      // user can still send (and remove the wrong one if needed).
+      const seen = new Set(pendingAttachments.map((a) => a.id));
+      const minimal: Attachment[] = ids
+        .filter((id) => !seen.has(id))
+        .map((id) => ({
+          id,
+          label: `Asset #${id}`,
+          filename: null,
+          kind: null,
+          mimeType: null,
+          thumbUrl: null,
+        }));
+      setPendingAttachments((prev) => [...prev, ...minimal]);
+    }
+  }, [api, pendingAttachments]);
+
+  const removeAttachment = useCallback((id: number) => {
+    setPendingAttachments((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  // PermissionMode owns the menu state; we just persist the result.
+  // The server has the same toolMode whitelist as SessionsController
+  // (full/draft/readonly/custom) — passing anything else returns 400.
+  const onPermissionChange = useCallback(
+    (mode: ToolMode, next: string[] | null) => {
+      setToolMode(mode);
+      setEnabledTools(next);
+      // The composer flushes toolMode + enabledTools on submit so a
+      // canceled comment doesn't leave a side-effected session behind.
+      // Persisting eagerly would feel snappier but the dropdown is
+      // small and the server round-trip would just be wasted on the
+      // ~30% of opens that end in Cancel.
+    },
+    [],
+  );
+
+  // Show the selection on one tight line — paragraph-length selections
+  // would otherwise dominate the composer's vertical space.
+  const selectionPreview = useMemo(() => {
+    const collapsed = draft.selectionText.replace(/\s+/g, " ").trim();
+    if (collapsed === "") return null;
+    return collapsed.length > 140 ? `${collapsed.slice(0, 137)}…` : collapsed;
+  }, [draft.selectionText]);
+
+  return (
+    <div
+      className="ai:flex ai:min-h-0 ai:flex-1 ai:flex-col ai:gap-3 ai:p-3"
+      data-testid="widget-compose-comment"
+    >
+      <div className="ai:flex ai:flex-col ai:gap-1 ai:rounded-md ai:border ai:border-craftai-border ai:bg-craftai-border/10 ai:px-3 ai:py-2 ai:text-xs ai:text-craftai-muted">
+        <span>
+          Commenting on field <code className="ai:rounded ai:bg-white ai:px-1 ai:py-0.5 ai:text-[11px] ai:text-craftai-fg">{draft.fieldHandle}</code>
+        </span>
+        {selectionPreview && (
+          <span className="ai:italic ai:text-craftai-fg">
+            “{selectionPreview}”
+          </span>
+        )}
+      </div>
+
+      {bootstrapError && (
+        <p
+          role="alert"
+          className="ai:m-0 ai:rounded-md ai:border ai:border-red-200 ai:bg-red-50 ai:px-3 ai:py-2 ai:text-xs ai:text-red-700"
+        >
+          {bootstrapError}
+        </p>
+      )}
+
+      <form
+        className="ai:flex ai:min-h-0 ai:flex-1 ai:flex-col ai:gap-2 ai:rounded-lg ai:border ai:border-craftai-border ai:bg-white ai:p-2 ai:shadow-sm"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
+        {pendingAttachments.length > 0 && (
+          <ul
+            className="ai:m-0 ai:flex ai:list-none ai:flex-wrap ai:gap-1.5 ai:p-0"
+            data-testid="widget-compose-comment-attachments"
+          >
+            {pendingAttachments.map((a) => (
+              <li
+                key={a.id}
+                className="ai:inline-flex ai:items-center ai:gap-1 ai:rounded ai:border ai:border-craftai-border ai:bg-craftai-border/10 ai:px-2 ai:py-0.5 ai:text-[11px] ai:text-craftai-fg"
+              >
+                <span className="ai:truncate ai:max-w-[140px]" title={a.label}>
+                  {a.label}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(a.id)}
+                  aria-label={`Remove ${a.label}`}
+                  className="ai:inline-flex ai:h-4 ai:w-4 ai:items-center ai:justify-center ai:rounded ai:text-craftai-muted hover:ai:bg-craftai-border/40 hover:ai:text-craftai-fg"
+                >
+                  <X aria-hidden className="ai:h-3 ai:w-3" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <textarea
+          ref={textareaRef}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Type your comment… (Markdown supported, Enter to send, Shift+Enter for newline)"
+          rows={6}
+          className="ai:block ai:min-h-0 ai:flex-1 ai:resize-none ai:rounded-md ai:border-0 ai:bg-transparent ai:px-2 ai:py-1 ai:text-sm ai:focus:outline-none ai:focus:ring-0"
+          data-testid="widget-compose-comment-textarea"
+          disabled={busy || composerSessionId === null}
+        />
+
+        <div className="ai:flex ai:items-center ai:justify-between ai:gap-2">
+          <div className="ai:flex ai:items-center ai:gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                void onAddAttachments();
+              }}
+              disabled={busy || composerSessionId === null}
+              data-testid="widget-compose-comment-upload"
+              className="ai:inline-flex ai:items-center ai:gap-1 ai:rounded-md ai:border ai:border-craftai-border ai:bg-white ai:px-2 ai:py-1 ai:text-xs ai:font-medium ai:text-craftai-fg ai:transition hover:ai:bg-craftai-border/20 ai:disabled:opacity-50"
+              aria-label="Upload"
+            >
+              <Paperclip aria-hidden className="ai:h-3.5 ai:w-3.5" />
+              Upload
+            </button>
+            {toolModeLoaded && availableTools.length > 0 && (
+              <PermissionMode
+                mode={toolMode}
+                enabledTools={enabledTools}
+                availableTools={availableTools}
+                onChange={onPermissionChange}
+                disabled={busy || composerSessionId === null}
+              />
+            )}
+          </div>
+
+          <div className="ai:flex ai:items-center ai:gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={busy}
+              className="ai:inline-flex ai:items-center ai:rounded-md ai:border ai:border-craftai-border ai:bg-white ai:px-3 ai:py-1.5 ai:text-xs ai:font-medium ai:text-craftai-fg ai:transition hover:ai:bg-craftai-border/20 ai:disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="ai:inline-flex ai:items-center ai:gap-1.5 ai:rounded-md ai:bg-craftai-accent ai:px-3 ai:py-1.5 ai:text-xs ai:font-medium ai:text-white ai:transition ai:disabled:opacity-50"
+              data-testid="widget-compose-comment-submit"
+            >
+              {busy ? (
+                <>
+                  <Loader2 aria-hidden className="ai:h-3.5 ai:w-3.5 ai:animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                <>
+                  <Send aria-hidden className="ai:h-3.5 ai:w-3.5" />
+                  Add comment
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </form>
     </div>
   );
 }

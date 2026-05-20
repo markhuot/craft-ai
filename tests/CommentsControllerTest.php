@@ -224,6 +224,41 @@ it('forks the originating session when opening a comment thread', function () {
     expect($refreshed->threadSessionId)->toBe($forkId);
 });
 
+it('titles the forked thread session from the originating comment, not the parent title', function () {
+    $entry = Entry::factory()->section('posts')->title('Entry')->create();
+    $anchorId = makeParentSession('sess-fork-title-1');
+
+    // Pin a known title on the parent so we can prove the fork does
+    // NOT just inherit it.
+    $parent = SessionRecord::findOne(['id' => 'sess-fork-title-1']);
+    $parent->title = 'Original parent title';
+    $parent->save();
+
+    $comment = makeStoredComment([
+        'elementId' => $entry->id,
+        'body' => 'this headline buries the lede',
+        'fieldHandle' => 'title',
+        'sessionId' => 'sess-fork-title-1',
+        'authorMessageId' => $anchorId,
+    ]);
+
+    $response = test()->http('post', 'admin')
+        ->withCsrfToken()
+        ->setBody([
+            'action' => 'craft-ai/comments/open-thread',
+            'commentId' => $comment->id,
+        ])
+        ->send();
+
+    $response->assertOk();
+    $body = json_decode((string) $response->content, true);
+    $fork = SessionRecord::findOne(['id' => $body['threadSessionId']]);
+
+    expect($fork)->not->toBeNull();
+    expect($fork->title)->not->toBe('Original parent title');
+    expect($fork->title)->toContain('this headline buries the lede');
+});
+
 it('returns the existing thread session on subsequent open calls', function () {
     $entry = Entry::factory()->section('posts')->title('Entry')->create();
     $anchorId = makeParentSession('sess-open-2');
@@ -255,6 +290,150 @@ it('returns the existing thread session on subsequent open calls', function () {
 
     expect($secondBody['created'])->toBeFalse();
     expect($secondBody['threadSessionId'])->toBe($forkId);
+});
+
+it('creates a user-initiated comment with a referenceId and a fresh session', function () {
+    $entry = Entry::factory()->section('posts')->title('Entry')->create();
+
+    $response = test()->http('post', 'admin')
+        ->withCsrfToken()
+        ->setBody([
+            'action' => 'craft-ai/comments/create',
+            'elementId' => $entry->id,
+            'isDraft' => 0,
+            'fieldHandle' => 'bodyContent',
+            'body' => 'Tighten this paragraph.',
+            'referenceId' => 'ref-abc-123',
+        ])
+        ->send();
+
+    expect($response->getStatusCode())->toBe(200);
+    $payload = json_decode((string) $response->content, true);
+
+    expect($payload['ok'])->toBeTrue();
+    expect($payload['comment']['referenceId'])->toBe('ref-abc-123');
+    expect($payload['comment']['fieldHandle'])->toBe('bodyContent');
+    expect($payload['comment']['body'])->toBe('Tighten this paragraph.');
+    expect($payload['comment']['status'])->toBe(CommentRecord::STATUS_OPEN);
+
+    // The endpoint should have created a brand-new SessionRecord that
+    // owns the eventual discussion thread. The user shouldn't have to
+    // wait until they open the popover to see the session exist.
+    $sessionId = $payload['comment']['sessionId'];
+    $session = SessionRecord::findOne(['id' => $sessionId]);
+    expect($session)->not->toBeNull();
+    expect($session->clientType)->toBe('cp');
+
+    // Server should also drop a system message describing the comment
+    // so the agent has grounding when the editor opens the thread.
+    $systemNote = MessageRecord::find()
+        ->where(['sessionId' => $sessionId, 'role' => 'system'])
+        ->one();
+    expect($systemNote)->not->toBeNull();
+    expect((string) $systemNote->content)->toContain('Tighten this paragraph.');
+});
+
+it('generates a referenceId server-side when the client omits one', function () {
+    $entry = Entry::factory()->section('posts')->title('Entry')->create();
+
+    $response = test()->http('post', 'admin')
+        ->withCsrfToken()
+        ->setBody([
+            'action' => 'craft-ai/comments/create',
+            'elementId' => $entry->id,
+            'fieldHandle' => 'bodyContent',
+            'body' => 'no client ref',
+        ])
+        ->send();
+
+    $payload = json_decode((string) $response->content, true);
+    expect($payload['ok'])->toBeTrue();
+    expect($payload['comment']['referenceId'])->toBeString();
+    expect(strlen($payload['comment']['referenceId']))->toBeGreaterThan(0);
+});
+
+it('rejects an empty body on create', function () {
+    $entry = Entry::factory()->section('posts')->title('Entry')->create();
+
+    test()->http('post', 'admin')
+        ->withCsrfToken()
+        ->setBody([
+            'action' => 'craft-ai/comments/create',
+            'elementId' => $entry->id,
+            'fieldHandle' => 'bodyContent',
+            'body' => '   ',
+        ])
+        ->send();
+})->throws(\yii\web\BadRequestHttpException::class);
+
+it('404s on create when the elementId points at nothing', function () {
+    test()->http('post', 'admin')
+        ->withCsrfToken()
+        ->setBody([
+            'action' => 'craft-ai/comments/create',
+            'elementId' => 999999,
+            'fieldHandle' => 'bodyContent',
+            'body' => 'hello',
+        ])
+        ->send();
+})->throws(\yii\web\NotFoundHttpException::class);
+
+it('surfaces a comment left on a draft when the user views the canonical', function () {
+    // Repro of the "agent commented on a draft → editor reloads the
+    // canonical view → no popover" bug. CommentScope::pairsFor needs
+    // to bridge draft<->canonical in both directions so a comment
+    // sticks to the entry regardless of which surface the editor is
+    // looking at.
+    $entry = Entry::factory()->section('posts')->title('Test Entry')->create();
+    $draft = \Craft::$app->drafts->createDraft($entry, 1);
+
+    makeStoredComment([
+        'elementId' => (int) $draft->draftId,
+        'isDraft' => true,
+        'fieldHandle' => 'storyContent',
+        'body' => 'comment authored on the draft',
+    ]);
+
+    $response = test()->get('admin?action=craft-ai/comments&elementId='.$entry->id.'&isDraft=0');
+
+    $response->assertOk();
+    $response->assertJsonCount(1, 'comments');
+    $payload = json_decode((string) $response->content, true);
+    expect($payload['comments'][0]['body'])->toBe('comment authored on the draft');
+});
+
+it('surfaces a comment left on the canonical when the user views a draft', function () {
+    $entry = Entry::factory()->section('posts')->title('Test Entry')->create();
+    $draft = \Craft::$app->drafts->createDraft($entry, 1);
+
+    makeStoredComment([
+        'elementId' => (int) $entry->id,
+        'isDraft' => false,
+        'fieldHandle' => 'storyContent',
+        'body' => 'comment authored on the canonical',
+    ]);
+
+    $response = test()->get('admin?action=craft-ai/comments&elementId='.$draft->draftId.'&isDraft=1');
+
+    $response->assertOk();
+    $response->assertJsonCount(1, 'comments');
+    $payload = json_decode((string) $response->content, true);
+    expect($payload['comments'][0]['body'])->toBe('comment authored on the canonical');
+});
+
+it('serializes existing comments with referenceId in the index payload', function () {
+    $entry = Entry::factory()->section('posts')->title('Entry')->create();
+    makeStoredComment([
+        'elementId' => $entry->id,
+        'fieldHandle' => 'bodyContent',
+        'body' => 'span comment',
+    ])->updateAttributes(['referenceId' => 'ref-xyz-789']);
+
+    $response = test()->get('admin?action=craft-ai/comments&elementId='.$entry->id.'&isDraft=0');
+    $payload = json_decode((string) $response->content, true);
+
+    expect($payload['comments'])->toHaveCount(1);
+    expect($payload['comments'][0]['referenceId'])->toBe('ref-xyz-789');
 });
 
 it('404s on an unknown commentId for resolve', function () {

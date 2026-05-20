@@ -25,6 +25,25 @@ beforeEach(function () {
     $context->begin('test-session-leave', 'tu-leave', ClientType::CP);
 });
 
+it('teaches the agent the span-comment workflow in its description', function () {
+    // The agent reads this description before deciding whether to
+    // pin a comment to a specific span vs. dot the whole field. The
+    // captured "first paragraph" session showed it defaulting to a
+    // field-level comment because the doc was passively worded —
+    // the description now needs to be explicit that the agent itself
+    // generates the referenceId and wraps the span via upsert_entry
+    // (not "wait for the user to highlight text and use the plugin").
+    $descriptor = $this->registry->describe('leave_comment');
+
+    expect($descriptor->description)->toContain('referenceId');
+    // Must reference the upsert path so the agent connects the dots.
+    expect($descriptor->description)->toContain('upsert_entry');
+    // The literal marker class is what the overlay matches on; the
+    // doc should give the agent the exact wrapper to write.
+    expect($descriptor->description)->toContain('craft-ai-comment-mark');
+    expect($descriptor->description)->toContain('data-craft-ai-comment-id');
+});
+
 it('saves a comment on a specific field of a canonical entry', function () {
     $entry = Entry::factory()->section('posts')->title('My Post')->create();
 
@@ -45,6 +64,38 @@ it('saves a comment on a specific field of a canonical entry', function () {
     expect($record)->not->toBeNull();
     expect($record->sessionId)->toBe('test-session-leave');
     expect($record->elementId)->toBe((int) $entry->id);
+});
+
+it('persists a referenceId when the agent pins the comment to a CKEditor span', function () {
+    $entry = Entry::factory()->section('posts')->title('Post')->create();
+
+    $output = $this->registry->execute('leave_comment', [
+        'entryId' => $entry->id,
+        'fieldHandle' => 'bodyContent',
+        'referenceId' => 'agent-uuid-001',
+        'body' => 'This paragraph buries the lede.',
+    ]);
+
+    expect($output->isError)->toBeFalse($output->text);
+    $payload = decode($output);
+    expect($payload['data']['referenceId'])->toBe('agent-uuid-001');
+
+    $record = CommentRecord::findOne(['id' => $payload['data']['id']]);
+    expect($record->referenceId)->toBe('agent-uuid-001');
+});
+
+it('errors when the agent passes referenceId without a fieldHandle', function () {
+    $entry = Entry::factory()->section('posts')->title('Post')->create();
+
+    $output = $this->registry->execute('leave_comment', [
+        'entryId' => $entry->id,
+        'referenceId' => 'stray-uuid',
+        'body' => 'no field anchor',
+    ]);
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('referenceId');
+    expect($output->text)->toContain('fieldHandle');
 });
 
 it('saves a top-level comment when fieldHandle is omitted', function () {

@@ -27,6 +27,23 @@ it('mentions ckeditor in the upsert_field tool description', function () {
     expect($descriptor->description)->toContain('CKEditor');
 });
 
+it('publishes the span-comment workflow in the ckeditor field notes', function () {
+    // craftcms/ckeditor isn't installed in the test environment, so
+    // we can't drive the listener through a real field instance.
+    // The notes string itself is the contract — assert the literal
+    // wrapper attributes appear so a future edit that softens the
+    // guidance back into passive voice gets caught here.
+    $contents = file_get_contents(__DIR__.'/../src/notes/CkeditorFieldNotes.php');
+
+    expect($contents)->toContain('craft-ai-comment-mark');
+    expect($contents)->toContain('data-craft-ai-comment-id');
+    expect($contents)->toContain('leave_comment');
+    // Specifically the active-voice "you do it" framing — the field
+    // notes have to teach the agent the same workflow leave_comment's
+    // own description teaches.
+    expect($contents)->toContain('upsert_entry');
+});
+
 it('mentions ckeditor in the get_fields tool-level notes', function () {
     Field::factory()->name('Body')->handle('body')->type(PlainText::class)->create();
 

@@ -16,10 +16,18 @@ use craft\elements\Entry;
  *
  * Drafts: when the page is a draft, we walk from the draft entry and
  * surface descendants by their own draftIds where present, falling back
- * to the canonical id otherwise. Mixed-draft scenarios (a draft entry
- * with non-draft nested blocks, etc.) are handled because the controller
- * filters comments by the `(elementId, isDraft)` pair recorded at
- * leave-time, not by a single isDraft flag.
+ * to the canonical id otherwise. We also bridge across the
+ * draft/canonical boundary in *both* directions — viewing a canonical
+ * sees comments left on any of its drafts, viewing a draft sees
+ * comments left on the canonical (or on sibling drafts). Without that
+ * bridge, a comment authored on a draft disappears the moment the draft
+ * is applied, and a comment authored on a canonical is invisible while
+ * the editor is working in a draft.
+ *
+ * The controller still filters records by the literal (elementId,
+ * isDraft) pair stamped on each row, so every element-id only matches
+ * the comments authored against that exact identity — we just feed in
+ * a wider list of identities.
  */
 final class CommentScope
 {
@@ -40,6 +48,26 @@ final class CommentScope
 
         $visited = [self::keyFor($elementId, $isDraft) => true];
         $queue = [$root];
+
+        // Seed the queue with every "sibling identity" of the root —
+        // its canonical (when the root is a draft) and every draft of
+        // its canonical (when the root is a canonical). All siblings
+        // share the same Matrix-block subtree on the canonical side
+        // but may have draft-side copies too, so we still walk each
+        // one's owned children below.
+        foreach (self::siblingRoots($root) as $sibling) {
+            $siblingId = $sibling->draftId !== null
+                ? (int) $sibling->draftId
+                : (int) $sibling->id;
+            $siblingIsDraft = $sibling->draftId !== null;
+            $key = self::keyFor($siblingId, $siblingIsDraft);
+            if (isset($visited[$key])) {
+                continue;
+            }
+            $visited[$key] = true;
+            $pairs[] = [$siblingId, $siblingIsDraft];
+            $queue[] = $sibling;
+        }
 
         while ($queue !== []) {
             $current = array_shift($queue);
@@ -71,6 +99,44 @@ final class CommentScope
         }
 
         return $pairs;
+    }
+
+    /**
+     * Return the canonical / draft "siblings" of a given root.
+     *
+     *  - Canonical root → returns every draft of it (so canonical-view
+     *    sees draft-only comments after a draft is applied or while
+     *    a parallel draft is in flight).
+     *  - Draft root → returns the canonical (so draft-view sees
+     *    canonical-anchored comments left before the draft existed).
+     *
+     * Provisional drafts are deliberately included — Craft auto-creates
+     * one when an editor opens an entry, and a comment left during
+     * that session is filed against the provisional draftId. Without
+     * including them the next person to open the entry would see an
+     * empty overlay.
+     *
+     * @return list<Entry>
+     */
+    private static function siblingRoots(Entry $root): array
+    {
+        if ($root->draftId !== null) {
+            $canonicalId = (int) $root->canonicalId;
+            if ($canonicalId <= 0) {
+                return [];
+            }
+            $canonical = Entry::find()->id($canonicalId)->status(null)->one();
+            return $canonical instanceof Entry ? [$canonical] : [];
+        }
+
+        // Canonical root — find all drafts (including provisionals).
+        /** @var list<Entry> $drafts */
+        $drafts = Entry::find()
+            ->draftOf($root)
+            ->status(null)
+            ->provisionalDrafts(null)
+            ->all();
+        return $drafts;
     }
 
     /**

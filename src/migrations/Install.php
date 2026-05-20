@@ -118,6 +118,11 @@ class Install extends Migration
             // at the forked session that carries the comment's discussion.
             // Null until the user clicks the comment to open a thread.
             'threadSessionId' => $this->string(36)->null(),
+            // Stable in-field id the CKEditor "Comment" plugin stamps onto
+            // a `<span data-craft-ai-comment-id="…">` so the overlay can
+            // pin the indicator to that exact selection. Null for
+            // field-level comments (the pre-span shape).
+            'referenceId' => $this->string(64)->null(),
             'dateCreated' => $this->dateTime()->notNull(),
             'dateUpdated' => $this->dateTime()->notNull(),
             'uid' => $this->uid(),
@@ -133,6 +138,12 @@ class Install extends Migration
             'idx_craftai_comments_element',
             '{{%craftai_comments}}',
             ['elementId', 'isDraft', 'status'],
+        );
+
+        $this->createIndex(
+            'idx_craftai_comments_reference',
+            '{{%craftai_comments}}',
+            ['elementId', 'isDraft', 'fieldHandle', 'referenceId'],
         );
 
         return true;

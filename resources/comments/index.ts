@@ -5,6 +5,7 @@ import {
   buildTopLevelBanner,
   ensureOverlayHost,
   findBlockContainer,
+  findCommentSpans,
   findFieldContainer,
   readElementContext,
 } from "./dom";
@@ -49,8 +50,65 @@ class CommentsOverlay {
   async start(): Promise<void> {
     await this.refresh();
     document.addEventListener("click", (e) => this.handleOutsideClick(e));
+    // Span clicks are wired on `mousedown` (capture phase) instead of
+    // `click` because CKEditor 5's editing view installs its own
+    // `mousedown` handler to manage caret placement / selection. By
+    // running first in capture we get to open the popover before
+    // CKEditor decides where the caret goes; without this the popover
+    // sometimes never appears because CKEditor preventDefaults the
+    // descendant click event in certain selection scenarios.
+    document.addEventListener(
+      "mousedown",
+      (e) => this.handleSpanClick(e),
+      true,
+    );
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") this.closePopover();
+    });
+
+    // The CKEditor "Comment" toolbar plugin dispatches this after a
+    // successful comments/create call so the indicator dots show up
+    // without waiting on a page reload. We also kick a delayed refresh
+    // on the same event in case the CKEditor data round-trip hasn't
+    // finished rendering the marker into the editing view yet.
+    document.addEventListener("craftai:comments-changed", () => {
+      void this.refresh();
+    });
+
+    // Authoritative click handler for marker spans inside a CKEditor
+    // editing view. The CKEditor plugin dispatches this event from
+    // *inside* the editor's own event system (view.document) — which
+    // is the only reliable path for clicks that happen inside the
+    // contenteditable surface, because CKEditor's MouseObserver and
+    // SelectionObserver can swallow DOM-level listeners. The document-
+    // level mousedown handler stays as the fallback for marker spans
+    // rendered outside an editor (e.g. read-only previews).
+    document.addEventListener("craftai:open-span-comment", (e) => {
+      const detail = (e as CustomEvent<{
+        referenceId?: unknown;
+        rect?: { top: number; left: number; right: number; bottom: number; width: number; height: number } | null;
+      }>).detail;
+      if (!detail || typeof detail.referenceId !== "string") return;
+      const matches = this.comments.filter(
+        (c) => c.referenceId === detail.referenceId,
+      );
+      if (matches.length === 0) return;
+
+      // Prefer the real DOM span as the popover anchor over a rect-
+      // based synthetic. `handleOutsideClick` decides whether to close
+      // by asking `anchor.contains(clickTarget)` — the DOM `click`
+      // event that bubbles up a few ms after the CKEditor `click` would
+      // see a *synthetic* anchor that doesn't contain the highlighted
+      // span the user actually clicked, and close the popover ~250ms
+      // after it opened. Falling back to `openForRect` keeps the
+      // popover usable if the marker isn't actually in the DOM (e.g.
+      // CKEditor mangled the attribute on render).
+      const realSpan = findCommentSpans(detail.referenceId)[0] ?? null;
+      if (realSpan) {
+        this.openFor(matches, realSpan);
+      } else {
+        this.openForRect(matches, detail.rect ?? null);
+      }
     });
   }
 
@@ -103,6 +161,54 @@ class CommentsOverlay {
     for (const comments of byKey.values()) {
       this.renderFieldIndicator(comments);
     }
+
+    // Decorate any CKEditor highlight spans currently in the DOM with
+    // the matching comment count + title so they're discoverable even
+    // before the user hovers (the popover opens via delegated click in
+    // handleSpanClick). Done after the field-heading indicator pass so
+    // a span that's missing from the DOM gracefully falls back to the
+    // heading dot — both surfaces are wired and the user always has at
+    // least one entry point to the conversation.
+    for (const c of this.comments) {
+      if (!c.referenceId) continue;
+      for (const span of findCommentSpans(c.referenceId)) {
+        const preview = c.body.length > 140 ? `${c.body.slice(0, 140)}…` : c.body;
+        // Append a hint so editors don't think the hover tooltip is
+        // the entire interaction — the popover lives behind a click.
+        span.title = `${preview}\n\n(Click to view, reply, or resolve)`;
+        span.dataset.craftAiCommentMarkActive = "1";
+      }
+    }
+  }
+
+  /**
+   * Delegated click for CKEditor comment highlights. The marker spans
+   * live inside contenteditable surfaces (the CKEditor editing view)
+   * so we can't attach individual handlers without fighting the
+   * editor's own DOM lifecycle — a delegated `document` click filters
+   * to `[data-craft-ai-comment-id]` and opens the popover anchored to
+   * the clicked span.
+   *
+   * We bail when the click landed inside an open popover; that's how
+   * a user clicking the popover body itself stays inside the same
+   * interaction without re-triggering this handler.
+   */
+  private handleSpanClick(e: MouseEvent): void {
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+
+    const span = target.closest<HTMLElement>("[data-craft-ai-comment-id]");
+    if (!span) return;
+
+    const refId = span.getAttribute("data-craft-ai-comment-id");
+    if (!refId) return;
+
+    const matches = this.comments.filter((c) => c.referenceId === refId);
+    if (matches.length === 0) return;
+
+    e.stopPropagation();
+    e.preventDefault();
+    this.openFor(matches, span);
   }
 
   private renderBanner(comments: Comment[]): void {
@@ -149,13 +255,61 @@ class CommentsOverlay {
     this.mountedIndicators.push(indicator);
   }
 
+  /**
+   * Variant of `openFor` that anchors against a raw rect instead of a
+   * DOM element. Used by `craftai:open-span-comment` (dispatched from
+   * the CKEditor plugin) because the marker's DOM node lives inside
+   * a contenteditable surface — we can still derive its rect, but
+   * binding the popover's "click outside to close" logic to that DOM
+   * node is brittle (CKEditor remounts the editing view on data
+   * changes). Treating the rect as the anchor source means the
+   * popover stays correctly positioned even if the editor view
+   * re-renders.
+   */
+  private openForRect(
+    comments: Comment[],
+    rect: { top: number; left: number; right: number; bottom: number; width: number; height: number } | null,
+  ): void {
+    // Synthesize a hidden anchor element at the rect's position so
+    // outside-click detection can still ask `anchor.contains(target)`
+    // against a real DOM node. The anchor is removed alongside the
+    // popover in `closePopover`.
+    const anchor = document.createElement("span");
+    anchor.style.position = "absolute";
+    anchor.style.pointerEvents = "none";
+    anchor.style.opacity = "0";
+    if (rect) {
+      anchor.style.top = `${window.scrollY + rect.top}px`;
+      anchor.style.left = `${window.scrollX + rect.left}px`;
+      anchor.style.width = `${rect.width}px`;
+      anchor.style.height = `${rect.height}px`;
+    }
+    ensureOverlayHost().appendChild(anchor);
+    this.openFor(comments, anchor);
+  }
+
   private openFor(comments: Comment[], anchor: HTMLElement): void {
     this.closePopover();
 
     const popover = buildPopover(comments, {
       onClose: () => this.closePopover(),
       onResolve: async (commentId) => {
+        // Capture the referenceId *before* refresh wipes the comment
+        // from local state — we need to tell every live CKEditor on
+        // the page to drop its highlight span so the user sees the
+        // resolve land immediately, not just after a reload.
+        const resolved = this.comments.find((c) => c.id === commentId);
         await this.api.resolve(commentId);
+        if (resolved?.referenceId) {
+          document.dispatchEvent(
+            new CustomEvent("craftai:comment-resolved", {
+              detail: {
+                commentId: resolved.id,
+                referenceId: resolved.referenceId,
+              },
+            }),
+          );
+        }
         await this.refresh();
       },
       onOpenInChat: async (comment) => {
@@ -183,10 +337,35 @@ class CommentsOverlay {
 
   private positionPopover(popover: HTMLElement, anchor: HTMLElement): void {
     const rect = anchor.getBoundingClientRect();
-    const top = window.scrollY + rect.bottom + 8;
-    const left = window.scrollX + rect.left;
-    popover.style.top = `${top}px`;
-    popover.style.left = `${left}px`;
+    // Measure the popover after it's been mounted so the clamp math
+    // works against its real width/height (CSS gives it `width: 320px`
+    // and an auto height, but the rendered height depends on body
+    // length and reply count). Clamp within the viewport with an 8px
+    // gutter on every side so the popover never lands offscreen on a
+    // marker near the bottom-right corner of a long CKEditor field.
+    const popoverRect = popover.getBoundingClientRect();
+    const gutter = 8;
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+
+    let top = rect.bottom + gutter;
+    let left = rect.left;
+
+    if (left + popoverRect.width + gutter > viewportW) {
+      left = Math.max(gutter, viewportW - popoverRect.width - gutter);
+    }
+    if (left < gutter) left = gutter;
+
+    if (top + popoverRect.height + gutter > viewportH) {
+      // Try flipping above the anchor; if that's worse, just clamp.
+      const above = rect.top - popoverRect.height - gutter;
+      top = above >= gutter
+        ? above
+        : Math.max(gutter, viewportH - popoverRect.height - gutter);
+    }
+
+    popover.style.top = `${window.scrollY + top}px`;
+    popover.style.left = `${window.scrollX + left}px`;
   }
 
   private closePopover(): void {

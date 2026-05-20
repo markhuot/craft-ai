@@ -16,6 +16,7 @@ use craft\db\ActiveRecord;
  * @property string|null $resolvedBy
  * @property int|null $authorMessageId
  * @property string|null $threadSessionId Set on first user interaction — points at the forked session that carries the comment's back-and-forth
+ * @property string|null $referenceId Stable in-field identifier (UUID) the CKEditor "Comment" plugin stamps onto a `<span data-craft-ai-comment-id="…">` wrapper so the overlay can pin the indicator to that exact selection instead of the whole field heading. Null for field-level comments.
  * @property string $dateCreated
  * @property string $dateUpdated
  * @property string $uid

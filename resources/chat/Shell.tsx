@@ -352,7 +352,7 @@ function SessionsTree({
 }) {
   const { roots, childrenByParent } = buildSessionTree(sessions);
 
-  const renderNode = (session: SessionListItem) => {
+  const renderNode = (session: SessionListItem, depth: number) => {
     const children = childrenByParent.get(session.sessionId) ?? [];
     return (
       <SessionRow
@@ -360,13 +360,14 @@ function SessionsTree({
         session={session}
         isCurrent={session.sessionId === currentSessionId}
         onNavigate={onNavigate}
+        depth={depth}
       >
         {children.length > 0 && (
           <ul
             data-testid="sessions-children"
-            className="ai:flex ai:flex-col ai:list-none ai:m-0 ai:ml-3 ai:pl-3 ai:border-l ai:border-dotted ai:border-craftai-border/70"
+            className="ai:flex ai:flex-col ai:list-none ai:m-0 ai:ml-3 ai:p-0"
           >
-            {children.map(renderNode)}
+            {children.map((child) => renderNode(child, depth + 1))}
           </ul>
         )}
       </SessionRow>
@@ -376,9 +377,9 @@ function SessionsTree({
   return (
     <ul
       data-testid="sessions-list"
-      className="ai:flex ai:flex-1 ai:min-h-0 ai:flex-col ai:gap-1 ai:list-none ai:overflow-y-auto ai:p-0 ai:m-0"
+      className="ai:flex ai:flex-1 ai:min-h-0 ai:flex-col ai:gap-2 ai:list-none ai:overflow-y-auto ai:p-0 ai:m-0"
     >
-      {roots.map(renderNode)}
+      {roots.map((root) => renderNode(root, 0))}
     </ul>
   );
 }
@@ -387,43 +388,67 @@ function SessionRow({
   session,
   isCurrent,
   onNavigate,
+  depth,
   children,
 }: {
   session: SessionListItem;
   isCurrent: boolean;
   onNavigate: () => void;
+  /** Nesting depth — 0 for top-level rows, ≥1 for forked children. */
+  depth: number;
   /** Nested child sessions, rendered beneath the row connected by a dotted line. */
   children?: ReactNode;
 }) {
+  const isChild = depth > 0;
   const statusClass = session.active ? "yellow" : "green";
   const statusLabel = session.active ? "Active" : "Idle";
   const label = session.title?.trim() || session.sessionId.slice(0, 8);
 
+  // Child rows get a per-row ┌─ connector drawn with `::before` (vertical
+  // dotted stub from the top down to the row's vertical centre) and
+  // `::after` (horizontal dotted stub running right from the centre).
+  // Doing it per-row instead of as a single tall border on the children
+  // <ul> lets the line terminate cleanly at each child rather than running
+  // past the last sibling.
+  const connectorClasses = isChild
+    ? "ai:relative ai:pl-5 " +
+      "ai:before:content-[''] ai:before:absolute ai:before:left-0 ai:before:top-0 ai:before:bottom-1/2 ai:before:border-l ai:before:border-dotted ai:before:border-craftai-border " +
+      "ai:after:content-[''] ai:after:absolute ai:after:left-0 ai:after:top-1/2 ai:after:w-4 ai:after:border-t ai:after:border-dotted ai:after:border-craftai-border "
+    : "";
+
   return (
-    <li>
+    <li className={connectorClasses} data-tree-depth={depth}>
       <a
         href={session.url}
         onClick={onNavigate}
         aria-current={isCurrent ? "page" : undefined}
         className={
-          "ai:flex ai:items-start ai:gap-2 ai:rounded ai:px-2 ai:py-1.5 ai:text-sm ai:no-underline " +
+          (isChild
+            ? "ai:flex ai:items-center ai:gap-1.5 ai:rounded ai:px-1.5 ai:py-0.5 ai:text-xs ai:no-underline "
+            : "ai:flex ai:items-start ai:gap-2 ai:rounded ai:px-2 ai:py-1 ai:text-sm ai:no-underline ") +
           (isCurrent
             ? "ai:bg-craftai-border/40 ai:text-craftai-fg"
-            : "ai:text-craftai-fg hover:ai:bg-craftai-border/20")
+            : isChild
+              ? "ai:text-craftai-muted hover:ai:bg-craftai-border/20 hover:ai:text-craftai-fg"
+              : "ai:text-craftai-fg hover:ai:bg-craftai-border/20")
         }
       >
-        <span
-          className={`status ${statusClass}`}
-          title={statusLabel}
-          aria-hidden="true"
-          style={{ marginTop: 4 }}
-        />
+        {!isChild && (
+          <span
+            className={`status ${statusClass}`}
+            title={statusLabel}
+            aria-hidden="true"
+            style={{ marginTop: 4 }}
+          />
+        )}
         <span className="ai:flex-1 ai:min-w-0">
           <span className="ai:block ai:truncate">{label}</span>
-          <span className="ai:block ai:text-[11px] ai:text-craftai-muted">
-            {session.messageCount} {session.messageCount === 1 ? "message" : "messages"}
-            {session.lastMessage ? ` · ${session.lastMessage}` : ""}
-          </span>
+          {!isChild && (
+            <span className="ai:block ai:text-[11px] ai:text-craftai-muted">
+              {session.messageCount} {session.messageCount === 1 ? "message" : "messages"}
+              {session.lastMessage ? ` · ${session.lastMessage}` : ""}
+            </span>
+          )}
         </span>
       </a>
       {children}

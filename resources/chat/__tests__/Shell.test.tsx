@@ -175,9 +175,13 @@ describe("<SessionsSidebar /> parent/child nesting", () => {
     expect(children.textContent).toContain("child-1");
     expect(children.textContent).toContain("child-2");
 
-    // Connector list carries a dotted left border so the parent/child
-    // relationship is visible even when the parent row is off-screen.
-    expect(children.className).toContain("border-dotted");
+    // Each child row is tagged with its depth so the per-row ┌─ connector
+    // (drawn with `::before`/`::after` pseudo-elements) knows to apply.
+    // We can't assert directly on pseudo-elements in jsdom, but the
+    // `data-tree-depth="1"` attribute is the same signal that triggers
+    // the connector classes.
+    const childRows = children.querySelectorAll('[data-tree-depth="1"]');
+    expect(childRows).toHaveLength(2);
   });
 
   test("supports nested grandchildren", () => {

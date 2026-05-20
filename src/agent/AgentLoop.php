@@ -5,6 +5,7 @@ namespace markhuot\craftai\agent;
 use craft\elements\Asset;
 use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\Plugin;
+use markhuot\craftai\records\CommentRecord;
 use markhuot\craftai\records\MessageRecord;
 use markhuot\craftai\records\SessionRecord;
 use markhuot\craftai\tools\ToolRegistry;
@@ -563,7 +564,13 @@ PROMPT;
         $fork->id = $forkId;
         $fork->active = false;
         $fork->stopRequested = false;
-        $fork->title = $parent->title;
+        // Derive the fork's title from the comment that triggered it
+        // rather than copying the parent's. The whole point of a fork
+        // is that it's a focused discussion of one comment — so the
+        // sidebar label should reflect the comment, not the parent
+        // run. Falls back to the parent title if the comment lookup
+        // fails (e.g. mid-deletion races).
+        $fork->title = self::forkTitleFromComment($originatingCommentId) ?? $parent->title;
         $fork->userId = $parent->userId;
         $fork->toolMode = $parent->toolMode;
         $fork->enabledTools = $parent->enabledTools;
@@ -614,6 +621,58 @@ PROMPT;
         }
 
         return $forkId;
+    }
+
+    /**
+     * Derive a fork-session title from its originating comment so the
+     * sidebar can distinguish it from the parent at a glance. The body
+     * is already a short human-written description of the feedback, so
+     * we use it verbatim (truncated) rather than calling the LLM —
+     * cheaper, faster, and predictable.
+     *
+     * Returns null when the comment isn't found or has no body to work
+     * with; callers fall back to the parent's title in that case.
+     */
+    private static function forkTitleFromComment(int $originatingCommentId): ?string
+    {
+        if ($originatingCommentId <= 0) {
+            return null;
+        }
+
+        try {
+            $comment = CommentRecord::findOne(['id' => $originatingCommentId]);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if ($comment === null) {
+            return null;
+        }
+
+        $body = trim((string) ($comment->body ?? ''));
+        // Strip newlines so a multi-paragraph comment doesn't break the
+        // sidebar row. Collapse runs of whitespace to a single space.
+        $body = trim((string) preg_replace('/\s+/u', ' ', $body));
+
+        if ($body === '') {
+            // No body — derive something from the scope instead so the
+            // sidebar isn't blank. Field comments are far more common
+            // than entry-level notes, so the field handle path comes
+            // first.
+            $field = is_string($comment->fieldHandle ?? null) ? trim((string) $comment->fieldHandle) : '';
+            return $field !== ''
+                ? "Re: comment on {$field}"
+                : 'Re: comment';
+        }
+
+        // Compact label for the sidebar. 64 chars leaves room for the
+        // "Re: " prefix without truncating mid-word for most comments.
+        $maxBodyLen = 60;
+        if (mb_strlen($body) > $maxBodyLen) {
+            $body = mb_substr($body, 0, $maxBodyLen - 1).'…';
+        }
+
+        return "Re: {$body}";
     }
 
     /**

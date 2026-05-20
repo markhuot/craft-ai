@@ -34,9 +34,14 @@ use Throwable;
  * `settings.entryTypes[].handle` from `get_fields`) and `fields` (the sub-field
  * values keyed by handle). Existing blocks are referenced by their numeric ID;
  * new blocks use placeholder keys like `"new1"`, `"new2"`, etc. — any string
- * key that is not an existing block ID is treated as a new block. The order
- * of keys determines the order of blocks; blocks omitted from the object are
- * deleted on save. Example:
+ * key that is not an existing block ID is treated as a new block. Blocks
+ * omitted from the object are deleted on save.
+ *
+ * ⚠️ For updates: key order in the matrix payload becomes the new sort
+ * order of the blocks. To leave blocks in place, list every existing
+ * block ID in its existing order from `get_entry` — including ones you
+ * aren't changing. Putting the block you're editing first will move it
+ * to position 1. Example:
  *
  *     {
  *       "contentBuilder": {
@@ -118,7 +123,7 @@ class UpsertEntry extends Tool
         #[Validate(ExistingSite::class)]
         #[Bind(SiteBinder::class)]
         Site|string|int|null $site = null,
-        #[Description('Custom field values as a flat object keyed by field handle, e.g. {"body": "Hello", "summary": "..."}. Do NOT wrap in an array or use numeric keys like {"0": {"body": "Hello"}} — keys must be the field handles themselves. Matrix fields take an object keyed by block ID where each block is {"type": "<entryTypeHandle>", "fields": {...}}; use "new1", "new2" (or any unused string) for new blocks and existing numeric IDs for blocks you want to keep or update. See the tool description for a full example.')]
+        #[Description('Custom field values as a flat object keyed by field handle, e.g. {"body": "Hello", "summary": "..."}. Do NOT wrap in an array or use numeric keys like {"0": {"body": "Hello"}} — keys must be the field handles themselves. Matrix fields take an object keyed by block ID where each block is {"type": "<entryTypeHandle>", "fields": {...}}; use "new1", "new2" (or any unused string) for new blocks and existing numeric IDs for blocks you want to keep or update. When updating a Matrix field, preserve the existing block order — key order in the payload = block sort order, so put the block IDs in the same sequence get_entry returned them. See the tool description for a full example.')]
         ?array $fields = null,
     ): array|ToolOutput {
         $isUpdate = $id instanceof Entry;

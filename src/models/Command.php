@@ -158,7 +158,11 @@ class Command extends Model
                 'uid' => 'craft-ai--default-translate',
                 'name' => 'translate',
                 'prompt' => <<<'PROMPT'
-                Translate the current entry's content into the language the user names in their message (default: Spanish if no language is given). Preserve formatting, links, and inline references. Produce a draft of the translated entry; do not overwrite the original.
+                Translate the current entry's content into the language the user names in their message (default: Spanish if no language is given).
+
+                Sites are the locale boundary in Craft — every site has exactly one `language` (e.g. "en-US", "es-MX", "fr") and content fields store one value per site. Use `get_sites` to discover which locales already exist. If a site exists for the requested language, save the translation against it by calling `upsert_draft` (preferred) or `upsert_entry` with that site's handle as the `site` argument. If no site exists for the target language, create one with `upsert_site` first, then translate into it.
+
+                Preserve formatting, links, and inline references. Produce a draft of the translated entry rather than overwriting the original.
                 PROMPT,
                 'enabled' => true,
             ],

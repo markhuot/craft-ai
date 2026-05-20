@@ -31,7 +31,9 @@ it('creates an asset from a local source path', function () {
     ]);
 
     expect($output->isError)->toBeFalse($output->text);
-    $result = decode($output)['data'];
+    // CP context always wraps with at least a cpEditUrl note now, so
+    // the asset payload lives at `data.asset` instead of `data`.
+    $result = decode($output)['data']['asset'];
     expect($result['filename'])->toBe('hello.jpg');
 
     $asset = Asset::find()->id($result['id'])->status(null)->one();
@@ -106,7 +108,7 @@ it('updates an existing asset by id', function () {
         'filename' => 'original.jpg',
         'sourcePath' => $this->sourceFile,
         'title' => 'Original',
-    ]))['data'];
+    ]))['data']['asset'];
 
     $output = $this->registry->execute('upsert_asset', [
         'id' => $created['id'],
@@ -130,7 +132,7 @@ it('binds a volume by numeric ID', function () {
     ]);
 
     expect($output->isError)->toBeFalse($output->text);
-    expect(decode($output)['data']['filename'])->toBe('by-id.jpg');
+    expect(decode($output)['data']['asset']['filename'])->toBe('by-id.jpg');
 });
 
 it('wraps the response with a notes prompt to call open_preview when the asset has a URL', function () {

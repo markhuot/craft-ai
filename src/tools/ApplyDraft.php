@@ -61,6 +61,13 @@ class ApplyDraft extends Tool
         $data = $canonical->toArray();
         $data['url'] = $url;
 
+        $cpEditUrl = null;
+        try {
+            $cpEditUrl = $canonical->getCpEditUrl();
+        } catch (\Throwable) {
+            $cpEditUrl = null;
+        }
+
         $notes = $wasFresh
             ? sprintf(
                 'Published fresh draft #%d as canonical entry id=%d. The draft no longer exists; future edits should use upsert_entry (or upsert_draft to start a new draft).',
@@ -75,7 +82,7 @@ class ApplyDraft extends Tool
 
         return [
             '_notes' => $notes,
-            'data' => PreviewSuggestion::wrap($data, $url, 'entry', $this->context),
+            'data' => PreviewSuggestion::wrap($data, $url, 'entry', $this->context, $cpEditUrl),
         ];
     }
 }

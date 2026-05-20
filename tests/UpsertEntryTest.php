@@ -192,7 +192,11 @@ it('wraps the response with a notes prompt to call open_preview when the entry h
     expect($output['notes'])->toContain($output['entry']['url']);
 });
 
-it('returns the entry without a notes wrapper when the section has no front-end URLs', function () {
+it('wraps an entry without a front-end URL with the cpEditUrl guidance on CP', function () {
+    // Sections that lack URI formats can't be previewed, but on CP
+    // the editor can still click through to the entry's edit screen
+    // to review. The wrap surfaces the cpEditUrl link but omits the
+    // open_preview prompt (there's no front-end URL to point at).
     Section::factory()->name('Hidden')->handle('hidden')->hasUrls(false)->create();
 
     $payload = decode($this->registry->execute('upsert_entry', [
@@ -202,10 +206,11 @@ it('returns the entry without a notes wrapper when the section has no front-end 
     expect($payload)->toHaveKeys(['_notes', 'data']);
     $output = $payload['data'];
 
-    expect($output)->not->toHaveKey('notes');
-    expect($output)->not->toHaveKey('entry');
-    expect($output['title'])->toBe('Invisible');
-    expect($output['url'])->toBeNull();
+    expect($output)->toHaveKeys(['notes', 'entry']);
+    expect($output['notes'])->not->toContain('open_preview');
+    expect($output['notes'])->toContain('review and edit');
+    expect($output['entry']['title'])->toBe('Invisible');
+    expect($output['entry']['url'])->toBeNull();
 });
 
 it('emits a generic Entry saved. note for MCP clients without referencing open_preview', function () {

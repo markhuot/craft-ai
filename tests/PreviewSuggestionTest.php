@@ -119,3 +119,75 @@ it('treats an unset client like a non-CP surface (conservative default)', functi
     expect($wrapped['notes'])->toBe('Entry saved.');
     expect($wrapped['notes'])->not->toContain('open_preview');
 });
+
+it('includes the cpEditUrl link instruction on the CP surface', function () {
+    $wrapped = PreviewSuggestion::wrap(
+        ['id' => 5, 'title' => 'Hi'],
+        'https://example.test/hi',
+        'entry',
+        cpContext(),
+        'https://admin.example.test/admin/entries/news/5',
+    );
+
+    expect($wrapped['notes'])->toContain('open_preview');
+    expect($wrapped['notes'])->toContain('https://example.test/hi');
+    expect($wrapped['notes'])->toContain('review and edit');
+    expect($wrapped['notes'])->toContain('https://admin.example.test/admin/entries/news/5');
+});
+
+it('wraps with just the cpEditUrl when CP has no front-end URL', function () {
+    // Sections without URI formats, draft entries on disabled sections,
+    // assets on filesystems with no public URLs — all valid CP saves
+    // that have no preview pane to drive but DO have an edit screen the
+    // editor can be linked back to.
+    $wrapped = PreviewSuggestion::wrap(
+        ['id' => 9],
+        null,
+        'entry',
+        cpContext(),
+        'https://admin.example.test/admin/entries/9',
+    );
+
+    expect($wrapped)->toHaveKeys(['notes', 'entry']);
+    expect($wrapped['notes'])->not->toContain('open_preview');
+    expect($wrapped['notes'])->toContain('https://admin.example.test/admin/entries/9');
+});
+
+it('includes the cpEditUrl link instruction on the widget surface', function () {
+    // Widget is browser-based — it has no preview pane, but the user
+    // can still click through to the CP edit screen to review.
+    $wrapped = PreviewSuggestion::wrap(
+        ['id' => 11],
+        'https://example.test/x',
+        'entry',
+        widgetContext(),
+        'https://admin.example.test/admin/entries/11',
+    );
+
+    expect($wrapped['notes'])->not->toContain('open_preview');
+    expect($wrapped['notes'])->toContain('review and edit');
+    expect($wrapped['notes'])->toContain('https://admin.example.test/admin/entries/11');
+});
+
+it('omits the cpEditUrl link instruction on MCP (no browser to click through)', function () {
+    $wrapped = PreviewSuggestion::wrap(
+        ['id' => 12],
+        'https://example.test/x',
+        'entry',
+        mcpContext(),
+        'https://admin.example.test/admin/entries/12',
+    );
+
+    expect($wrapped['notes'])->toBe('Entry saved.');
+    expect($wrapped['notes'])->not->toContain('admin');
+});
+
+it('still returns the payload unchanged on CP when neither URL nor cpEditUrl is available', function () {
+    // Regression guard for the historical "skip wrap entirely on CP
+    // with nothing to add" shortcut — the cpEditUrl support didn't
+    // change that contract for callers that don't pass either.
+    expect(PreviewSuggestion::wrap(['id' => 9], null, 'entry', cpContext(), null))
+        ->toBe(['id' => 9]);
+    expect(PreviewSuggestion::wrap(['id' => 9], null, 'entry', cpContext(), ''))
+        ->toBe(['id' => 9]);
+});

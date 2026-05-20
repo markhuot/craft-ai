@@ -231,6 +231,17 @@ class UpsertEntry extends Tool
         $data = $entry->toArray();
         $data['url'] = $url;
 
+        // `getCpEditUrl` can throw on edge cases (e.g. an entry whose
+        // section was deleted out from under us mid-save). We treat the
+        // CP URL as optional context — if it's not available, we just
+        // skip the cpEditUrl guidance.
+        $cpEditUrl = null;
+        try {
+            $cpEditUrl = $entry->getCpEditUrl();
+        } catch (\Throwable) {
+            $cpEditUrl = null;
+        }
+
         $notes = sprintf(
             '%s entry id=%d. Use get_entry to fetch the current state, or upsert_draft to make further changes without publishing.',
             $isUpdate ? 'Updated' : 'Created',
@@ -239,7 +250,7 @@ class UpsertEntry extends Tool
 
         return [
             '_notes' => $notes,
-            'data' => PreviewSuggestion::wrap($data, $url, 'entry', $this->context),
+            'data' => PreviewSuggestion::wrap($data, $url, 'entry', $this->context, $cpEditUrl),
         ];
     }
 }

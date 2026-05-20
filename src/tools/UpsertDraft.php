@@ -164,12 +164,19 @@ class UpsertDraft extends Tool
             $data = $draft->toArray();
             $data['url'] = $url;
 
+            $cpEditUrl = null;
+            try {
+                $cpEditUrl = $draft->getCpEditUrl();
+            } catch (\Throwable) {
+                $cpEditUrl = null;
+            }
+
             return [
                 '_notes' => sprintf(
                     'Fresh draft created with draftId=%d (no canonical entry yet). Use get_draft with draftId to re-fetch, or call upsert_draft again with this draftId to keep iterating before publishing.',
                     $draft->draftId,
                 ),
-                'data' => PreviewSuggestion::wrap($data, $url, 'draft', $this->context),
+                'data' => PreviewSuggestion::wrap($data, $url, 'draft', $this->context, $cpEditUrl),
             ];
         } else {
             return new ToolOutput(
@@ -211,6 +218,13 @@ class UpsertDraft extends Tool
         $data = $draft->toArray();
         $data['url'] = $url;
 
+        $cpEditUrl = null;
+        try {
+            $cpEditUrl = $draft->getCpEditUrl();
+        } catch (\Throwable) {
+            $cpEditUrl = null;
+        }
+
         $notes = $isUpdate
             ? sprintf(
                 'Updated draft draftId=%d. Use get_draft to re-fetch the saved state, or upsert_entry on the canonical entry once you are ready to publish.',
@@ -224,7 +238,7 @@ class UpsertDraft extends Tool
 
         return [
             '_notes' => $notes,
-            'data' => PreviewSuggestion::wrap($data, $url, 'draft', $this->context),
+            'data' => PreviewSuggestion::wrap($data, $url, 'draft', $this->context, $cpEditUrl),
         ];
     }
 }

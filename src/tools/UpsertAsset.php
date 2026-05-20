@@ -141,6 +141,13 @@ class UpsertAsset extends Tool
         $data = $asset->toArray();
         $data['url'] = $url;
 
+        $cpEditUrl = null;
+        try {
+            $cpEditUrl = $asset->getCpEditUrl();
+        } catch (\Throwable) {
+            $cpEditUrl = null;
+        }
+
         $notes = sprintf(
             '%s asset id=%d. Use get_asset to fetch the saved record, or upsert_field_layout_element to attach a new asset field to an entry type.',
             $isUpdate ? 'Updated' : 'Created',
@@ -149,7 +156,7 @@ class UpsertAsset extends Tool
 
         return [
             '_notes' => $notes,
-            'data' => PreviewSuggestion::wrap($data, $url, 'asset', $this->context),
+            'data' => PreviewSuggestion::wrap($data, $url, 'asset', $this->context, $cpEditUrl),
         ];
     }
 

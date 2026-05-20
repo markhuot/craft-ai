@@ -184,7 +184,10 @@ it('returns a tokenized preview URL when updating a draft', function () {
     expect($route[1]['draftId'])->toBe($updated['draftId']);
 });
 
-it('returns a null url for a draft in a section without front-end URLs', function () {
+it('wraps a draft without a front-end URL with the cpEditUrl guidance on CP', function () {
+    // No URI format → no front-end URL → no open_preview suggestion.
+    // The draft still has a CP edit screen the user can be linked
+    // back to, so the wrap surfaces that and omits the preview hint.
     Section::factory()->name('Hidden')->handle('hidden')->hasUrls(false)->create();
 
     $payload = decode($this->registry->execute('upsert_draft', [
@@ -193,11 +196,12 @@ it('returns a null url for a draft in a section without front-end URLs', functio
     ]));
 
     expect($payload)->toHaveKeys(['_notes', 'data']);
-    $draft = $payload['data'];
+    $output = $payload['data'];
 
-    expect($draft['url'])->toBeNull();
-    expect($draft)->not->toHaveKey('notes');
-    expect($draft)->not->toHaveKey('draft');
+    expect($output)->toHaveKeys(['notes', 'draft']);
+    expect($output['notes'])->not->toContain('open_preview');
+    expect($output['notes'])->toContain('review and edit');
+    expect($output['draft']['url'])->toBeNull();
 });
 
 it('wraps the response with a notes prompt to call open_preview when the draft has a URL', function () {

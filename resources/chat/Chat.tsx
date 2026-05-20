@@ -686,6 +686,14 @@ export function Chat({
     return 0;
   }, [messages]);
 
+  // Pair every tool_use anywhere in the transcript with its matching
+  // tool_result so the renderer can merge them into a single collapsible
+  // row. Recomputing on every messages update keeps the pairing fresh
+  // when a result arrives on a later poll (handles out-of-order delivery
+  // from concurrent tool calls — the result lands in the map whenever it
+  // lands and the next render picks it up).
+  const toolLookup = useMemo(() => buildToolLookup(messages), [messages]);
+
   const transcript = (
     <div className="craftai-chat ai:flex ai:min-h-0 ai:flex-1 ai:flex-col ai:gap-3">
       <Conversation>
@@ -710,7 +718,7 @@ export function Chat({
                   key={m.id}
                   className={isPreFork ? "craftai-pre-fork" : undefined}
                 >
-                  <RenderedMessage message={m} />
+                  <RenderedMessage message={m} toolLookup={toolLookup} />
                 </div>
               );
             })
@@ -959,7 +967,66 @@ export function Chat({
 // keep text/error inside the bubble so they read as the assistant's voice.
 const STANDALONE_BLOCK_TYPES = new Set(["thinking", "tool_use", "tool_result"]);
 
-function RenderedMessage({ message }: { message: ChatMessage }) {
+/**
+ * Lookup payloads built once per render at the Chat level so each
+ * `RenderedBlock` can pair a `tool_use` with its matching `tool_result`
+ * — possibly emitted on a *later* user message after the tool finished
+ * executing. The map is keyed by the original `tool_use.id`, which is
+ * the same id the agent loop stamps on the `tool_result.tool_use_id`.
+ *
+ * `toolUseIds` is the set of `tool_use.id` values seen anywhere in the
+ * transcript. Tool-result blocks whose `tool_use_id` is in this set
+ * have been merged into their tool_use's row and render as `null` so
+ * the transcript doesn't double-show "Tool call X" then "Tool result
+ * for X" as two separate cards.
+ */
+interface ToolResultPayload {
+  content: string | Array<{ type: string; [key: string]: unknown }>;
+  is_error?: boolean;
+}
+
+interface ToolLookup {
+  results: Map<string, ToolResultPayload>;
+  useIds: Set<string>;
+}
+
+function buildToolLookup(messages: ChatMessage[]): ToolLookup {
+  const results = new Map<string, ToolResultPayload>();
+  const useIds = new Set<string>();
+  for (const m of messages) {
+    for (const block of m.content) {
+      if (block.type === "tool_use") {
+        const id = (block as { id?: unknown }).id;
+        if (typeof id === "string" && id !== "") useIds.add(id);
+        continue;
+      }
+      if (block.type === "tool_result") {
+        const b = block as {
+          tool_use_id?: unknown;
+          content?: unknown;
+          is_error?: unknown;
+        };
+        if (typeof b.tool_use_id !== "string" || b.tool_use_id === "") continue;
+        // Multiple results for the same id shouldn't happen, but if they
+        // do (e.g. retry), the latest wins — it's the one that actually
+        // got fed back into the LLM.
+        results.set(b.tool_use_id, {
+          content: b.content as ToolResultPayload["content"],
+          is_error: typeof b.is_error === "boolean" ? b.is_error : undefined,
+        });
+      }
+    }
+  }
+  return { results, useIds };
+}
+
+function RenderedMessage({
+  message,
+  toolLookup,
+}: {
+  message: ChatMessage;
+  toolLookup: ToolLookup;
+}) {
   // Summary messages mark a compaction boundary — everything before this
   // row in the transcript got squashed into the summary text and the LLM
   // no longer sees the originals. We render it as a distinct card so the
@@ -1009,10 +1076,23 @@ function RenderedMessage({ message }: { message: ChatMessage }) {
   // Walk content blocks and group consecutive inline blocks together so we
   // emit one bubble per run, with standalone blocks rendered as siblings in
   // their original order.
+  // Filter out tool_result blocks that have been merged into their
+  // tool_use's row — they'd otherwise render as redundant standalone
+  // "Tool result" cards alongside the merged row.  Legacy orphans
+  // (tool_results with no matching tool_use anywhere in the transcript)
+  // pass through and still render so old persisted sessions stay
+  // readable.
+  const visibleContent = message.content.filter((b) => {
+    if (b.type !== "tool_result") return true;
+    const useId = (b as { tool_use_id?: unknown }).tool_use_id;
+    if (typeof useId !== "string" || useId === "") return true;
+    return !toolLookup.useIds.has(useId);
+  });
+
   const segments: Array<
     { kind: "bubble"; blocks: ContentBlock[] } | { kind: "standalone"; block: ContentBlock }
   > = [];
-  for (const block of message.content) {
+  for (const block of visibleContent) {
     if (STANDALONE_BLOCK_TYPES.has(block.type)) {
       segments.push({ kind: "standalone", block });
       continue;
@@ -1033,6 +1113,14 @@ function RenderedMessage({ message }: { message: ChatMessage }) {
     segments.push({ kind: "bubble", blocks: [] });
   }
 
+  // Synthetic user messages that carry only tool_results (after merging
+  // those into their tool_use rows) have nothing meaningful to show —
+  // skip the wrapper entirely so the transcript doesn't accumulate
+  // empty rows next to each tool call.
+  if (segments.length === 0) {
+    return null;
+  }
+
   // Tag the first bubble — that's where we'll render the attachment row, so
   // each user turn shows its attached assets exactly once even if the
   // content was split across multiple bubbles.
@@ -1049,7 +1137,7 @@ function RenderedMessage({ message }: { message: ChatMessage }) {
               </div>
               <div className="ai:space-y-2">
                 {segment.blocks.map((block, j) => (
-                  <RenderedBlock key={j} block={block} />
+                  <RenderedBlock key={j} block={block} toolLookup={toolLookup} />
                 ))}
                 {i === firstBubbleIndex && attachments.length > 0 && (
                   <div
@@ -1065,7 +1153,7 @@ function RenderedMessage({ message }: { message: ChatMessage }) {
             </MessageContent>
           </Message>
         ) : (
-          <RenderedBlock key={i} block={segment.block} />
+          <RenderedBlock key={i} block={segment.block} toolLookup={toolLookup} />
         ),
       )}
     </>
@@ -1113,7 +1201,13 @@ function SystemContextNote({ text }: { text: string }) {
   );
 }
 
-function RenderedBlock({ block }: { block: ContentBlock }) {
+function RenderedBlock({
+  block,
+  toolLookup,
+}: {
+  block: ContentBlock;
+  toolLookup: ToolLookup;
+}) {
   if (block.type === "text" && typeof (block as { text?: unknown }).text === "string") {
     return <Response>{(block as { text: string }).text}</Response>;
   }
@@ -1129,12 +1223,42 @@ function RenderedBlock({ block }: { block: ContentBlock }) {
     );
   }
   if (block.type === "tool_use") {
-    const b = block as { name: string; input: Record<string, unknown> };
+    const b = block as {
+      id?: string;
+      name: string;
+      input: Record<string, unknown>;
+    };
+    // Pair the call with its result when one has landed. Without a
+    // matching result the call is still in flight — render a running
+    // status so the editor sees a spinner in the header until the
+    // tool_result message arrives on the next poll. Tool_uses with no
+    // id (legacy persisted sessions, or any provider that doesn't emit
+    // call ids) can't be paired at all, so they render as "complete"
+    // — the alternative would be a spinner that never resolves.
+    const hasId = typeof b.id === "string" && b.id !== "";
+    const result = hasId ? toolLookup.results.get(b.id!) : undefined;
+    const status: "running" | "complete" | "error" = !hasId
+      ? "complete"
+      : !result
+        ? "running"
+        : result.is_error
+          ? "error"
+          : "complete";
+    // Auto-open while running (so the user can see what's being
+    // called) and on error (so the failure is visible without an
+    // extra click). Completed-on-mount tools stay collapsed.
+    const defaultOpen = status !== "complete";
     return (
-      <Tool>
-        <ToolHeader name={b.name} status="complete" />
+      <Tool defaultOpen={defaultOpen}>
+        <ToolHeader name={b.name} status={status} />
         <ToolContent>
           <ToolInput input={b.input} />
+          {result && (
+            <ToolOutput
+              output={result.content as Parameters<typeof ToolOutput>[0]["output"]}
+              isError={result.is_error}
+            />
+          )}
         </ToolContent>
       </Tool>
     );
@@ -1154,6 +1278,11 @@ function RenderedBlock({ block }: { block: ContentBlock }) {
     );
   }
   if (block.type === "tool_result") {
+    // Orphan tool_result — its matching tool_use either isn't in the
+    // transcript yet or never will be (legacy persisted sessions, an
+    // out-of-band fixture, etc.). The merge filter in `RenderedMessage`
+    // already removes results whose tool_use is present; anything that
+    // makes it here renders as a standalone card the old way.
     const b = block as {
       content: string | Array<{ type: string; [key: string]: unknown }>;
       is_error?: boolean;

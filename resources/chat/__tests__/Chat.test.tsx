@@ -126,6 +126,143 @@ describe("<Chat />", () => {
     expect(screen.getByText("boom")).toBeTruthy();
   });
 
+  test("merges tool_use and its tool_result into one card with both input and output", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: 1,
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            id: "call_42",
+            name: "list_entries",
+            input: { section: "news" },
+          },
+        ],
+      },
+      {
+        id: 2,
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "call_42",
+            content: '[{"id":1,"title":"Hello"}]',
+          },
+        ],
+      },
+    ];
+    render(<Chat bootstrap={bootstrap(messages)} api={makeApi()} pollIntervalMs={1_000_000} />);
+
+    // Exactly one tool card on the page — the result was merged in, not
+    // rendered as its own card.
+    const cards = document.querySelectorAll('[data-slot="tool"]');
+    expect(cards.length).toBe(1);
+
+    // Status pill reads complete — the result landed.
+    expect(screen.getByText("complete")).toBeTruthy();
+
+    // Expand the card and confirm both the input and the output are
+    // inside the same disclosure.
+    fireEvent.click(screen.getByText("list_entries"));
+    expect(screen.getByText(/section/)).toBeTruthy();
+    expect(screen.getByText(/"Hello"/)).toBeTruthy();
+  });
+
+  test("tool_use without a matching result renders with running status + spinner", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: 1,
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            id: "call_pending",
+            name: "get_entry",
+            input: { id: 7 },
+          },
+        ],
+      },
+    ];
+    render(<Chat bootstrap={bootstrap(messages)} api={makeApi()} pollIntervalMs={1_000_000} />);
+
+    expect(screen.getByText("running")).toBeTruthy();
+    // Spinner replaces the wrench icon while the call is in flight so
+    // the editor has an unambiguous "this is happening right now" cue.
+    expect(screen.getByTestId("tool-running-spinner")).toBeTruthy();
+  });
+
+  test("pairs an out-of-order tool_result that arrives on a later message", () => {
+    // First message kicks off two concurrent calls; second message
+    // carries the result for the SECOND call only (the first is still
+    // pending). The third message carries the missing first-call
+    // result. The renderer should pair each call with its own result.
+    const messages: ChatMessage[] = [
+      {
+        id: 1,
+        role: "assistant",
+        content: [
+          { type: "tool_use", id: "call_a", name: "tool_a", input: {} },
+          { type: "tool_use", id: "call_b", name: "tool_b", input: {} },
+        ],
+      },
+      {
+        id: 2,
+        role: "user",
+        content: [
+          { type: "tool_result", tool_use_id: "call_b", content: "B done" },
+        ],
+      },
+      {
+        id: 3,
+        role: "user",
+        content: [
+          { type: "tool_result", tool_use_id: "call_a", content: "A done" },
+        ],
+      },
+    ];
+    render(<Chat bootstrap={bootstrap(messages)} api={makeApi()} pollIntervalMs={1_000_000} />);
+
+    // Two tool cards, none in a "running" state — both results landed.
+    const cards = document.querySelectorAll('[data-slot="tool"]');
+    expect(cards.length).toBe(2);
+    expect(screen.queryAllByText("running").length).toBe(0);
+
+    // Both cards are auto-expanded? No — they start collapsed (status
+    // complete). Expand each and confirm the output landed on the
+    // right card.
+    fireEvent.click(screen.getByText("tool_a"));
+    expect(screen.getByText(/A done/)).toBeTruthy();
+    fireEvent.click(screen.getByText("tool_b"));
+    expect(screen.getByText(/B done/)).toBeTruthy();
+  });
+
+  test("user message that only carries merged tool_results renders nothing", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: 1,
+        role: "assistant",
+        content: [
+          { type: "tool_use", id: "call_x", name: "get_health", input: {} },
+        ],
+      },
+      {
+        id: 2,
+        role: "user",
+        content: [
+          { type: "tool_result", tool_use_id: "call_x", content: "ok" },
+        ],
+      },
+    ];
+    render(<Chat bootstrap={bootstrap(messages)} api={makeApi()} pollIntervalMs={1_000_000} />);
+
+    // The "user" role label only appears for visible user-role
+    // bubbles. Since the only user message in this transcript carries
+    // only the merged tool_result, no user bubble should render.
+    expect(screen.queryByText("user")).toBeNull();
+  });
+
+
   test("submitting the form calls sendMessage and clears the textarea", async () => {
     let sent = "";
     const api = makeApi({

@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from "react";
-import { ChevronRight, Wrench } from "lucide-react";
+import { ChevronRight, Loader2, Wrench } from "lucide-react";
 import { cn } from "../lib/utils";
 import type { ToolResultContentBlock } from "../types";
 
@@ -66,7 +66,15 @@ export function ToolHeader({ name, status = "complete", className }: ToolHeaderP
         className={cn("ai:h-3.5 ai:w-3.5 ai:transition-transform", open && "ai:rotate-90")}
         aria-hidden
       />
-      <Wrench className="ai:h-3.5 ai:w-3.5 ai:text-craftai-muted" aria-hidden />
+      {status === "running" ? (
+        <Loader2
+          className="ai:h-3.5 ai:w-3.5 ai:animate-spin ai:text-amber-600"
+          aria-hidden
+          data-testid="tool-running-spinner"
+        />
+      ) : (
+        <Wrench className="ai:h-3.5 ai:w-3.5 ai:text-craftai-muted" aria-hidden />
+      )}
       <span className="ai:font-medium">{name}</span>
       <span
         className={cn(

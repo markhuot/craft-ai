@@ -14,6 +14,25 @@ beforeEach(function () {
     $this->registry = new ToolRegistry();
     $this->registry->register(UpsertEntry::class);
     $this->registry->register(UpsertDraft::class);
+
+    // saveSite() writes to project config outside the test transaction —
+    // snapshot existing sites so anything a test creates can be removed.
+    $this->preexistingSiteIds = array_map(
+        fn ($s) => $s->id,
+        Craft::$app->sites->getAllSites(true),
+    );
+});
+
+afterEach(function () {
+    foreach (Craft::$app->sites->getAllSites(true) as $site) {
+        if (in_array($site->id, $this->preexistingSiteIds, true)) {
+            continue;
+        }
+        if ($site->primary) {
+            continue;
+        }
+        Craft::$app->sites->deleteSiteById($site->id);
+    }
 });
 
 function canonicalEntry(ToolRegistry $registry): array
@@ -237,4 +256,68 @@ it('emits a generic Draft saved. note for MCP clients without referencing open_p
     expect($output['notes'])->toBe('Draft saved.');
     expect($output['notes'])->not->toContain('open_preview');
     expect($output['draft']['title'])->toBe('MCP Draft');
+});
+
+it('anchors a canonical-entry draft to the requested site', function () {
+    // Spanish has to be in place BEFORE we make the section + entry so
+    // the section enables both locales. The beforeEach posts section
+    // doesn't qualify — it was created when only the primary existed.
+    $group = Craft::$app->sites->getAllGroups()[0];
+    $spanish = new \craft\models\Site([
+        'groupId' => $group->id,
+        'handle' => 'spanish',
+        'name' => 'Spanish',
+        'language' => 'es',
+        'primary' => false,
+        'hasUrls' => false,
+    ]);
+    Craft::$app->sites->saveSite($spanish);
+
+    $sectionHandle = 'multisite'.bin2hex(random_bytes(3));
+    Section::factory()->name(ucfirst($sectionHandle))->handle($sectionHandle)->create();
+    $entry = decode($this->registry->execute('upsert_entry', [
+        'section' => $sectionHandle, 'title' => 'Canonical',
+    ]))['data']['entry'];
+
+    $output = $this->registry->execute('upsert_draft', [
+        'entry' => $entry['id'],
+        'site' => 'spanish',
+        'title' => 'Borrador',
+    ]);
+
+    expect($output->isError)->toBeFalse($output->text);
+    $draft = decode($output)['data']['draft'];
+    expect($draft['siteId'])->toBe($spanish->id);
+    expect($draft['canonicalId'])->toBe($entry['id']);
+});
+
+it('errors clearly when drafting on a site the section is not enabled for', function () {
+    // German is added but the section's site_settings only cover the
+    // primary, so a draft on German is impossible without first
+    // extending the section. The tool should surface this rather than
+    // silently land the draft on the primary.
+    $group = Craft::$app->sites->getAllGroups()[0];
+    $german = new \craft\models\Site([
+        'groupId' => $group->id,
+        'handle' => 'german',
+        'name' => 'German',
+        'language' => 'de',
+        'primary' => false,
+        'hasUrls' => false,
+    ]);
+    Craft::$app->sites->saveSite($german);
+
+    // `posts` was created in beforeEach BEFORE German existed, so it
+    // doesn't enable German.
+    $entry = canonicalEntry($this->registry);
+
+    $output = $this->registry->execute('upsert_draft', [
+        'entry' => $entry['id'],
+        'site' => 'german',
+        'title' => 'Entwurf',
+    ]);
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('german');
+    expect($output->text)->toContain('upsert_section');
 });

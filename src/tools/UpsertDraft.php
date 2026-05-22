@@ -81,7 +81,7 @@ class UpsertDraft extends Tool
         #[Validate(ExistingEntryType::class, inSection: 'section')]
         #[Bind(EntryTypeBinder::class, inSection: 'section', defaultToFirst: true)]
         EntryType|string|int|null $type = null,
-        #[Description('Site handle for multi-site installs (e.g. "english", "french"). Used only when creating a fresh draft.')]
+        #[Description('Site handle or ID for multi-site installs (e.g. "spanish"). When creating a draft from a canonical `entry`, the draft is anchored to this site so subsequent saves edit the locale\'s row instead of the source. Ignored when updating an existing draft (drafts are already locked to a site).')]
         #[Validate(ExistingSite::class)]
         #[Bind(SiteBinder::class)]
         Site|string|int|null $site = null,
@@ -111,11 +111,53 @@ class UpsertDraft extends Tool
         if ($isUpdate) {
             $draft = $draftId;
         } elseif ($entry instanceof Entry) {
+            // Drafts are anchored to a specific site row of the canonical.
+            // The Entry binder resolved against the default site, so two
+            // things have to happen to land a draft on a non-default site:
+            //
+            // 1. Prefer the canonical's row on the target site when it
+            //    exists — duplicateElement uses the source instance's
+            //    siteId as the starting point for the draft's field
+            //    values.
+            // 2. Pass siteId through `newAttributes` so Craft creates the
+            //    draft's own per-site row on the target site (otherwise it
+            //    inherits the source instance's siteId silently).
+            //
+            // Step 2 is the load-bearing piece: sections with
+            // propagationMethod="custom" don't auto-propagate entries to
+            // new sites, so the canonical may only exist on the primary
+            // even though the section is enabled on others. Without (2)
+            // the draft lands on the wrong locale and subsequent saves
+            // silently overwrite the source.
+            $canonical = $entry;
+            $newAttributes = [];
+            if ($site instanceof Site && $entry->siteId !== $site->id) {
+                if (! $this->sectionEnabledForSite($entry, $site)) {
+                    $section = $entry->getSection();
+                    $sectionHandle = $section !== null ? $section->handle : '(unknown)';
+                    $siteHandle = $site->handle ?? (string) $site->id;
+                    return new ToolOutput(
+                        "Cannot create a draft on site \"{$siteHandle}\" — section \"{$sectionHandle}\" is not enabled for that site. Re-call upsert_section with `sites` extended to include \"{$siteHandle}\" first.",
+                        isError: true,
+                    );
+                }
+                $resolved = Entry::find()
+                    ->id($entry->id)
+                    ->siteId($site->id)
+                    ->status(null)
+                    ->one();
+                if ($resolved instanceof Entry) {
+                    $canonical = $resolved;
+                }
+                $newAttributes['siteId'] = $site->id;
+            }
+
             $draft = Craft::$app->drafts->createDraft(
-                $entry,
+                $canonical,
                 $creatorId,
                 $name,
                 $notes,
+                $newAttributes,
             );
         } elseif ($section instanceof Section) {
             if (! $type instanceof EntryType) {
@@ -240,5 +282,26 @@ class UpsertDraft extends Tool
             '_notes' => $notes,
             'data' => PreviewSuggestion::wrap($data, $url, 'draft', $this->context, $cpEditUrl),
         ];
+    }
+
+    /**
+     * Whether the canonical entry's section has a site_settings row for
+     * the target site. If false, the draft cannot live on that site and
+     * we error early with actionable guidance — Craft would otherwise
+     * throw a less informative exception inside duplicateElement.
+     */
+    private function sectionEnabledForSite(Entry $canonical, Site $site): bool
+    {
+        $section = $canonical->getSection();
+        if ($section === null) {
+            return true;
+        }
+        foreach ($section->getSiteSettings() as $row) {
+            if ((int) $row->siteId === $site->id) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -17,6 +17,25 @@ beforeEach(function () {
     $this->registry->register(GetEntry::class);
     $this->registry->register(GetDraft::class);
     $this->registry->register(GetDrafts::class);
+
+    // saveSite() writes project config outside the test transaction;
+    // snapshot existing sites so the cleanup removes any added.
+    $this->preexistingSiteIds = array_map(
+        fn ($s) => $s->id,
+        Craft::$app->sites->getAllSites(true),
+    );
+});
+
+afterEach(function () {
+    foreach (Craft::$app->sites->getAllSites(true) as $site) {
+        if (in_array($site->id, $this->preexistingSiteIds, true)) {
+            continue;
+        }
+        if ($site->primary) {
+            continue;
+        }
+        Craft::$app->sites->deleteSiteById($site->id);
+    }
 });
 
 it('round-trips a fresh draft via get_draft', function () {
@@ -69,6 +88,67 @@ it('does not return a draft from get_entry', function () {
     $output = $this->registry->execute('get_entry', ['id' => $created['id']]);
 
     expect($output->isError)->toBeTrue();
+});
+
+it('names the site in the notes so the agent knows which locale it just read', function () {
+    $created = decode($this->registry->execute('upsert_draft', [
+        'section' => 'posts',
+        'title' => 'Fresh Draft',
+    ]))['data']['draft'];
+
+    $output = $this->registry->execute('get_draft', ['draftId' => $created['draftId']]);
+
+    expect($output->isError)->toBeFalse($output->text);
+    $payload = decode($output);
+    expect($payload['_notes'])->toContain('on site');
+    $primary = Craft::$app->sites->getPrimarySite();
+    expect($payload['_notes'])->toContain($primary->handle);
+});
+
+it('returns the draft as it exists on the requested site', function () {
+    // Spanish has to be in place BEFORE the section + canonical so the
+    // section's site_settings cover both locales — same constraint as
+    // GetEntry's per-site test.
+    $group = Craft::$app->sites->getAllGroups()[0];
+    $spanish = new \craft\models\Site([
+        'groupId' => $group->id,
+        'handle' => 'spanish',
+        'name' => 'Spanish',
+        'language' => 'es',
+        'primary' => false,
+        'hasUrls' => false,
+    ]);
+    Craft::$app->sites->saveSite($spanish);
+
+    $sectionHandle = 'multisite'.bin2hex(random_bytes(3));
+    Section::factory()->name(ucfirst($sectionHandle))->handle($sectionHandle)->create();
+
+    $entry = decode($this->registry->execute('upsert_entry', [
+        'section' => $sectionHandle, 'title' => 'Canonical',
+    ]))['data']['entry'];
+
+    $draft = decode($this->registry->execute('upsert_draft', [
+        'entry' => $entry['id'],
+        'site' => 'spanish',
+        'title' => 'Borrador',
+    ]))['data']['draft'];
+
+    // Without site, the primary view comes back.
+    $primaryView = decode($this->registry->execute('get_draft', [
+        'draftId' => $draft['draftId'],
+    ]))['data'];
+    expect($primaryView['siteId'])->toBe(Craft::$app->sites->getPrimarySite()->id);
+
+    // With site=spanish, the Spanish row comes back.
+    $output = $this->registry->execute('get_draft', [
+        'draftId' => $draft['draftId'],
+        'site' => 'spanish',
+    ]);
+
+    expect($output->isError)->toBeFalse($output->text);
+    $payload = decode($output);
+    expect($payload['data']['siteId'])->toBe($spanish->id);
+    expect($payload['_notes'])->toContain('spanish');
 });
 
 it('returns a tokenized preview URL routed to the draft', function () {

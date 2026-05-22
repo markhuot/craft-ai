@@ -2,6 +2,8 @@
 
 namespace markhuot\craftai\tools;
 
+use Craft;
+use craft\base\Field;
 use craft\elements\Entry;
 use markhuot\craftai\attributes\Description;
 use markhuot\craftai\attributes\Validate;
@@ -15,6 +17,12 @@ use markhuot\craftai\validators\ExistingSite;
  *
  * Each result includes the entry's ID, title, status, section, URL, and custom
  * field values. Results default to 25 — use limit and offset to paginate.
+ *
+ * On multi-site installs, pass `site` to read entries as they exist on that
+ * locale. The response `_notes` always names the site the rows came back
+ * from and flags any custom fields whose translationMethod is not "site" —
+ * those share their value across locales, so saving them with a non-primary
+ * site will overwrite the source.
  */
 class GetEntries extends Tool
 {
@@ -123,22 +131,113 @@ class GetEntries extends Tool
             $query->offset($offset);
         }
 
-        $data = array_values(array_map(
+        $entries = array_values($query->all());
+
+        $data = array_map(
             static fn (Entry $entry): array => $entry->toArray(),
-            $query->all(),
-        ));
+            $entries,
+        );
 
         $appliedLimit = $limit ?? 25;
         $hitLimit = count($data) === $appliedLimit;
-        $notes = $data === []
-            ? 'No entries matched the given filters. Loosen filters (e.g. status: "any") or call get_sections to see what sections exist.'
-            : 'Returned '.count($data).' entry(ies)'
-                .($hitLimit ? " (limit={$appliedLimit} reached; pass offset to paginate)" : '')
-                .'. Use get_entry with an id for full details, or upsert_entry/upsert_draft with an id to modify.';
+        $notes = $this->buildNotes($entries, $hitLimit, $appliedLimit, $site);
 
         return [
             '_notes' => $notes,
             'data' => $data,
         ];
+    }
+
+    /**
+     * @param  list<Entry>  $entries
+     */
+    private function buildNotes(array $entries, bool $hitLimit, int $appliedLimit, ?string $siteFilter): string
+    {
+        if ($entries === []) {
+            return 'No entries matched the given filters. Loosen filters (e.g. status: "any") or call get_sections to see what sections exist.';
+        }
+
+        $base = 'Returned '.count($entries).' entry(ies)';
+        if ($hitLimit) {
+            $base .= " (limit={$appliedLimit} reached; pass offset to paginate)";
+        }
+        $base .= '. Use get_entry with an id for full details, or upsert_entry/upsert_draft with an id to modify.';
+
+        $siteContext = $this->renderSiteContext($entries, $siteFilter);
+        if ($siteContext !== '') {
+            $base .= ' '.$siteContext;
+        }
+
+        $nonSiteFields = $this->aggregatedNonSiteTranslationFields($entries);
+        if ($nonSiteFields !== []) {
+            $base .= ' ⚠️ Translation caution — these custom fields are NOT per-site (their value is shared across locales): '
+                .implode('; ', $nonSiteFields)
+                .'. To make one translatable, call upsert_field with `translationMethod="site"`.';
+        }
+
+        return $base;
+    }
+
+    /**
+     * @param  list<Entry>  $entries
+     */
+    private function renderSiteContext(array $entries, ?string $siteFilter): string
+    {
+        // All returned entries share a site when a filter was applied, or
+        // default to the primary site when not. Use the first row as the
+        // representative.
+        $first = $entries[0] ?? null;
+        if ($first === null || $first->siteId === null) {
+            return '';
+        }
+        $site = Craft::$app->sites->getSiteById($first->siteId);
+        if ($site === null) {
+            return '';
+        }
+
+        $suffix = $siteFilter === null
+            ? ' (the install\'s primary; pass `site=<handle>` to read another locale)'
+            : '';
+
+        return sprintf(
+            'Returned from site "%s" (id=%d, language="%s")%s.',
+            $site->handle ?? '',
+            $site->id ?? 0,
+            $site->language ?? '',
+            $suffix,
+        );
+    }
+
+    /**
+     * Collect a deduplicated list of custom fields across every returned
+     * entry whose translationMethod is not "site" — i.e. fields shared
+     * across locales.
+     *
+     * @param  list<Entry>  $entries
+     * @return list<string>
+     */
+    private function aggregatedNonSiteTranslationFields(array $entries): array
+    {
+        $seen = [];
+        foreach ($entries as $entry) {
+            $type = $entry->getType();
+            $layout = $type->getFieldLayout();
+            foreach ($layout->getCustomFields() as $field) {
+                if (! $field instanceof Field) {
+                    continue;
+                }
+                $method = $field->translationMethod;
+                if ($method === Field::TRANSLATION_METHOD_SITE) {
+                    continue;
+                }
+                $handle = $field->handle;
+                if ($handle === '' || $handle === null || isset($seen[$handle])) {
+                    continue;
+                }
+                $seen[$handle] = "{$handle} (translationMethod=\"{$method}\")";
+            }
+        }
+
+        return array_values($seen);
     }
 }

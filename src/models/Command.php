@@ -163,6 +163,8 @@ class Command extends Model
                 Sites are the locale boundary in Craft — every site has exactly one `language` (e.g. "en-US", "es-MX", "fr") and content fields store one value per site. Use `get_sites` to discover which locales already exist. If a site exists for the requested language, save the translation against it by calling `upsert_draft` (preferred) or `upsert_entry` with that site's handle as the `site` argument. If no site exists for the target language, create one with `upsert_site` first, then translate into it.
 
                 Preserve formatting, links, and inline references. Produce a draft of the translated entry rather than overwriting the original.
+
+                Only the entry's content is being translated — your conversation with the user is not. Reply to the user in the language they wrote to you in, not the target translation language. (If their request was in English, status updates and the final summary stay in English even when the translated draft is Spanish.)
                 PROMPT,
                 'enabled' => true,
             ],

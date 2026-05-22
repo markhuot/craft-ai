@@ -628,10 +628,10 @@
           </span>
           <div class="titles">
             <span class="eyebrow">Review comments</span>
-            <h3>The agent leaves inline feedback — and resolves it.</h3>
+            <h3>A two-way review surface — agent and editor.</h3>
           </div>
         </div>
-        <p>Run <code>/review entry:123</code> and the agent inspects every field, leaves targeted comments on the ones that need work, and resolves them later once they're addressed. Comments scope to fields, Matrix blocks, and even specific spans inside CKEditor text. Opening a thread forks a private discussion session so multiple comments never trample on each other.</p>
+        <p>Run <code>/review entry:123</code> and the agent inspects every field, leaves targeted comments, and resolves them once they're addressed. Editors can author their own straight from the entry edit screen — the widget pops a multi-line composer with attachments and per-session permission modes. Comments scope to fields, Matrix blocks, and even specific spans inside CKEditor text; each thread forks a private discussion session so multiple conversations never trample on each other.</p>
         <div class="comment-pop" style="margin-top:auto" aria-hidden="true">
           <div class="who">Craft AI</div>
           <div class="body">The headline buries the lede — readers need the "why" in the first six words. Suggest <em>"Brewed slowly, served carefully — meet our spring blend."</em></div>
@@ -641,10 +641,10 @@
           </div>
         </div>
         <div class="comment-pop" aria-hidden="true">
-          <div class="who">Craft AI</div>
-          <div class="body">This block's image is missing alt text. Suggest "Hands pouring filtered coffee from a gooseneck kettle."</div>
+          <div class="who">Maya (editor)</div>
+          <div class="body">Can we soften this paragraph? It reads like a press release — needs a human voice.</div>
           <div class="meta">
-            <span class="tag">Matrix block · image</span>
+            <span class="tag">CKEditor span</span>
             <span>Entry #482 · just now</span>
           </div>
         </div>
@@ -693,6 +693,27 @@
         </div>
       </article>
 
+      <!-- MULTI-SITE TRANSLATIONS -->
+      <article class="cell span-2">
+        <div class="cell-head">
+          <span class="icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+          </span>
+          <div class="titles">
+            <span class="eyebrow">Multi-site translations</span>
+            <h3>Locale-aware reads, drafts, and saves.</h3>
+          </div>
+        </div>
+        <p>Ask "translate this to Spanish" and the agent discovers locales with <code>get_sites</code>, anchors a draft to the target site, and only ever writes to that site's row — even when the source section is custom-propagation and the entry had no row there yet. If the target locale doesn't exist, <code>upsert_site</code> spins one up.</p>
+        <p>Reads carry their site context so the agent can tell which locale it's looking at, and field-level <code>translationMethod</code> warnings flash up-front whenever a non-per-site field would silently overwrite every locale.</p>
+        <div class="badges" aria-hidden="true">
+          <span class="badge brand">get_sites</span>
+          <span class="badge">upsert_site</span>
+          <span class="badge">site-aware drafts</span>
+          <span class="badge">translationMethod warnings</span>
+        </div>
+      </article>
+
       <!-- CODE COMPONENT FIELD -->
       <article class="cell span-2">
         <div class="cell-head">
@@ -730,7 +751,7 @@
             <h3>Pin a thread to specific text.</h3>
           </div>
         </div>
-        <p>Select text in a CKEditor field, hit Comment, and the marker survives Craft's HTML sanitizer. Each span owns its own forked chat thread.</p>
+        <p>Editors highlight prose and hit Comment; the agent does the same by wrapping the target text itself. Markers survive the HTML sanitizer, click the highlight for the popover, and resolving strips the wrapper server-side so the saved HTML stays clean.</p>
       </article>
 
       <!-- MCP SERVER -->

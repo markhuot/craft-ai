@@ -138,10 +138,55 @@ class UpsertSite extends Tool
             $site->handle,
         );
 
+        if (! $isUpdate) {
+            $sectionsMissing = $this->sectionsNotEnabledForSite($site->id);
+            if ($sectionsMissing !== []) {
+                $notes .= sprintf(
+                    ' ⚠️ Existing sections were configured before this site existed, so they do not yet enable it: [%s]. Until you re-call upsert_section for each with the full `sites` list including "%s", entries cannot be created or translated on this site.',
+                    implode(', ', $sectionsMissing),
+                    $site->handle,
+                );
+            }
+        }
+
         return [
             '_notes' => $notes,
             'data' => $this->serializeSite($site),
         ];
+    }
+
+    /**
+     * Return the handles of every section that has no site_settings row
+     * for the given site ID. Used to warn the agent that creating a site
+     * is only half the work — each affected section also needs the new
+     * site added to its enablement list.
+     *
+     * @return list<string>
+     */
+    private function sectionsNotEnabledForSite(?int $siteId): array
+    {
+        if ($siteId === null) {
+            return [];
+        }
+
+        $missing = [];
+        foreach (Craft::$app->entries->getAllSections() as $section) {
+            if (! is_string($section->handle) || $section->handle === '') {
+                continue;
+            }
+            $enabledForSite = false;
+            foreach ($section->getSiteSettings() as $row) {
+                if ((int) $row->siteId === $siteId) {
+                    $enabledForSite = true;
+                    break;
+                }
+            }
+            if (! $enabledForSite) {
+                $missing[] = $section->handle;
+            }
+        }
+
+        return $missing;
     }
 
     /**

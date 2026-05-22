@@ -132,3 +132,20 @@ it('mentions translation workflow in the _notes hint', function () {
     expect($payload['_notes'])->toContain('upsert_entry');
     expect($payload['_notes'])->toContain('itIT');
 });
+
+it('warns when existing sections do not enable the newly created site', function () {
+    $h = 'warnsite'.bin2hex(random_bytes(3));
+    \markhuot\craftpest\factories\Section::factory()
+        ->name(ucfirst($h))->handle($h)->type('channel')
+        ->create();
+
+    $output = $this->registry->execute('upsert_site', [
+        'name' => 'German',
+        'handle' => 'deDE',
+        'language' => 'de-DE',
+    ]);
+
+    expect($output->isError)->toBeFalse($output->text);
+    expect($output->text)->toContain($h);
+    expect($output->text)->toContain('upsert_section');
+});

@@ -93,3 +93,15 @@ it('rejects an invalid type filter', function () {
 
     expect($output->isError)->toBeTrue();
 });
+
+it('includes enabledSiteHandles on every section', function () {
+    Section::factory()->name('Posts')->handle('posts')->type('channel')->create();
+
+    $output = $this->registry->execute('get_sections', []);
+    expect($output->isError)->toBeFalse($output->text);
+
+    $payload = decode($output);
+    $posts = collect($payload['data'])->firstWhere('handle', 'posts');
+    expect($posts)->toHaveKey('enabledSiteHandles');
+    expect($posts['enabledSiteHandles'])->toContain('default');
+});

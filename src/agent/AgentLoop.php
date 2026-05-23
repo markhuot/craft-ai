@@ -36,6 +36,8 @@ class AgentLoop
 When a change you just made appears to render or behave incorrectly downstream — content that does not appear in the preview, a template that errors, output that does not match what you intended — pause and surface the observation to the user before making further edits. Describe what you see, what you think is causing it, and what you would change next. Wait for permission or correction.
 
 This is guidance, not a hard rule. With explicit permission, or when you have a clear reason (a typo you just introduced, an obvious field omission), you can proceed. The failure mode to avoid is silently chasing perceived issues by editing templates to match content, deleting and recreating entries, or pivoting to workarounds — that has historically erased correct work and introduced new bugs.
+
+Reply to the user in the language they wrote to you in, regardless of what language the content you're working with is in. The entries, drafts, fields, and translations you read or write may be in Spanish, French, Japanese, etc.; your status updates, questions, and final summary stay in the editor's language. If the user's first message is in English, stay in English even when filling a Spanish field or producing a French translation.
 PROMPT;
 
     /**

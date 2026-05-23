@@ -4,6 +4,8 @@ Craft AI brings an AI agent into Craft CMS. It adds a control panel chat interfa
 
 https://github.com/user-attachments/assets/0a96ecf0-2383-4f04-a704-6f94551977e6
 
+![Craft AI feature overview](.github/screenshots/bento.png)
+
 ## What it can do
 
 Craft AI gives an LLM access to Craft-aware tools that can:

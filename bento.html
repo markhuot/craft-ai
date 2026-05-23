@@ -467,6 +467,82 @@
     .preview-pane .ln { display: block; }
     .preview-pane .ln.brand { color: var(--brand); }
 
+    /* ai-fill field-and-star mockup */
+    .aifill {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: auto;
+      padding: 14px 14px 12px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    .aifill-field-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-family: var(--font-sans);
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .aifill-field-label .locale {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 500;
+      color: var(--brand);
+      background: var(--brand-soft);
+      padding: 1px 6px;
+      border-radius: 4px;
+      letter-spacing: 0.01em;
+    }
+    .aifill-field-label .star {
+      color: var(--brand);
+      display: inline-grid;
+      place-items: center;
+    }
+    .aifill-field-label .star svg { width: 14px; height: 14px; }
+    .aifill-input {
+      background: var(--bg-tint);
+      border-radius: 6px;
+      padding: 9px 11px;
+      font-family: var(--font-sans);
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+    .aifill-input em {
+      font-style: normal;
+      color: var(--ink-2);
+      background: rgba(229, 66, 43, 0.12);
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+    .aifill-trace {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--muted-2);
+      align-items: center;
+    }
+    .aifill-trace .step {
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg-tint);
+      color: var(--ink-2);
+    }
+    .aifill-trace .step.done {
+      border-color: rgba(229, 66, 43, 0.25);
+      background: var(--brand-soft);
+      color: var(--brand);
+    }
+    .aifill-trace .arrow { color: var(--border-strong); }
+
     /* tool mode pills */
     .modes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
     .mode {
@@ -617,6 +693,49 @@
           <span class="cursor">
             <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="m3 2 17 7-7 3-3 7z"/></svg>
           </span>
+        </div>
+      </article>
+
+      <!-- AI FILL STAR -->
+      <article class="cell span-2">
+        <div class="cell-head">
+          <span class="icon" aria-hidden="true">
+            <!-- Same four-point sparkle the JS bundle renders next to every field. -->
+            <svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 0.5 L9.4 5.6 L14.5 7 L9.4 8.4 L8 13.5 L6.6 8.4 L1.5 7 L6.6 5.6 Z"/>
+              <path d="M13 0.5 L13.6 2.4 L15.5 3 L13.6 3.6 L13 5.5 L12.4 3.6 L10.5 3 L12.4 2.4 Z" opacity="0.7"/>
+            </svg>
+          </span>
+          <div class="titles">
+            <span class="eyebrow">AI fill star</span>
+            <h3>One click on any field. The agent fills it.</h3>
+          </div>
+        </div>
+        <p>Every custom field on a CP edit screen gets a star next to its label. Click it and a fresh session pre-seeded with the element, field handle, and current locale opens in the chat — the agent reads the surrounding entry, decides on a value, and saves a draft. Works on entries, drafts, Matrix-nested entries, assets, and categories.</p>
+        <p>The session is anchored to the editor's current site, so filling a Spanish entry produces Spanish content from the first tool call — no four-step locale discovery dance.</p>
+        <div class="aifill" aria-hidden="true">
+          <div class="aifill-field-label">
+            <span>Story Content</span>
+            <span style="display:inline-flex; align-items:center; gap:8px;">
+              <span class="locale">site: spanish</span>
+              <span class="star">
+                <svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M8 0.5 L9.4 5.6 L14.5 7 L9.4 8.4 L8 13.5 L6.6 8.4 L1.5 7 L6.6 5.6 Z"/>
+                  <path d="M13 0.5 L13.6 2.4 L15.5 3 L13.6 3.6 L13 5.5 L12.4 3.6 L10.5 3 L12.4 2.4 Z" opacity="0.7"/>
+                </svg>
+              </span>
+            </span>
+          </div>
+          <div class="aifill-input">
+            <em>Los arcoíris</em> aparecen cuando la luz del sol atraviesa gotas de agua suspendidas en el aire, refractándose en sus colores constituyentes…
+          </div>
+          <div class="aifill-trace">
+            <span class="step done">★ AI fill</span>
+            <span class="arrow">›</span>
+            <span class="step">get_entry · site: spanish</span>
+            <span class="arrow">›</span>
+            <span class="step">upsert_draft</span>
+          </div>
         </div>
       </article>
 

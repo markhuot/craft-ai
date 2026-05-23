@@ -97,6 +97,8 @@ class MessagesController extends Controller
      * rendering. Today: just the parent + pivot pointers so the chat
      * component can render messages with id ≤ pivot at a lower opacity,
      * making the "where the comment thread starts" boundary visible.
+     *
+     * @return array{parentSessionId: ?string, originatingCommentId: ?int, forkPivotMessageId: ?int}
      */
     private static function sessionMeta(string $sessionId): array
     {
@@ -132,8 +134,8 @@ class MessagesController extends Controller
         foreach (AgentLoop::availableSlashCommands() as $name => $meta) {
             $payload[] = [
                 'name' => $name,
-                'description' => (string) ($meta['description'] ?? ''),
-                'takesArgs' => (bool) ($meta['takesArgs'] ?? false),
+                'description' => $meta['description'],
+                'takesArgs' => $meta['takesArgs'],
             ];
         }
         return $payload;

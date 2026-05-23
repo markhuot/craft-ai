@@ -73,8 +73,8 @@ class AnthropicProvider implements LlmProvider
             content: $payload['content'],
             stopReason: $payload['stop_reason'] ?? 'end_turn',
             raw: $payload,
-            inputTokens: isset($usage['input_tokens']) && is_int($usage['input_tokens']) ? $usage['input_tokens'] : null,
-            outputTokens: isset($usage['output_tokens']) && is_int($usage['output_tokens']) ? $usage['output_tokens'] : null,
+            inputTokens: $usage['input_tokens'] ?? null,
+            outputTokens: $usage['output_tokens'] ?? null,
         );
     }
 }

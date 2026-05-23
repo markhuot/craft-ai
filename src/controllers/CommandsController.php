@@ -26,6 +26,9 @@ use yii\web\Response;
  */
 class CommandsController extends Controller
 {
+    /**
+     * @param \yii\base\Action<\yii\base\Controller<\yii\base\Module>> $action
+     */
     public function beforeAction($action): bool
     {
         if (! parent::beforeAction($action)) {
@@ -85,9 +88,9 @@ class CommandsController extends Controller
         $plugin = Plugin::getInstance();
         $settings = $this->settings();
 
-        $uid = (string) $this->request->getBodyParam('uid', '');
-        $name = (string) $this->request->getBodyParam('name', '');
-        $prompt = (string) $this->request->getBodyParam('prompt', '');
+        $uid = $this->stringParam('uid');
+        $name = $this->stringParam('name');
+        $prompt = $this->stringParam('prompt');
         $enabled = (bool) $this->request->getBodyParam('enabled', false);
 
         $incoming = Command::fromArray([
@@ -154,7 +157,7 @@ class CommandsController extends Controller
     {
         $this->requirePostRequest();
 
-        $uid = (string) $this->request->getRequiredBodyParam('uid');
+        $uid = $this->stringParam('uid');
         $plugin = Plugin::getInstance();
         $settings = $this->settings();
 
@@ -186,6 +189,13 @@ class CommandsController extends Controller
         }
 
         return $settings;
+    }
+
+    private function stringParam(string $name, string $default = ''): string
+    {
+        $value = $this->request->getBodyParam($name, $default);
+
+        return is_string($value) ? $value : $default;
     }
 
     /**

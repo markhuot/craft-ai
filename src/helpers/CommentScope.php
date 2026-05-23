@@ -148,10 +148,10 @@ final class CommentScope
      */
     public static function idsFor(int $elementId, bool $isDraft): array
     {
-        return array_values(array_map(
+        return array_map(
             static fn (array $pair): int => $pair[0],
             self::pairsFor($elementId, $isDraft),
-        ));
+        );
     }
 
     private static function loadRoot(int $elementId, bool $isDraft): ?Entry

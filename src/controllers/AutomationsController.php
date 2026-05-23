@@ -26,6 +26,9 @@ use yii\web\Response;
  */
 class AutomationsController extends Controller
 {
+    /**
+     * @param \yii\base\Action<\yii\base\Controller<\yii\base\Module>> $action
+     */
     public function beforeAction($action): bool
     {
         if (! parent::beforeAction($action)) {
@@ -89,12 +92,12 @@ class AutomationsController extends Controller
         $plugin = Plugin::getInstance();
         $settings = $this->settings();
 
-        $uid = (string) $this->request->getBodyParam('uid', '');
-        $name = (string) $this->request->getBodyParam('name', '');
-        $event = (string) $this->request->getBodyParam('event', '');
-        $sectionHandle = (string) $this->request->getBodyParam('sectionHandle', '');
-        $volumeHandle = (string) $this->request->getBodyParam('volumeHandle', '');
-        $prompt = (string) $this->request->getBodyParam('prompt', '');
+        $uid = $this->stringParam('uid');
+        $name = $this->stringParam('name');
+        $event = $this->stringParam('event');
+        $sectionHandle = $this->stringParam('sectionHandle');
+        $volumeHandle = $this->stringParam('volumeHandle');
+        $prompt = $this->stringParam('prompt');
         $enabled = (bool) $this->request->getBodyParam('enabled', false);
 
         $incoming = Automation::fromArray([
@@ -167,7 +170,7 @@ class AutomationsController extends Controller
     {
         $this->requirePostRequest();
 
-        $uid = (string) $this->request->getRequiredBodyParam('uid');
+        $uid = $this->stringParam('uid');
         $plugin = Plugin::getInstance();
         $settings = $this->settings();
 
@@ -201,6 +204,13 @@ class AutomationsController extends Controller
         return $settings;
     }
 
+    private function stringParam(string $name, string $default = ''): string
+    {
+        $value = $this->request->getBodyParam($name, $default);
+
+        return is_string($value) ? $value : $default;
+    }
+
     /**
      * @return array<string, ?string>
      */
@@ -220,7 +230,7 @@ class AutomationsController extends Controller
     {
         $options = [['label' => Craft::t('craft-ai', '— Any section —'), 'value' => '']];
         foreach (Craft::$app->getEntries()->getAllSections() as $section) {
-            $options[] = ['label' => $section->name, 'value' => $section->handle];
+            $options[] = ['label' => $section->name ?? '', 'value' => $section->handle ?? ''];
         }
         return $options;
     }
@@ -232,7 +242,7 @@ class AutomationsController extends Controller
     {
         $options = [['label' => Craft::t('craft-ai', '— Any volume —'), 'value' => '']];
         foreach (Craft::$app->getVolumes()->getAllVolumes() as $volume) {
-            $options[] = ['label' => $volume->name, 'value' => $volume->handle];
+            $options[] = ['label' => $volume->name ?? '', 'value' => $volume->handle ?? ''];
         }
         return $options;
     }

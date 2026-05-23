@@ -50,13 +50,6 @@ class ApplyDraft extends Tool
             );
         }
 
-        if (! $canonical instanceof Entry) {
-            return new ToolOutput(
-                'Could not apply draft: Craft returned an unexpected element type.',
-                isError: true,
-            );
-        }
-
         $url = $canonical->getUrl();
         $data = $canonical->toArray();
         $data['url'] = $url;

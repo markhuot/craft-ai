@@ -112,14 +112,28 @@ class PreviewController extends Controller
                 return [];
             }
 
-            return $decoded;
+            return $this->stringKeyedOnly($decoded);
         }
 
         if (is_array($value)) {
-            /** @var array<string, mixed> $value */
-            return $value;
+            return $this->stringKeyedOnly($value);
         }
 
         return [];
+    }
+
+    /**
+     * @param array<mixed, mixed> $value
+     * @return array<string, mixed>
+     */
+    private function stringKeyedOnly(array $value): array
+    {
+        $out = [];
+        foreach ($value as $key => $v) {
+            if (is_string($key)) {
+                $out[$key] = $v;
+            }
+        }
+        return $out;
     }
 }

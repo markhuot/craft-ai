@@ -148,7 +148,39 @@ class UpsertField extends Tool
             $config['settings'] = $mergedSettings;
         }
 
-        $field = Craft::$app->fields->createField($config);
+        $typeClass = $config['type'] ?? null;
+        if (! is_string($typeClass) || ! is_a($typeClass, FieldInterface::class, true)) {
+            return new ToolOutput(
+                'Could not save field: a valid field type class is required.',
+                isError: true,
+            );
+        }
+        if (! is_string($config['name']) || $config['name'] === '') {
+            return new ToolOutput(
+                'Could not save field: `name` is required.',
+                isError: true,
+            );
+        }
+        if (! is_string($config['handle']) || $config['handle'] === '') {
+            return new ToolOutput(
+                'Could not save field: `handle` is required.',
+                isError: true,
+            );
+        }
+        // Instantiate the field type directly so its constructor runs the
+        // Typecast pass that converts serialized-enum strings (e.g.
+        // propagationMethod = 'all') back into the real BackedEnum instances.
+        // We mirror ComponentHelper::mergeSettings()'s flattening, then
+        // hand the config to the constructor. We do NOT route through
+        // Craft\services\Fields::createField() because its phpstan-param shape
+        // is strict about which keys may appear and rejects our richer config.
+        $constructorConfig = $config;
+        unset($constructorConfig['type']);
+        if (isset($constructorConfig['settings'])) {
+            $constructorConfig = array_merge($constructorConfig, $constructorConfig['settings']);
+        }
+        unset($constructorConfig['settings']);
+        $field = new $typeClass($constructorConfig);
 
         if (! Craft::$app->fields->saveField($field)) {
             $errors = $field->getErrors();

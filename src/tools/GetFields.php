@@ -37,9 +37,14 @@ class GetFields extends Tool
         #[Validate(AvailableFieldType::class)]
         ?string $type = null,
     ): array {
-        $fields = $type !== null
-            ? Craft::$app->fields->getFieldsByType($type)
-            : Craft::$app->fields->getAllFields();
+        if ($type !== null) {
+            if (! is_a($type, FieldInterface::class, true)) {
+                throw new \InvalidArgumentException("Unknown field type: {$type}");
+            }
+            $fields = Craft::$app->fields->getFieldsByType($type);
+        } else {
+            $fields = Craft::$app->fields->getAllFields();
+        }
 
         $data = array_values(array_map(
             static fn (FieldInterface $field): array => UpsertField::summarize($field),

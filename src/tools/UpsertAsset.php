@@ -166,8 +166,12 @@ class UpsertAsset extends Tool
 
     private function resolveFolder(Volume $volume, ?string $path): ?VolumeFolder
     {
+        $volumeId = $volume->id;
+        if ($volumeId === null) {
+            return null;
+        }
         $assets = Craft::$app->assets;
-        $root = $assets->getRootFolderByVolumeId($volume->id);
+        $root = $assets->getRootFolderByVolumeId($volumeId);
 
         if ($root === null || $path === null || $path === '' || $path === '/') {
             return $root;

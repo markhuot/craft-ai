@@ -22,8 +22,8 @@ use markhuot\craftai\attributes\Validate;
 class DeleteFields extends Tool
 {
     /**
-     * @param  list<int>  $ids
-     * @return array{_notes: string, data: array{results: array<string, array{deleted: bool, error?: string}>}}|ToolOutput
+     * @param  array<int|string>  $ids
+     * @return array{_notes: string, data: array{results: array<int|string, array{deleted: bool, error?: string}>}}|ToolOutput
      */
     public function __invoke(
         #[Description('Field IDs to delete. Stored values for these fields will be removed from all elements.')]
@@ -32,8 +32,8 @@ class DeleteFields extends Tool
     ): array|ToolOutput {
         $results = [];
         foreach ($ids as $id) {
-            if (! is_int($id) && ! (is_string($id) && ctype_digit($id))) {
-                $results[(string) $id] = ['deleted' => false, 'error' => 'ID must be a numeric value.'];
+            if (! is_int($id) && ! ctype_digit($id)) {
+                $results[$id] = ['deleted' => false, 'error' => 'ID must be a numeric value.'];
 
                 continue;
             }
@@ -41,22 +41,22 @@ class DeleteFields extends Tool
             $intId = (int) $id;
             $field = Craft::$app->fields->getFieldById($intId);
             if ($field === null) {
-                $results[(string) $intId] = ['deleted' => false, 'error' => "No field found with ID {$intId}."];
+                $results[$intId] = ['deleted' => false, 'error' => "No field found with ID {$intId}."];
 
                 continue;
             }
 
             try {
                 $deleted = Craft::$app->fields->deleteField($field);
-                $results[(string) $intId] = $deleted
+                $results[$intId] = $deleted
                     ? ['deleted' => true]
                     : ['deleted' => false, 'error' => 'Craft refused to delete the field.'];
             } catch (\Throwable $e) {
-                $results[(string) $intId] = ['deleted' => false, 'error' => $e->getMessage()];
+                $results[$intId] = ['deleted' => false, 'error' => $e->getMessage()];
             }
         }
 
-        $successCount = count(array_filter($results, static fn ($r) => ($r['deleted'] ?? false) === true));
+        $successCount = count(array_filter($results, static fn ($r) => $r['deleted'] === true));
         $total = count($results);
         $notes = "Deleted {$successCount} of {$total} fields. Each removed field is detached from every field layout that referenced it and its stored values are dropped from all elements — this is not recoverable. Per-ID outcomes are in data.results.";
 

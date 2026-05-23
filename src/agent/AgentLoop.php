@@ -248,7 +248,7 @@ PROMPT;
     {
         $trimmed = ltrim($rawCommand, '/');
         $parts = preg_split('/\s+/', $trimmed, 2) ?: [''];
-        $name = strtolower((string) ($parts[0] ?? ''));
+        $name = strtolower($parts[0]);
         $args = isset($parts[1]) ? trim((string) $parts[1]) : '';
 
         if (! isset(self::SLASH_COMMANDS[$name])) {
@@ -743,6 +743,8 @@ PROMPT;
      * conversation. In practice this is the simple case where the row
      * is the LAST one we've copied — but coding it as a general check
      * (rather than "assume orphans") keeps the helper reusable.
+     *
+     * @return list<string>
      */
     private function unmatchedToolUseIds(MessageRecord $row): array
     {
@@ -916,6 +918,9 @@ PROMPT;
         }
     }
 
+    /**
+     * @phpstan-impure
+     */
     private function isStopRequested(string $sessionId): bool
     {
         $session = SessionRecord::findOne(['id' => $sessionId]);
@@ -1329,7 +1334,7 @@ PROMPT;
         }
 
         $response = $e->getResponse();
-        if ($response === null || $response->getStatusCode() !== 400) {
+        if ($response->getStatusCode() !== 400) {
             return false;
         }
 
@@ -1506,12 +1511,15 @@ PROMPT;
     }
 
     /**
-     * @param list<array<string, mixed>> $blocks
+     * @param array<mixed, mixed> $blocks
      */
     private function renderBlocksForSummary(array $blocks): string
     {
         $parts = [];
         foreach ($blocks as $block) {
+            if (! is_array($block)) {
+                continue;
+            }
             $type = $block['type'] ?? '';
             if ($type === 'text' && is_string($block['text'] ?? null)) {
                 $parts[] = $block['text'];

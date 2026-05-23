@@ -20,8 +20,8 @@ use markhuot\craftai\attributes\Validate;
 class DeleteEntryTypes extends Tool
 {
     /**
-     * @param  list<int>  $ids
-     * @return array{_notes: string, data: array{results: array<string, array{deleted: bool, error?: string}>}}|ToolOutput
+     * @param  array<int|string>  $ids
+     * @return array{_notes: string, data: array{results: array<int|string, array{deleted: bool, error?: string}>}}|ToolOutput
      */
     public function __invoke(
         #[Description('Entry type IDs to delete.')]
@@ -30,8 +30,8 @@ class DeleteEntryTypes extends Tool
     ): array|ToolOutput {
         $results = [];
         foreach ($ids as $id) {
-            if (! is_int($id) && ! (is_string($id) && ctype_digit($id))) {
-                $results[(string) $id] = ['deleted' => false, 'error' => 'ID must be a numeric value.'];
+            if (! is_int($id) && ! ctype_digit($id)) {
+                $results[$id] = ['deleted' => false, 'error' => 'ID must be a numeric value.'];
 
                 continue;
             }
@@ -39,22 +39,22 @@ class DeleteEntryTypes extends Tool
             $intId = (int) $id;
             $entryType = Craft::$app->entries->getEntryTypeById($intId);
             if ($entryType === null) {
-                $results[(string) $intId] = ['deleted' => false, 'error' => "No entry type found with ID {$intId}."];
+                $results[$intId] = ['deleted' => false, 'error' => "No entry type found with ID {$intId}."];
 
                 continue;
             }
 
             try {
                 $deleted = Craft::$app->entries->deleteEntryTypeById($intId);
-                $results[(string) $intId] = $deleted
+                $results[$intId] = $deleted
                     ? ['deleted' => true]
                     : ['deleted' => false, 'error' => 'Craft refused to delete the entry type.'];
             } catch (\Throwable $e) {
-                $results[(string) $intId] = ['deleted' => false, 'error' => $e->getMessage()];
+                $results[$intId] = ['deleted' => false, 'error' => $e->getMessage()];
             }
         }
 
-        $successCount = count(array_filter($results, static fn ($r) => ($r['deleted'] ?? false) === true));
+        $successCount = count(array_filter($results, static fn ($r) => $r['deleted'] === true));
         $total = count($results);
         $notes = "Deleted {$successCount} of {$total} entry types. Every entry that used this entry type is also removed, and the type is detached from any sections that referenced it — re-run get_sections afterward if you need a fresh section/entry-type mapping. Failures are in data.results.";
 

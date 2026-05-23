@@ -78,7 +78,10 @@ class RemoveFieldLayoutElement extends Tool
             );
         }
 
-        $reloaded = Craft::$app->entries->getEntryTypeById($entryType->id);
+        $entryTypeId = $entryType->id;
+        $reloaded = $entryTypeId !== null
+            ? Craft::$app->entries->getEntryTypeById($entryTypeId)
+            : null;
         $removedSummary = UpsertFieldLayoutElement::summarizeElement($removed);
         $layoutSummary = UpsertFieldLayoutElement::summarizeLayout($reloaded ?? $entryType);
 

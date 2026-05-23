@@ -23,8 +23,8 @@ use markhuot\craftai\attributes\Validate;
 class DeleteEntries extends Tool
 {
     /**
-     * @param  list<int>  $ids
-     * @return array{_notes: string, data: array{results: array<string, array{deleted: bool, error?: string}>}}|ToolOutput
+     * @param  array<int|string>  $ids
+     * @return array{_notes: string, data: array{results: array<int|string, array{deleted: bool, error?: string}>}}|ToolOutput
      */
     public function __invoke(
         #[Description('Entry IDs to delete.')]
@@ -35,8 +35,8 @@ class DeleteEntries extends Tool
     ): array|ToolOutput {
         $results = [];
         foreach ($ids as $id) {
-            if (! is_int($id) && ! (is_string($id) && ctype_digit($id))) {
-                $results[(string) $id] = ['deleted' => false, 'error' => 'ID must be a numeric value.'];
+            if (! is_int($id) && ! ctype_digit($id)) {
+                $results[$id] = ['deleted' => false, 'error' => 'ID must be a numeric value.'];
 
                 continue;
             }
@@ -44,22 +44,22 @@ class DeleteEntries extends Tool
             $intId = (int) $id;
             $entry = Entry::find()->id($intId)->status(null)->one();
             if (! $entry instanceof Entry) {
-                $results[(string) $intId] = ['deleted' => false, 'error' => "No entry found with ID {$intId}."];
+                $results[$intId] = ['deleted' => false, 'error' => "No entry found with ID {$intId}."];
 
                 continue;
             }
 
             try {
                 $deleted = Craft::$app->elements->deleteElement($entry, $hardDelete ?? false);
-                $results[(string) $intId] = $deleted
+                $results[$intId] = $deleted
                     ? ['deleted' => true]
                     : ['deleted' => false, 'error' => 'Craft refused to delete the entry.'];
             } catch (\Throwable $e) {
-                $results[(string) $intId] = ['deleted' => false, 'error' => $e->getMessage()];
+                $results[$intId] = ['deleted' => false, 'error' => $e->getMessage()];
             }
         }
 
-        $successCount = count(array_filter($results, static fn ($r) => ($r['deleted'] ?? false) === true));
+        $successCount = count(array_filter($results, static fn ($r) => $r['deleted'] === true));
         $total = count($results);
         $mode = ($hardDelete ?? false) ? 'hard-deleted' : 'soft-deleted (recoverable from the trash)';
         $notes = "{$mode} {$successCount} of {$total} entries. Per-ID outcomes are in data.results — common failure causes are unknown IDs, the ID belonging to a different element type, or insufficient permission. Soft-deleted entries can be restored from Craft's trash until purged.";

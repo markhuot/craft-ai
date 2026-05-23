@@ -1,9 +1,29 @@
 <?php
 
-namespace yii;
+namespace yii\base {
+    class Application {}
+}
 
-class BaseYii
-{
-    /** @var \craft\web\Application|\craft\console\Application */
-    public static $app;
+namespace yii\web {
+    class Application extends \yii\base\Application {}
+}
+
+namespace yii\console {
+    class Application extends \yii\base\Application {}
+}
+
+namespace craft\web {
+    class Application extends \yii\web\Application {}
+}
+
+namespace craft\console {
+    class Application extends \yii\console\Application {}
+}
+
+namespace yii {
+    class BaseYii
+    {
+        /** @var \craft\web\Application|\craft\console\Application */
+        public static $app;
+    }
 }

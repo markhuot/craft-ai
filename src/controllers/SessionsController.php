@@ -403,7 +403,7 @@ class SessionsController extends Controller
             $descriptors,
         );
 
-        $mode = $session?->toolMode ?? 'full';
+        $mode = $session !== null ? $session->toolMode : 'full';
         $enabled = null;
         if ($mode === 'custom' && $session?->enabledTools !== null && $session->enabledTools !== '') {
             try {
@@ -433,10 +433,6 @@ class SessionsController extends Controller
      */
     private function resolveClientType(): ClientType
     {
-        if (! $this->request instanceof \craft\web\Request) {
-            return ClientType::WIDGET;
-        }
-
         return $this->request->getIsCpRequest() ? ClientType::CP : ClientType::WIDGET;
     }
 
@@ -669,13 +665,28 @@ class SessionsController extends Controller
             if (! is_array($decoded)) {
                 return null;
             }
-            return $decoded;
+            return $this->stringKeyedOnly($decoded);
         }
 
         if (is_array($value)) {
-            return $value;
+            return $this->stringKeyedOnly($value);
         }
 
         return null;
+    }
+
+    /**
+     * @param array<mixed, mixed> $value
+     * @return array<string, mixed>
+     */
+    private function stringKeyedOnly(array $value): array
+    {
+        $out = [];
+        foreach ($value as $key => $v) {
+            if (is_string($key)) {
+                $out[$key] = $v;
+            }
+        }
+        return $out;
     }
 }

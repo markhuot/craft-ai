@@ -259,7 +259,10 @@ class UpsertFieldLayoutElement extends Tool
             );
         }
 
-        $reloaded = Craft::$app->entries->getEntryTypeById($entryType->id);
+        $entryTypeId = $entryType->id;
+        $reloaded = $entryTypeId !== null
+            ? Craft::$app->entries->getEntryTypeById($entryTypeId)
+            : null;
         $target = $reloaded ?? $entryType;
         $elementUidStored = $element->uid ?? null;
 
@@ -334,7 +337,7 @@ class UpsertFieldLayoutElement extends Tool
             if ($tipText !== null) {
                 $element->tip = $tipText;
             }
-            if ($tipStyle !== null) {
+            if ($tipStyle === 'tip' || $tipStyle === 'warning') {
                 $element->style = $tipStyle;
             }
             if ($tipDismissible !== null) {
@@ -442,7 +445,7 @@ class UpsertFieldLayoutElement extends Tool
     }
 
     /**
-     * @return array<array-key, mixed>
+     * @return array<string, mixed>
      */
     public static function summarizeLayout(EntryType $entryType): array
     {

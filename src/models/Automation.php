@@ -132,7 +132,7 @@ class Automation extends Model
      * Inflate from a raw associative array, tolerating missing keys so
      * older settings rows (pre-feature) and partial POSTs both work.
      *
-     * @param array<string, mixed> $data
+     * @param array<int|string, mixed> $data
      */
     public static function fromArray(array $data): self
     {

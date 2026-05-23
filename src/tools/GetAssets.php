@@ -138,12 +138,16 @@ class GetAssets extends Tool
             $query->site($site);
         }
 
-        if ($before !== null) {
-            $query->before($before);
-        }
-
-        if ($after !== null) {
-            $query->after($after);
+        // AssetQuery doesn't expose Entry-style `before()`/`after()` helpers,
+        // so we filter by `dateCreated` directly. Combining both bounds
+        // requires a single call with an `['and', ...]` payload — calling
+        // `dateCreated()` twice would overwrite the first bound.
+        if ($before !== null && $after !== null) {
+            $query->dateCreated(['and', '< '.$before, '>= '.$after]);
+        } elseif ($before !== null) {
+            $query->dateCreated('< '.$before);
+        } elseif ($after !== null) {
+            $query->dateCreated('>= '.$after);
         }
 
         if ($dateModified !== null) {

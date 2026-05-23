@@ -68,7 +68,7 @@ class Settings extends Model
      * "add row" button can leave blank stubs without dispatching against
      * an empty automation.
      *
-     * @param list<array<string, mixed>|Automation>|array<string|int, array<string, mixed>|Automation> $value
+     * @param array<int|string, mixed> $value
      */
     public function setAutomations(array $value): void
     {
@@ -76,6 +76,9 @@ class Settings extends Model
         foreach ($value as $row) {
             if ($row instanceof Automation) {
                 $row = $row->toConfigArray();
+            }
+            if (! is_array($row)) {
+                continue;
             }
 
             $prompt = $row['prompt'] ?? '';
@@ -120,7 +123,7 @@ class Settings extends Model
      * so an editor who cleared the table doesn't see the defaults
      * resurrect on the next request.
      *
-     * @param list<array<string, mixed>|Command>|array<string|int, array<string, mixed>|Command>|null $value
+     * @param array<int|string, mixed>|null $value
      */
     public function setCommands(?array $value): void
     {
@@ -137,6 +140,9 @@ class Settings extends Model
         foreach ($value as $row) {
             if ($row instanceof Command) {
                 $row = $row->toConfigArray();
+            }
+            if (! is_array($row)) {
+                continue;
             }
 
             // The fromArray() coercion lowercases / strips invalid chars
@@ -181,17 +187,28 @@ class Settings extends Model
      * with magic getters — `toArray()` and validation still see the
      * canonical attribute names without any extra wiring.
      */
+    /**
+     * @param array<string, mixed>|null $values
+     */
     public function setAttributes($values, $safeOnly = true): void
     {
-        if (is_array($values)) {
-            if (array_key_exists('commands', $values)) {
-                $this->setCommands($values['commands']);
-                unset($values['commands']);
+        if ($values === null) {
+            return;
+        }
+
+        if (array_key_exists('commands', $values)) {
+            $commands = $values['commands'];
+            if ($commands === null || is_array($commands)) {
+                $this->setCommands($commands);
             }
-            if (array_key_exists('automations', $values)) {
-                $this->setAutomations($values['automations'] ?? []);
-                unset($values['automations']);
+            unset($values['commands']);
+        }
+        if (array_key_exists('automations', $values)) {
+            $automations = $values['automations'] ?? [];
+            if (is_array($automations)) {
+                $this->setAutomations($automations);
             }
+            unset($values['automations']);
         }
 
         parent::setAttributes($values, $safeOnly);

@@ -23,8 +23,8 @@ use markhuot\craftai\attributes\Validate;
 class DeleteAssets extends Tool
 {
     /**
-     * @param  list<int>  $ids
-     * @return array{_notes: string, data: array{results: array<string, array{deleted: bool, error?: string}>}}|ToolOutput
+     * @param  array<int|string>  $ids
+     * @return array{_notes: string, data: array{results: array<int|string, array{deleted: bool, error?: string}>}}|ToolOutput
      */
     public function __invoke(
         #[Description('Asset IDs to delete.')]
@@ -35,8 +35,8 @@ class DeleteAssets extends Tool
     ): array|ToolOutput {
         $results = [];
         foreach ($ids as $id) {
-            if (! is_int($id) && ! (is_string($id) && ctype_digit($id))) {
-                $results[(string) $id] = ['deleted' => false, 'error' => 'ID must be a numeric value.'];
+            if (! is_int($id) && ! ctype_digit($id)) {
+                $results[$id] = ['deleted' => false, 'error' => 'ID must be a numeric value.'];
 
                 continue;
             }
@@ -44,22 +44,22 @@ class DeleteAssets extends Tool
             $intId = (int) $id;
             $asset = Asset::find()->id($intId)->status(null)->one();
             if (! $asset instanceof Asset) {
-                $results[(string) $intId] = ['deleted' => false, 'error' => "No asset found with ID {$intId}."];
+                $results[$intId] = ['deleted' => false, 'error' => "No asset found with ID {$intId}."];
 
                 continue;
             }
 
             try {
                 $deleted = Craft::$app->elements->deleteElement($asset, $hardDelete ?? false);
-                $results[(string) $intId] = $deleted
+                $results[$intId] = $deleted
                     ? ['deleted' => true]
                     : ['deleted' => false, 'error' => 'Craft refused to delete the asset.'];
             } catch (\Throwable $e) {
-                $results[(string) $intId] = ['deleted' => false, 'error' => $e->getMessage()];
+                $results[$intId] = ['deleted' => false, 'error' => $e->getMessage()];
             }
         }
 
-        $successCount = count(array_filter($results, static fn ($r) => ($r['deleted'] ?? false) === true));
+        $successCount = count(array_filter($results, static fn ($r) => $r['deleted'] === true));
         $total = count($results);
         $mode = ($hardDelete ?? false) ? 'hard-deleted' : 'soft-deleted (recoverable from the trash)';
         $notes = "{$mode} {$successCount} of {$total} assets. Underlying files on the volume are removed only on hard delete; soft-deleted assets keep their source file until the trash is emptied. Per-ID outcomes are in data.results.";

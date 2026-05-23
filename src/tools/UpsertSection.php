@@ -105,7 +105,7 @@ class UpsertSection extends Tool
             $section->handle = $handle;
         }
 
-        if ($type !== null) {
+        if ($type === 'channel' || $type === 'single' || $type === 'structure') {
             $section->type = $type;
         }
 

@@ -74,8 +74,8 @@ class OpenAiProvider implements LlmProvider
             content: $this->translateAssistantIn($message),
             stopReason: $this->translateStopReason($finishReason),
             raw: $payload,
-            inputTokens: isset($usage['prompt_tokens']) && is_int($usage['prompt_tokens']) ? $usage['prompt_tokens'] : null,
-            outputTokens: isset($usage['completion_tokens']) && is_int($usage['completion_tokens']) ? $usage['completion_tokens'] : null,
+            inputTokens: $usage['prompt_tokens'] ?? null,
+            outputTokens: $usage['completion_tokens'] ?? null,
         );
     }
 

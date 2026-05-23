@@ -101,7 +101,7 @@ class Command extends Model
      * partial CP form post (the "+" stub row) doesn't blow up before the
      * Settings filter has a chance to drop it.
      *
-     * @param array<string, mixed> $data
+     * @param array<int|string, mixed> $data
      */
     public static function fromArray(array $data): self
     {

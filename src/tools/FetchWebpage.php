@@ -217,7 +217,7 @@ class FetchWebpage extends Tool
     private static function isSameHostAsRequest(string $url): bool
     {
         $request = Craft::$app->getRequest();
-        if ($request->getIsConsoleRequest()) {
+        if (! $request instanceof \craft\web\Request) {
             return false;
         }
 
@@ -227,7 +227,7 @@ class FetchWebpage extends Tool
         }
 
         $currentHost = $request->getHostName();
-        if (! is_string($currentHost) || $currentHost === '') {
+        if ($currentHost === null || $currentHost === '') {
             return false;
         }
 
@@ -236,12 +236,13 @@ class FetchWebpage extends Tool
 
     private static function buildCookieHeader(): string
     {
-        if (Craft::$app->getRequest()->getIsConsoleRequest()) {
+        $request = Craft::$app->getRequest();
+        if (! $request instanceof \craft\web\Request) {
             return '';
         }
 
         $parts = [];
-        foreach (Craft::$app->getRequest()->getCookies() as $cookie) {
+        foreach ($request->getCookies() as $cookie) {
             $parts[] = $cookie->name.'='.rawurlencode((string) $cookie->value);
         }
 

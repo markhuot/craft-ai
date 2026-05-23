@@ -67,8 +67,28 @@ class ServerFactory
             handler: $descriptor->toolClass,
             name: $mcp['name'],
             description: $mcp['description'],
-            annotations: isset($mcp['annotations']) ? ToolAnnotations::fromArray($mcp['annotations']) : null,
+            annotations: isset($mcp['annotations'])
+                ? ToolAnnotations::fromArray(self::narrowAnnotations($mcp['annotations']))
+                : null,
             inputSchema: $mcp['inputSchema'],
         );
+    }
+
+    /**
+     * @param array<string, mixed> $annotations
+     * @return array{title?: string, readOnlyHint?: bool, destructiveHint?: bool, idempotentHint?: bool, openWorldHint?: bool}
+     */
+    private static function narrowAnnotations(array $annotations): array
+    {
+        $out = [];
+        if (isset($annotations['title']) && is_string($annotations['title'])) {
+            $out['title'] = $annotations['title'];
+        }
+        foreach (['readOnlyHint', 'destructiveHint', 'idempotentHint', 'openWorldHint'] as $key) {
+            if (isset($annotations[$key]) && is_bool($annotations[$key])) {
+                $out[$key] = $annotations[$key];
+            }
+        }
+        return $out;
     }
 }

@@ -61,7 +61,11 @@ class ToolDescriptor
             : ($attribute->description ?? self::extractDescription($reflection));
         $this->inputSchema = self::buildInputSchema($reflection);
         $this->annotations = $attribute === null ? [] : $attribute->annotations;
-        $this->kind = $toolClass::KIND;
+        $kind = $toolClass::KIND;
+        if (! $kind instanceof ToolKind) {
+            throw new \RuntimeException("Tool {$toolClass} declared an invalid KIND.");
+        }
+        $this->kind = $kind;
         /** @var list<ClientType> $allowed */
         $allowed = $toolClass::ALLOWED_CLIENTS;
         $this->allowedClients = $allowed;
@@ -266,18 +270,18 @@ class ToolDescriptor
 
         $types = [];
         foreach ($docBlock->getTagsByName('param') as $tag) {
-            if (! method_exists($tag, 'getVariableName') || ! method_exists($tag, 'getType')) {
+            if (! $tag instanceof \phpDocumentor\Reflection\DocBlock\Tags\Param) {
                 continue;
             }
             $name = $tag->getVariableName();
-            if (! is_string($name) || $name === '') {
+            if ($name === null || $name === '') {
                 continue;
             }
             $type = $tag->getType();
             if ($type === null) {
                 continue;
             }
-            $types[$name] = (string) $type;
+            $types[$name] = $type->__toString();
         }
 
         return $types;

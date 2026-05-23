@@ -3,6 +3,7 @@
 namespace markhuot\craftai\tools;
 
 use Craft;
+use craft\behaviors\DraftBehavior;
 use craft\elements\Entry;
 use craft\models\EntryType;
 use craft\models\Section;
@@ -167,9 +168,11 @@ class UpsertDraft extends Tool
                 );
             }
 
+            $typeId = $type->id;
+            assert($typeId !== null);
             $draft = new Entry();
             $draft->sectionId = $section->id;
-            $draft->typeId = $type->id;
+            $draft->typeId = $typeId;
 
             if ($site instanceof Site) {
                 $draft->siteId = $site->id;
@@ -231,12 +234,16 @@ class UpsertDraft extends Tool
             );
         }
 
-        if ($isUpdate && $name !== null) {
-            $draft->draftName = $name;
-        }
-
-        if ($isUpdate && $notes !== null) {
-            $draft->draftNotes = $notes;
+        if ($isUpdate && ($name !== null || $notes !== null)) {
+            $behavior = $draft->getBehavior('draft');
+            if ($behavior instanceof DraftBehavior) {
+                if ($name !== null) {
+                    $behavior->draftName = $name;
+                }
+                if ($notes !== null) {
+                    $behavior->draftNotes = $notes;
+                }
+            }
         }
 
         if ($title !== null) {

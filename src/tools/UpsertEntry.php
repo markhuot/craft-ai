@@ -135,9 +135,11 @@ class UpsertEntry extends Tool
             assert($title !== null);
             assert($type instanceof EntryType);
 
+            $typeId = $type->id;
+            assert($typeId !== null);
             $entry = new Entry();
             $entry->sectionId = $section->id;
-            $entry->typeId = $type->id;
+            $entry->typeId = $typeId;
 
             if ($authorId !== null) {
                 $entry->authorId = $authorId;

@@ -114,7 +114,7 @@ class GetImage extends Tool
      */
     private static function resolveMediaType(string $contentType, string $bytes): ?string
     {
-        $lower = strtolower(trim(explode(';', $contentType, 2)[0] ?? ''));
+        $lower = strtolower(trim(explode(';', $contentType, 2)[0]));
         $supported = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
         if (in_array($lower, $supported, true)) {

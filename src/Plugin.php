@@ -3,6 +3,7 @@
 namespace markhuot\craftai;
 
 use Craft;
+use craft\base\ElementInterface;
 use craft\base\Model;
 use craft\base\Plugin as BasePlugin;
 use craft\elements\Asset;
@@ -311,7 +312,7 @@ class Plugin extends BasePlugin
             View::EVENT_BEFORE_RENDER_PAGE_TEMPLATE,
             function (TemplateEvent $event): void {
                 if ($event->templateMode === View::TEMPLATE_MODE_SITE) {
-                    $this->lastRenderedTemplate = is_string($event->template) ? $event->template : null;
+                    $this->lastRenderedTemplate = $event->template;
                 }
             },
         );
@@ -764,7 +765,7 @@ HTML;
     {
         try {
             $matched = Craft::$app->getUrlManager()->getMatchedElement();
-            if ($matched !== null) {
+            if ($matched instanceof ElementInterface) {
                 return $this->summarizeElement($matched);
             }
         } catch (\Throwable) {
@@ -814,33 +815,25 @@ HTML;
             // use to query for the draft. (draftId in the URL refers to
             // the drafts-table row, not the elements-table id, so a
             // plain getElementById($draftId) would miss.)
-            $canonical = Craft::$app->getElements()->getElementById($elementId, null, $siteId);
-            if (! $canonical instanceof \craft\base\ElementInterface) {
+            $canonical = Craft::$app->getElements()->getElementById($elementId, ElementInterface::class, $siteId);
+            if (! $canonical instanceof ElementInterface) {
                 return null;
             }
 
             if ($draftId !== null) {
-                /** @var class-string<\craft\base\ElementInterface> $class */
                 $class = $canonical::class;
-                /** @var \craft\elements\db\ElementQueryInterface $query */
                 $query = $class::find();
-                if (method_exists($query, 'draftId')) {
-                    $query->draftId($draftId);
-                }
-                if (method_exists($query, 'provisionalDrafts')) {
-                    // null = include both provisional and non-provisional
-                    // drafts (provisionalDrafts(true) would exclude the
-                    // explicit-save ones).
-                    $query->provisionalDrafts(null);
-                }
-                if ($siteId !== null && method_exists($query, 'siteId')) {
+                $query->draftId($draftId);
+                // null = include both provisional and non-provisional
+                // drafts (provisionalDrafts(true) would exclude the
+                // explicit-save ones).
+                $query->provisionalDrafts(null);
+                if ($siteId !== null) {
                     $query->siteId($siteId);
                 }
-                if (method_exists($query, 'status')) {
-                    $query->status(null);
-                }
+                $query->status(null);
                 $draft = $query->one();
-                if ($draft instanceof \craft\base\ElementInterface) {
+                if ($draft instanceof ElementInterface) {
                     return $this->summarizeElement($draft);
                 }
             }
@@ -871,7 +864,7 @@ HTML;
     {
         try {
             $url = $request->getAbsoluteUrl();
-            return is_string($url) && $url !== '' ? $url : null;
+            return $url !== '' ? $url : null;
         } catch (\Throwable) {
             return null;
         }
@@ -881,7 +874,7 @@ HTML;
      * Drop anything that can't round-trip cleanly through JSON (resources,
      * objects, etc.) so the bootstrap stays a flat scalar map.
      *
-     * @param array<string, mixed> $params
+     * @param array<array-key, mixed> $params
      * @return array<string, string|int|float|bool|null>
      */
     private function scalarizeQuery(array $params): array
@@ -924,8 +917,8 @@ HTML;
             }
         }
 
-        $title = method_exists($element, 'getUiLabel') ? (string) $element->getUiLabel() : null;
-        if ($title === '' || $title === null) {
+        $title = (string) $element->getUiLabel();
+        if ($title === '') {
             $title = $element->title ?? null;
         }
 
@@ -936,7 +929,7 @@ HTML;
         $isDraft = false;
         $draftId = null;
         $canonicalId = null;
-        if (method_exists($element, 'getIsDraft') && $element->getIsDraft()) {
+        if ($element->getIsDraft()) {
             $isDraft = true;
             $draftId = isset($element->draftId) ? (int) $element->draftId : null;
             $canonicalId = isset($element->canonicalId) ? (int) $element->canonicalId : null;
@@ -1218,10 +1211,10 @@ HTML;
         }
 
         $resolved = ['apiKey' => $apiKey];
-        if (isset($config['model']) && (is_string($config['model']) || $config['model'] === null)) {
+        if (array_key_exists('model', $config) && (is_string($config['model']) || $config['model'] === null)) {
             $resolved['model'] = $config['model'];
         }
-        if (isset($config['baseUrl']) && (is_string($config['baseUrl']) || $config['baseUrl'] === null)) {
+        if (array_key_exists('baseUrl', $config) && (is_string($config['baseUrl']) || $config['baseUrl'] === null)) {
             $resolved['baseUrl'] = $config['baseUrl'];
         }
 

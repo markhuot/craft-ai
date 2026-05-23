@@ -3,12 +3,14 @@ parameters:
     paths:
         - src
     excludePaths:
-        analyseAndScan:
+        analyse:
             - phpstan-stubs/*
     bootstrapFiles:
         - phpstan-bootstrap.php
     scanFiles:
         - vendor/craftcms/cms/src/Craft.php
+        - vendor/craftcms/cms/src/web/Application.php
+        - vendor/craftcms/cms/src/console/Application.php
         - vendor/yiisoft/yii2/Yii.php
         - phpstan-stubs/CkeditorField.stub
         - phpstan-stubs/CkeditorEntryType.stub

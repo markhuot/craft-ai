@@ -419,11 +419,14 @@ class CommentsController extends Controller
             // turn so the fork sees the comment in context. If we somehow
             // don't have an authorMessageId (older comments predating that
             // column), fall back to the latest message in the parent.
-            $throughMessageId = $record->authorMessageId !== null
-                ? (int) $record->authorMessageId
-                : (int) (MessageRecord::find()
+            if ($record->authorMessageId !== null) {
+                $throughMessageId = (int) $record->authorMessageId;
+            } else {
+                $maxId = MessageRecord::find()
                     ->where(['sessionId' => $record->sessionId])
-                    ->max('id') ?? 0);
+                    ->max('id');
+                $throughMessageId = is_numeric($maxId) ? (int) $maxId : 0;
+            }
 
             if ($throughMessageId <= 0) {
                 throw new BadRequestHttpException("Comment #{$commentId} has no anchor message to fork from.");

@@ -39,7 +39,9 @@ function createTestAsset(string $filename, $registry, $sourceFile): int
 
     expect($output->isError)->toBeFalse($output->text);
 
-    return (int) json_decode($output->text, true)['data']['id'];
+    // CP context always wraps the upsert payload with a cpEditUrl note,
+    // so the asset record lives at `data.asset.id` rather than `data.id`.
+    return (int) json_decode($output->text, true)['data']['asset']['id'];
 }
 
 it('returns metadata + thumbUrl for the requested asset ids', function () {
@@ -100,4 +102,32 @@ it('drops ids that do not resolve to an asset', function () {
     $response->assertOk();
     $response->assertJsonCount(1, 'assets');
     $response->assertJsonPath('assets.0.id', $id);
+});
+
+it('rejects an unauthenticated request', function () {
+    // AssetsController doesn't scope by user (asset metadata is CMS-wide,
+    // not session-bound), but the endpoint still requires authentication —
+    // a guest must not be able to enumerate asset details. Drop the test
+    // identity established in TestCase::setUp before hitting the action.
+    Craft::$app->getUser()->setIdentity(null);
+
+    $threw = false;
+    try {
+        test()->http('get', 'admin')
+            ->addHeader('Accept', 'application/json')
+            ->setBody([
+                'action' => 'craft-ai/assets/info',
+                'ids' => '1',
+            ])
+            ->send();
+    } catch (\yii\web\ForbiddenHttpException) {
+        $threw = true;
+    } catch (\yii\base\UserException) {
+        // Yii's requireLogin throws different concrete exception types
+        // depending on the request context; either flavor proves the
+        // guard fired.
+        $threw = true;
+    }
+
+    expect($threw)->toBeTrue();
 });

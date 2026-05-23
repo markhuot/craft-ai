@@ -97,6 +97,63 @@ it('truncates the catch-block error before persisting so the failure path itself
     expect($blocks[0]['text'])->toContain('… [truncated]');
 });
 
+it('falls through to the request identity when the originating user no longer exists', function () {
+    // Jobs persist `userId` for permission-restoration on the worker. If the
+    // user gets deleted between enqueue and execute (e.g. account deletion
+    // while a long-running job sits in the queue), `User::find()` returns
+    // null and the job should still run — falling back to whatever identity
+    // the queue worker has. Production never wants the run to crash on a
+    // null-identity lookup; failing tools surface their own permission
+    // errors through the normal loop path.
+    $providerCalled = false;
+    rebindProvider(new class($providerCalled) implements LlmProvider {
+        public function __construct(public bool &$called) {}
+
+        public function createMessage(array $messages, array $tools = [], ?string $system = null): ProviderResponse
+        {
+            $this->called = true;
+
+            return new ProviderResponse('msg_orphan', [['type' => 'text', 'text' => 'ran without owner']], 'end_turn');
+        }
+    });
+
+    $userMessage = new MessageRecord();
+    $userMessage->sessionId = 'job-deleted-user';
+    $userMessage->role = 'user';
+    $userMessage->content = json_encode([['type' => 'text', 'text' => 'continue without me']]);
+    $userMessage->save();
+
+    // Pin a userId on the job that does NOT resolve. AgentJob::execute will
+    // run `User::find()->id(99999)->one()` and skip the setIdentity step;
+    // the test harness's pre-configured admin identity should remain in
+    // place so the loop can run.
+    $job = new AgentJob([
+        'sessionId' => 'job-deleted-user',
+        'userId' => 99999,
+    ]);
+
+    $job->execute(Craft::$app->getQueue());
+
+    expect($providerCalled)->toBeTrue();
+
+    $records = MessageRecord::find()
+        ->where(['sessionId' => 'job-deleted-user'])
+        ->orderBy(['id' => SORT_ASC])
+        ->all();
+
+    // The assistant turn must have landed — confirming the loop completed
+    // end-to-end despite the missing user. If AgentJob blew up on the
+    // null identity, we'd see only the user row.
+    expect($records)->toHaveCount(2);
+    expect($records[1]->role)->toBe('assistant');
+    $assistantContent = json_decode($records[1]->content, true);
+    expect($assistantContent[0]['text'])->toBe('ran without owner');
+
+    // Session should also be back to inactive — `finally` ran.
+    $session = SessionRecord::findOne(['id' => 'job-deleted-user']);
+    expect((bool) $session->active)->toBeFalse();
+});
+
 it('clears a stale stopRequested flag when starting a new run', function () {
     rebindProvider(new class implements LlmProvider {
         public function createMessage(array $messages, array $tools = [], ?string $system = null): ProviderResponse

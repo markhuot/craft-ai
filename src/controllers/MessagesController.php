@@ -11,6 +11,7 @@ use markhuot\craftai\preview\PreviewService;
 use markhuot\craftai\queue\AgentJob;
 use markhuot\craftai\records\MessageRecord;
 use markhuot\craftai\records\SessionRecord;
+use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
 class MessagesController extends Controller
@@ -22,6 +23,11 @@ class MessagesController extends Controller
         $this->requireLogin();
 
         $sessionId = $this->request->getRequiredQueryParam('sessionId');
+        if (! is_string($sessionId) || $sessionId === '') {
+            throw new \yii\web\BadRequestHttpException('sessionId must be a non-empty string.');
+        }
+        $this->ensureSessionOwnership($sessionId);
+
         $afterParam = $this->request->getQueryParam('after', '0');
         $after = is_numeric($afterParam) ? (int) $afterParam : 0;
 
@@ -62,6 +68,28 @@ class MessagesController extends Controller
             // entirely in that case.
             'session' => self::sessionMeta($sessionId),
         ]);
+    }
+
+    /**
+     * Refuse to read/write a session owned by a different user. Mirrors
+     * SessionsController's ownership check — sessions that don't exist yet
+     * are allowed through so the React shell can render an empty composer
+     * for a freshly-minted session id before the first send creates the
+     * row. Legacy rows with `userId === null` are treated as "any owner."
+     */
+    private function ensureSessionOwnership(string $sessionId): void
+    {
+        $session = SessionRecord::findOne(['id' => $sessionId]);
+        if ($session === null) {
+            return;
+        }
+
+        $identity = Craft::$app->getUser()->getIdentity();
+        $userId = $identity !== null ? (int) $identity->id : null;
+
+        if ($session->userId !== null && $session->userId !== $userId) {
+            throw new NotFoundHttpException("No session found with id {$sessionId}.");
+        }
     }
 
     /**
@@ -262,6 +290,8 @@ class MessagesController extends Controller
         if (! is_string($sessionId) || ! is_string($userMessage)) {
             throw new \yii\web\BadRequestHttpException('sessionId and message must be strings.');
         }
+        $this->ensureSessionOwnership($sessionId);
+
         $async = (bool) $this->request->getBodyParam('async', false);
 
         /** @var AgentLoop $loop */

@@ -53,11 +53,16 @@ it('uses the provided key as the noun in the notes prompt', function () {
     expect($wrapped['notes'])->toStartWith('Draft saved');
 });
 
-it('returns the payload unchanged on the CP surface when no URL is available', function () {
+it('still wraps the payload on the CP surface when no URL is available', function () {
+    // Surface-consistent shape: even on CP with no preview URL we wrap
+    // under the noun key, so downstream consumers (tests, the agent
+    // prompt, MCP clients) can always reach the payload at `data.{noun}`
+    // regardless of the surface that produced it. The note degrades to
+    // the bare "<Noun> saved." line.
     expect(PreviewSuggestion::wrap(['id' => 9], null, 'entry', cpContext()))
-        ->toBe(['id' => 9]);
+        ->toBe(['notes' => 'Entry saved.', 'entry' => ['id' => 9]]);
     expect(PreviewSuggestion::wrap(['id' => 9], '', 'entry', cpContext()))
-        ->toBe(['id' => 9]);
+        ->toBe(['notes' => 'Entry saved.', 'entry' => ['id' => 9]]);
 });
 
 it('places notes before the payload key so the agent sees the instruction first', function () {
@@ -182,12 +187,14 @@ it('omits the cpEditUrl link instruction on MCP (no browser to click through)', 
     expect($wrapped['notes'])->not->toContain('admin');
 });
 
-it('still returns the payload unchanged on CP when neither URL nor cpEditUrl is available', function () {
-    // Regression guard for the historical "skip wrap entirely on CP
-    // with nothing to add" shortcut — the cpEditUrl support didn't
-    // change that contract for callers that don't pass either.
+it('still wraps the payload on CP when neither URL nor cpEditUrl is available', function () {
+    // Regression guard for the surface-consistent contract: callers
+    // that pass neither a preview URL nor a cpEditUrl on CP still get
+    // the same `{notes, {noun}}` envelope as every other surface, with
+    // the note degraded to the bare "<Noun> saved." line. Anything else
+    // would force consumers to branch on surface to find the data.
     expect(PreviewSuggestion::wrap(['id' => 9], null, 'entry', cpContext(), null))
-        ->toBe(['id' => 9]);
+        ->toBe(['notes' => 'Entry saved.', 'entry' => ['id' => 9]]);
     expect(PreviewSuggestion::wrap(['id' => 9], null, 'entry', cpContext(), ''))
-        ->toBe(['id' => 9]);
+        ->toBe(['notes' => 'Entry saved.', 'entry' => ['id' => 9]]);
 });

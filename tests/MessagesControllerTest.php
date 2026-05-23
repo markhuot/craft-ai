@@ -5,6 +5,7 @@ use craft\elements\User;
 use markhuot\craftai\agent\providers\LlmProvider;
 use markhuot\craftai\agent\providers\ProviderResponse;
 use markhuot\craftai\records\MessageRecord;
+use markhuot\craftai\records\SessionRecord;
 
 beforeEach(function () {
     $user = new User();
@@ -104,7 +105,9 @@ it('includes resolved attachments on user messages in the messages JSON', functi
     @unlink($sourceFile);
 
     expect($assetCreated->isError)->toBeFalse($assetCreated->text);
-    $assetId = json_decode($assetCreated->text, true)['data']['id'];
+    // CP context wraps the upsert payload (`data.asset.id`); the older
+    // `data.id` shape only applies to unwrapped surfaces.
+    $assetId = json_decode($assetCreated->text, true)['data']['asset']['id'];
 
     $record = new MessageRecord();
     $record->sessionId = 'mc-attachments';
@@ -181,4 +184,62 @@ it('exposes the last successfully-opened preview URL on the messages envelope', 
 
     $response->assertOk();
     $response->assertJsonPath('lastPreviewUrl', 'https://example.com/x/final');
+});
+
+it('refuses to list messages for a session owned by another user', function () {
+    // Cross-user read protection on the chat transcript. Without the
+    // ownership check, any logged-in user could enumerate sessionIds and
+    // siphon another user's conversation by polling /craft-ai/messages.
+    $otherId = createOtherUser('mc-list-other');
+
+    $theirs = new SessionRecord();
+    $theirs->id = 'mc-theirs-list';
+    $theirs->userId = $otherId;
+    $theirs->save();
+
+    $msg = new MessageRecord();
+    $msg->sessionId = 'mc-theirs-list';
+    $msg->role = 'user';
+    $msg->content = json_encode([['type' => 'text', 'text' => 'private note']]);
+    $msg->save();
+
+    $threw = false;
+    try {
+        test()->get('admin?action=craft-ai/messages&sessionId=mc-theirs-list');
+    } catch (\yii\web\NotFoundHttpException) {
+        $threw = true;
+    }
+
+    expect($threw)->toBeTrue();
+});
+
+it('refuses to append messages to a session owned by another user', function () {
+    // Cross-user write protection. Without this check, an attacker could
+    // inject user-role messages into a target's session — those would
+    // run through the LLM under the victim's account on the next loop
+    // tick, burning their token budget and contaminating their history.
+    $otherId = createOtherUser('mc-create-other');
+
+    $theirs = new SessionRecord();
+    $theirs->id = 'mc-theirs-create';
+    $theirs->userId = $otherId;
+    $theirs->save();
+
+    $threw = false;
+    try {
+        postMessages([
+            'sessionId' => 'mc-theirs-create',
+            'message' => 'attacker payload',
+        ]);
+    } catch (\yii\web\NotFoundHttpException) {
+        $threw = true;
+    }
+
+    expect($threw)->toBeTrue();
+
+    // Confirm no message was actually appended.
+    $count = MessageRecord::find()
+        ->where(['sessionId' => 'mc-theirs-create'])
+        ->count();
+    expect((int) $count)->toBe(0);
 });

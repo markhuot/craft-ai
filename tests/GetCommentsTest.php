@@ -31,7 +31,7 @@ function seedComment(int $elementId, array $attrs = []): CommentRecord {
 }
 
 it('lists open comments for an entry by default', function () {
-    $entry = Entry::factory()->section('posts')->title('E')->create();
+    $entry = Entry::factory()->section('posts')->title('Entry')->create();
     seedComment($entry->id, ['body' => 'first', 'fieldHandle' => 'title']);
     seedComment($entry->id, ['body' => 'second']);
     seedComment($entry->id, ['body' => 'resolved one', 'status' => CommentRecord::STATUS_RESOLVED]);
@@ -45,7 +45,7 @@ it('lists open comments for an entry by default', function () {
 });
 
 it('lists all comments when status is "all"', function () {
-    $entry = Entry::factory()->section('posts')->title('E')->create();
+    $entry = Entry::factory()->section('posts')->title('Entry')->create();
     seedComment($entry->id, ['body' => 'open']);
     seedComment($entry->id, ['body' => 'resolved', 'status' => CommentRecord::STATUS_RESOLVED]);
 
@@ -58,20 +58,34 @@ it('lists all comments when status is "all"', function () {
     expect($payload['data'])->toHaveCount(2);
 });
 
-it('separates draft comments from canonical comments by isDraft', function () {
-    $entry = Entry::factory()->section('posts')->title('E')->create();
+it('returns comments on both sides of the draft/canonical pair regardless of scope', function () {
+    // `CommentScope::pairsFor` bridges draft↔canonical in both directions
+    // so a comment authored on the draft sticks to the entry when the
+    // editor later views the canonical, and vice versa. Both surfaces
+    // therefore return the same merged set; each row still carries its
+    // own `isDraft` flag so the caller can tell where it was anchored.
+    $entry = Entry::factory()->section('posts')->title('Entry')->create();
     $draft = \Craft::$app->drafts->createDraft($entry, 1);
 
     seedComment((int) $entry->id, ['body' => 'on canonical']);
     seedComment((int) $draft->draftId, ['body' => 'on draft', 'isDraft' => true]);
 
-    $canonical = decode($this->registry->execute('get_comments', ['entryId' => $entry->id]));
-    $draftOnly = decode($this->registry->execute('get_comments', ['draftId' => $draft->draftId]));
+    $fromCanonical = decode($this->registry->execute('get_comments', ['entryId' => $entry->id]));
+    $fromDraft = decode($this->registry->execute('get_comments', ['draftId' => $draft->draftId]));
 
-    expect($canonical['data'])->toHaveCount(1);
-    expect($canonical['data'][0]['body'])->toBe('on canonical');
-    expect($draftOnly['data'])->toHaveCount(1);
-    expect($draftOnly['data'][0]['body'])->toBe('on draft');
+    expect($fromCanonical['data'])->toHaveCount(2);
+    expect($fromDraft['data'])->toHaveCount(2);
+
+    $bodiesFromCanonical = array_column($fromCanonical['data'], 'body');
+    expect($bodiesFromCanonical)->toContain('on canonical');
+    expect($bodiesFromCanonical)->toContain('on draft');
+
+    // The per-row isDraft flag is preserved so callers can still split
+    // the merged result themselves.
+    $canonicalRow = collect($fromCanonical['data'])->firstWhere('body', 'on canonical');
+    $draftRow = collect($fromCanonical['data'])->firstWhere('body', 'on draft');
+    expect($canonicalRow['isDraft'])->toBeFalse();
+    expect($draftRow['isDraft'])->toBeTrue();
 });
 
 it('includes comments on nested Matrix block entries when scoped to the parent entry', function () {

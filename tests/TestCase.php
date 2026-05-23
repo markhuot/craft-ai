@@ -20,22 +20,30 @@ class TestCase extends PestTestCase
         if (! $migrated) {
             $migrated = true;
             $db = Craft::$app->getDb();
-            if ($db->getSchema()->getTableSchema('{{%craftai_messages}}', true) !== null) {
-                $db->createCommand()->dropTable('{{%craftai_messages}}')->execute();
-            }
-            if ($db->getSchema()->getTableSchema('{{%craftai_sessions}}', true) !== null) {
-                $db->createCommand()->dropTable('{{%craftai_sessions}}')->execute();
-            }
-            if ($db->getSchema()->getTableSchema('{{%craftai_preview_requests}}', true) !== null) {
-                $db->createCommand()->dropTable('{{%craftai_preview_requests}}')->execute();
-            }
-            if ($db->getSchema()->getTableSchema('{{%craftai_comments}}', true) !== null) {
-                $db->createCommand()->dropTable('{{%craftai_comments}}')->execute();
+            foreach ([
+                '{{%craftai_messages}}',
+                '{{%craftai_sessions}}',
+                '{{%craftai_preview_requests}}',
+                '{{%craftai_comments}}',
+            ] as $table) {
+                if ($db->getSchema()->getTableSchema($table, true) !== null) {
+                    $db->createCommand()->dropTable($table)->execute();
+                }
             }
 
             $plugins = Craft::$app->getPlugins();
             if ($plugins->getPlugin('craft-ai') === null) {
                 $plugins->installPlugin('craft-ai');
+            } elseif ($db->getSchema()->getTableSchema('{{%craftai_messages}}', true) === null) {
+                // Plugin is registered as installed but its tables were
+                // dropped above without a matching uninstall — happens when
+                // a previous test process installed, the install record
+                // persisted across runs, and this process's drops left the
+                // schema empty. Re-run the install migration manually so
+                // each fresh test process gets a populated schema.
+                $migration = new Install();
+                $migration->db = $db;
+                $migration->safeUp();
             }
         }
 

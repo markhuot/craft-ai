@@ -46,6 +46,12 @@ class AgentJob extends BaseJob implements RetryableJobInterface
             $user = User::find()->id($this->userId)->one();
             if ($user instanceof User) {
                 Craft::$app->getUser()->setIdentity($user);
+            } else {
+                // User was deleted between enqueue and run. Forget the stale
+                // ID so the rest of the job (notably `setActive`'s lazy
+                // session create) doesn't try to persist a foreign-key
+                // reference to a row that no longer exists.
+                $this->userId = null;
             }
         }
 

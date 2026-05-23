@@ -307,7 +307,9 @@ it('annotates the user message with attached asset details when sending to the p
         'sourcePath' => $sourceFile,
     ]);
     expect($assetCreated->isError)->toBeFalse($assetCreated->text);
-    $assetId = json_decode($assetCreated->text, true)['data']['id'];
+    // CP context wraps the upsert payload under `data.asset` for the
+    // cpEditUrl note; reach through the wrapper to get the asset id.
+    $assetId = json_decode($assetCreated->text, true)['data']['asset']['id'];
 
     $provider = new FakeProvider([
         new ProviderResponse('msg_1', [['type' => 'text', 'text' => 'thanks']], 'end_turn'),

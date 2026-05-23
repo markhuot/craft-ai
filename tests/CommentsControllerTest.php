@@ -437,13 +437,118 @@ it('serializes existing comments with referenceId in the index payload', functio
 });
 
 it('404s on an unknown commentId for resolve', function () {
-    $response = test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/comments/resolve',
-            'commentId' => 999999,
-        ])
-        ->send();
+    // The harness raises the NotFoundHttpException straight through rather
+    // than rendering it as a 404 response, so the assertion shape matches
+    // the other denial tests in this file.
+    $threw = false;
+    try {
+        test()->http('post', 'admin')
+            ->withCsrfToken()
+            ->setBody([
+                'action' => 'craft-ai/comments/resolve',
+                'commentId' => 999999,
+            ])
+            ->send();
+    } catch (\yii\web\NotFoundHttpException) {
+        $threw = true;
+    }
 
-    expect($response->getStatusCode())->toBe(404);
+    expect($threw)->toBeTrue();
+});
+
+it('refuses to resolve a comment that belongs to another user\'s session', function () {
+    // Stand up a foreign user who owns the parent session of a comment.
+    // The currently-logged-in user (admin, id=1) should not be able to
+    // resolve the comment even though they're authenticated — the
+    // ownership check on the originating session has to gate this.
+    $otherId = createOtherUser('comment-resolve-other');
+
+    $entry = Entry::factory()->section('posts')->title('Entry')->create();
+
+    $theirSession = new SessionRecord();
+    $theirSession->id = 'sess-theirs-resolve';
+    $theirSession->userId = $otherId;
+    $theirSession->save();
+
+    $comment = makeStoredComment([
+        'elementId' => $entry->id,
+        'sessionId' => 'sess-theirs-resolve',
+        'body' => 'do not touch',
+    ]);
+
+    $threw = false;
+    try {
+        test()->http('post', 'admin')
+            ->withCsrfToken()
+            ->setBody([
+                'action' => 'craft-ai/comments/resolve',
+                'commentId' => $comment->id,
+            ])
+            ->send();
+    } catch (\yii\web\NotFoundHttpException) {
+        $threw = true;
+    }
+
+    expect($threw)->toBeTrue();
+
+    // Comment must remain open — the denial is real, not just a swallowed
+    // 404 with the write still happening.
+    $reloaded = CommentRecord::findOne(['id' => $comment->id]);
+    expect($reloaded->status)->toBe(CommentRecord::STATUS_OPEN);
+});
+
+it('refuses to open a comment thread whose parent session belongs to another user', function () {
+    // P0 fix: actionOpenThread used to fork sessions without verifying the
+    // current user owned the parent. A malicious caller could enumerate
+    // commentIds, fork foreign sessions, and either read forked history
+    // or pollute the original via the seed system note.
+    $otherId = createOtherUser('comment-open-other');
+
+    $entry = Entry::factory()->section('posts')->title('Entry')->create();
+
+    $theirSession = new SessionRecord();
+    $theirSession->id = 'sess-theirs-open';
+    $theirSession->userId = $otherId;
+    $theirSession->save();
+
+    // Seed the parent session so a fork *could* be created if the check
+    // weren't in place — this proves the test is exercising the auth
+    // path, not silently failing on "nothing to fork."
+    $msg = new MessageRecord();
+    $msg->sessionId = 'sess-theirs-open';
+    $msg->role = 'assistant';
+    $msg->content = json_encode([['type' => 'text', 'text' => 'left a note']]);
+    $msg->save();
+
+    $comment = makeStoredComment([
+        'elementId' => $entry->id,
+        'sessionId' => 'sess-theirs-open',
+        'body' => 'foreign comment',
+        'authorMessageId' => (int) $msg->id,
+    ]);
+
+    $threw = false;
+    try {
+        test()->http('post', 'admin')
+            ->withCsrfToken()
+            ->setBody([
+                'action' => 'craft-ai/comments/open-thread',
+                'commentId' => $comment->id,
+            ])
+            ->send();
+    } catch (\yii\web\NotFoundHttpException) {
+        $threw = true;
+    }
+
+    expect($threw)->toBeTrue();
+
+    // No fork should have been created. If one was, the attacker would
+    // now have a session id pointing into foreign conversation history.
+    $reloaded = CommentRecord::findOne(['id' => $comment->id]);
+    expect($reloaded->threadSessionId)->toBeNull();
+
+    $forkCount = (int) SessionRecord::find()
+        ->where(['parentSessionId' => 'sess-theirs-open'])
+        ->count();
+    expect($forkCount)->toBe(0);
 });

@@ -347,6 +347,8 @@ class CommentsController extends Controller
             throw new NotFoundHttpException("No comment found with id {$commentId}.");
         }
 
+        $this->ensureSessionOwnership($record->sessionId, "No comment found with id {$commentId}.");
+
         if ($record->status !== CommentRecord::STATUS_RESOLVED) {
             $record->status = CommentRecord::STATUS_RESOLVED;
             $record->resolvedBy = CommentRecord::RESOLVED_BY_USER;
@@ -401,6 +403,8 @@ class CommentsController extends Controller
         if ($record === null) {
             throw new NotFoundHttpException("No comment found with id {$commentId}.");
         }
+
+        $this->ensureSessionOwnership($record->sessionId, "No comment found with id {$commentId}.");
 
         $threadSessionId = $record->threadSessionId;
         $created = false;
@@ -460,6 +464,31 @@ class CommentsController extends Controller
             'sessionUrl' => UrlHelper::cpUrl('ai/session/'.$threadSessionId),
             'comment' => self::serialize($record),
         ]);
+    }
+
+    /**
+     * Refuse to act on a comment whose originating session belongs to a
+     * different user. Legacy rows with `session.userId === null` are treated
+     * as "any owner allowed" so older data keeps working; comments whose
+     * session has been deleted (orphans) also fall through — there's no
+     * owner left to defend, and the user still needs a way to clear the
+     * dangling row. The 404-shaped response mirrors the SessionsController
+     * / PreviewController pattern — we never reveal that the comment
+     * exists for someone else.
+     */
+    private function ensureSessionOwnership(string $sessionId, string $notFoundMessage): void
+    {
+        $session = SessionRecord::findOne(['id' => $sessionId]);
+        if ($session === null) {
+            return;
+        }
+
+        $identity = Craft::$app->getUser()->getIdentity();
+        $userId = $identity !== null ? (int) $identity->id : null;
+
+        if ($session->userId !== null && $session->userId !== $userId) {
+            throw new NotFoundHttpException($notFoundMessage);
+        }
     }
 
     private function notifySessionOfResolve(CommentRecord $record): void

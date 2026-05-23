@@ -6,9 +6,13 @@ use markhuot\craftai\agent\ClientType;
 use markhuot\craftai\agent\ToolContext;
 
 /**
- * Wraps a saved-element payload with a `notes` field for the calling surface.
+ * Wraps a saved-element payload under a `{noun}` key alongside a `notes`
+ * field for the calling surface. The shape is identical on every surface
+ * so downstream consumers (tests, agent prompt rendering, MCP clients)
+ * can always reach the element data at `data.{noun}` regardless of where
+ * the tool was invoked from.
  *
- * Two pieces of surface-specific guidance can ride along on the note:
+ * `notes` carries surface-specific guidance for the LLM:
  *
  *  - `open_preview` prompt — only on {@see ClientType::CP}, the full-page
  *    CP chat surface that owns the preview pane. The note hands the
@@ -23,12 +27,8 @@ use markhuot\craftai\agent\ToolContext;
  *    (MCP / console / queue / tests) the link is useless, so we leave
  *    it out.
  *
- * When neither piece of guidance applies on CP (no URL and no
- * cpEditUrl) we return the payload unwrapped — emitting an empty
- * "<Noun> saved." would be noise. Off-CP surfaces always wrap so the
- * shape stays consistent for downstream consumers; the note degrades
- * to the bare "<Noun> saved." when there's nothing surface-specific
- * to add.
+ * When neither guidance piece applies the note degrades to the bare
+ * "<Noun> saved." string — the wrap shape stays stable either way.
  */
 class PreviewSuggestion
 {
@@ -47,35 +47,15 @@ class PreviewSuggestion
     ): array {
         $noun = ucfirst($key);
         $client = $context->getClient();
-
-        // Surfaces that don't render in a browser (MCP, console, queue,
-        // tests with no client set) only get the generic "<Noun> saved."
-        // — a cpEditUrl wouldn't open anywhere useful for them.
-        if ($client !== ClientType::CP && $client !== ClientType::WIDGET) {
-            return [
-                'notes' => "{$noun} saved.",
-                $key => $data,
-            ];
-        }
-
         $isCp = $client === ClientType::CP;
-        $hasPreview = $isCp && $url !== null && $url !== '';
-        $hasEditLink = $cpEditUrl !== null && $cpEditUrl !== '';
+        $isBrowserSurface = $isCp || $client === ClientType::WIDGET;
 
-        if (! $hasPreview && ! $hasEditLink) {
-            // Preserve the historical "skip wrap entirely" behavior on
-            // CP — there's no preview pane to drive and no edit link to
-            // share, so an empty suggestion would just be noise. The
-            // widget surface still wraps with the generic note so its
-            // own consumers see a stable shape.
-            if ($isCp) {
-                return $data;
-            }
-            return [
-                'notes' => "{$noun} saved.",
-                $key => $data,
-            ];
-        }
+        // Preview is a CP-only concept — only the full-page chat hosts
+        // the iframe. Widget and other surfaces never get the prompt.
+        $hasPreview = $isCp && $url !== null && $url !== '';
+        // CP edit links only help on browser surfaces. MCP / console /
+        // queue clients can't click through, so we drop the link there.
+        $hasEditLink = $isBrowserSurface && $cpEditUrl !== null && $cpEditUrl !== '';
 
         $parts = ["{$noun} saved."];
         if ($hasPreview) {

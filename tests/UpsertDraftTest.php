@@ -203,10 +203,10 @@ it('returns a tokenized preview URL when updating a draft', function () {
     expect($route[1]['draftId'])->toBe($updated['draftId']);
 });
 
-it('wraps a draft without a front-end URL with the cpEditUrl guidance on CP', function () {
+it('folds the cpEditUrl guidance into _notes when the draft has no front-end URL on CP', function () {
     // No URI format → no front-end URL → no open_preview suggestion.
     // The draft still has a CP edit screen the user can be linked
-    // back to, so the wrap surfaces that and omits the preview hint.
+    // back to, so the envelope surfaces that and omits the preview hint.
     Section::factory()->name('Hidden')->handle('hidden')->hasUrls(false)->create();
 
     $payload = decode($this->registry->execute('upsert_draft', [
@@ -215,15 +215,12 @@ it('wraps a draft without a front-end URL with the cpEditUrl guidance on CP', fu
     ]));
 
     expect($payload)->toHaveKeys(['_notes', 'data']);
-    $output = $payload['data'];
-
-    expect($output)->toHaveKeys(['notes', 'draft']);
-    expect($output['notes'])->not->toContain('open_preview');
-    expect($output['notes'])->toContain('review and edit');
-    expect($output['draft']['url'])->toBeNull();
+    expect($payload['_notes'])->not->toContain('open_preview');
+    expect($payload['_notes'])->toContain('review and edit');
+    expect($payload['data']['draft']['url'])->toBeNull();
 });
 
-it('wraps the response with a notes prompt to call open_preview when the draft has a URL', function () {
+it('folds the open_preview prompt into _notes when the draft has a URL', function () {
     $entry = canonicalEntry($this->registry);
 
     $payload = decode($this->registry->execute('upsert_draft', [
@@ -231,14 +228,14 @@ it('wraps the response with a notes prompt to call open_preview when the draft h
     ]));
 
     expect($payload)->toHaveKeys(['_notes', 'data']);
-    $output = $payload['data'];
+    expect($payload['data'])->toHaveKey('draft');
+    expect($payload['data'])->not->toHaveKey('notes');
 
-    expect($output)->toHaveKeys(['notes', 'draft']);
-    expect($output['notes'])->toContain('open_preview');
-    expect($output['notes'])->toContain($output['draft']['url']);
+    expect($payload['_notes'])->toContain('open_preview');
+    expect($payload['_notes'])->toContain($payload['data']['draft']['url']);
 });
 
-it('emits a generic Draft saved. note for MCP clients without referencing open_preview', function () {
+it('skips the open_preview prompt on MCP and keeps _notes scoped to the tool narration', function () {
     $entry = canonicalEntry($this->registry);
 
     /** @var ToolContext $context */
@@ -250,12 +247,10 @@ it('emits a generic Draft saved. note for MCP clients without referencing open_p
     ]));
 
     expect($payload)->toHaveKeys(['_notes', 'data']);
-    $output = $payload['data'];
-
-    expect($output)->toHaveKeys(['notes', 'draft']);
-    expect($output['notes'])->toBe('Draft saved.');
-    expect($output['notes'])->not->toContain('open_preview');
-    expect($output['draft']['title'])->toBe('MCP Draft');
+    expect($payload['_notes'])->not->toContain('open_preview');
+    expect($payload['_notes'])->not->toContain('review and edit');
+    expect($payload['_notes'])->toMatch('/draftId=\d+/');
+    expect($payload['data']['draft']['title'])->toBe('MCP Draft');
 });
 
 it('anchors a canonical-entry draft to the requested site', function () {

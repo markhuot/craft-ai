@@ -213,13 +213,17 @@ class UpsertDraft extends Tool
                 $cpEditUrl = null;
             }
 
-            return [
-                '_notes' => sprintf(
+            return PreviewSuggestion::wrap(
+                notes: sprintf(
                     'Fresh draft created with draftId=%d (no canonical entry yet). Use get_draft with draftId to re-fetch, or call upsert_draft again with this draftId to keep iterating before publishing.',
                     $draft->draftId,
                 ),
-                'data' => PreviewSuggestion::wrap($data, $url, 'draft', $this->context, $cpEditUrl),
-            ];
+                data: $data,
+                key: 'draft',
+                url: $url,
+                context: $this->context,
+                cpEditUrl: $cpEditUrl,
+            );
         } else {
             return new ToolOutput(
                 'Could not save draft: pass `draftId` to update, `entry` to draft an existing entry, or `section` to create a fresh draft.',
@@ -278,10 +282,14 @@ class UpsertDraft extends Tool
                 $draft->canonicalId ?? 0,
             );
 
-        return [
-            '_notes' => $notes,
-            'data' => PreviewSuggestion::wrap($data, $url, 'draft', $this->context, $cpEditUrl),
-        ];
+        return PreviewSuggestion::wrap(
+            notes: $notes,
+            data: $data,
+            key: 'draft',
+            url: $url,
+            context: $this->context,
+            cpEditUrl: $cpEditUrl,
+        );
     }
 
     /**

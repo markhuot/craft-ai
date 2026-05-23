@@ -154,10 +154,14 @@ class UpsertAsset extends Tool
             $asset->id,
         );
 
-        return [
-            '_notes' => $notes,
-            'data' => PreviewSuggestion::wrap($data, $url, 'asset', $this->context, $cpEditUrl),
-        ];
+        return PreviewSuggestion::wrap(
+            notes: $notes,
+            data: $data,
+            key: 'asset',
+            url: $url,
+            context: $this->context,
+            cpEditUrl: $cpEditUrl,
+        );
     }
 
     private function resolveFolder(Volume $volume, ?string $path): ?VolumeFolder

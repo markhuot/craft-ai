@@ -6,13 +6,14 @@ use markhuot\craftai\agent\ClientType;
 use markhuot\craftai\agent\ToolContext;
 
 /**
- * Wraps a saved-element payload under a `{noun}` key alongside a `notes`
- * field for the calling surface. The shape is identical on every surface
- * so downstream consumers (tests, agent prompt rendering, MCP clients)
- * can always reach the element data at `data.{noun}` regardless of where
- * the tool was invoked from.
+ * Builds the full `{_notes, data}` envelope a saved-element tool returns,
+ * folding any surface-specific guidance into the same `_notes` string the
+ * tool's own narration lives on. The shape is stable across every surface
+ * — `data.{noun}` is always where the element payload lives — and there's
+ * only one place an LLM-facing note can appear, so the agent never has to
+ * juggle a top-level note plus a nested one.
  *
- * `notes` carries surface-specific guidance for the LLM:
+ * Surface-specific call-to-actions appended to `_notes`:
  *
  *  - `open_preview` prompt — only on {@see ClientType::CP}, the full-page
  *    CP chat surface that owns the preview pane. The note hands the
@@ -27,25 +28,28 @@ use markhuot\craftai\agent\ToolContext;
  *    (MCP / console / queue / tests) the link is useless, so we leave
  *    it out.
  *
- * When neither guidance piece applies the note degrades to the bare
- * "<Noun> saved." string — the wrap shape stays stable either way.
+ * When neither guidance piece applies, `_notes` is just the tool's own
+ * note unchanged.
  */
 class PreviewSuggestion
 {
     /**
-     * @param  array<array-key, mixed>  $data
+     * @param  string                   $notes      Tool-authored "what just happened" narration (e.g. "Created entry id=42. Use get_entry to fetch…").
+     * @param  array<array-key, mixed>  $data       Serialized form of the saved element.
+     * @param  string                   $key        Noun the element lives under inside `data` (e.g. 'entry', 'asset', 'draft').
      * @param  ?string                  $url        Front-end URL the agent should call open_preview with (CP only).
+     * @param  ToolContext              $context    Active tool context — determines which surface is asking.
      * @param  ?string                  $cpEditUrl  Craft CP edit URL for the saved element — surfaced on CP + Widget so the agent can link the user back to review.
-     * @return array<array-key, mixed>
+     * @return array{_notes: string, data: array<string, array<array-key, mixed>>}
      */
     public static function wrap(
+        string $notes,
         array $data,
-        ?string $url,
         string $key,
+        ?string $url,
         ToolContext $context,
         ?string $cpEditUrl = null,
     ): array {
-        $noun = ucfirst($key);
         $client = $context->getClient();
         $isCp = $client === ClientType::CP;
         $isBrowserSurface = $isCp || $client === ClientType::WIDGET;
@@ -57,7 +61,7 @@ class PreviewSuggestion
         // queue clients can't click through, so we drop the link there.
         $hasEditLink = $isBrowserSurface && $cpEditUrl !== null && $cpEditUrl !== '';
 
-        $parts = ["{$noun} saved."];
+        $parts = [$notes];
         if ($hasPreview) {
             $parts[] = "Show the user the result by calling open_preview with this url: {$url}";
         }
@@ -70,8 +74,8 @@ class PreviewSuggestion
         }
 
         return [
-            'notes' => implode(' ', $parts),
-            $key => $data,
+            '_notes' => implode(' ', $parts),
+            'data' => [$key => $data],
         ];
     }
 }

@@ -248,9 +248,13 @@ class UpsertEntry extends Tool
             $entry->id,
         );
 
-        return [
-            '_notes' => $notes,
-            'data' => PreviewSuggestion::wrap($data, $url, 'entry', $this->context, $cpEditUrl),
-        ];
+        return PreviewSuggestion::wrap(
+            notes: $notes,
+            data: $data,
+            key: 'entry',
+            url: $url,
+            context: $this->context,
+            cpEditUrl: $cpEditUrl,
+        );
     }
 }

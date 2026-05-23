@@ -179,24 +179,24 @@ it('binds a section by numeric ID', function () {
     expect(decode($output)['data']['entry']['title'])->toBe('By ID');
 });
 
-it('wraps the response with a notes prompt to call open_preview when the entry has a URL', function () {
+it('folds the open_preview prompt into _notes when the entry has a URL', function () {
     $payload = decode($this->registry->execute('upsert_entry', [
         'section' => 'posts', 'title' => 'Previewable',
     ]));
 
     expect($payload)->toHaveKeys(['_notes', 'data']);
-    $output = $payload['data'];
+    expect($payload['data'])->toHaveKey('entry');
+    expect($payload['data'])->not->toHaveKey('notes');
 
-    expect($output)->toHaveKeys(['notes', 'entry']);
-    expect($output['notes'])->toContain('open_preview');
-    expect($output['notes'])->toContain($output['entry']['url']);
+    expect($payload['_notes'])->toContain('open_preview');
+    expect($payload['_notes'])->toContain($payload['data']['entry']['url']);
 });
 
-it('wraps an entry without a front-end URL with the cpEditUrl guidance on CP', function () {
+it('folds the cpEditUrl guidance into _notes when there is no front-end URL on CP', function () {
     // Sections that lack URI formats can't be previewed, but on CP
     // the editor can still click through to the entry's edit screen
-    // to review. The wrap surfaces the cpEditUrl link but omits the
-    // open_preview prompt (there's no front-end URL to point at).
+    // to review. The envelope surfaces the cpEditUrl link in `_notes`
+    // but omits the open_preview prompt (there's no front-end URL).
     Section::factory()->name('Hidden')->handle('hidden')->hasUrls(false)->create();
 
     $payload = decode($this->registry->execute('upsert_entry', [
@@ -204,16 +204,13 @@ it('wraps an entry without a front-end URL with the cpEditUrl guidance on CP', f
     ]));
 
     expect($payload)->toHaveKeys(['_notes', 'data']);
-    $output = $payload['data'];
-
-    expect($output)->toHaveKeys(['notes', 'entry']);
-    expect($output['notes'])->not->toContain('open_preview');
-    expect($output['notes'])->toContain('review and edit');
-    expect($output['entry']['title'])->toBe('Invisible');
-    expect($output['entry']['url'])->toBeNull();
+    expect($payload['_notes'])->not->toContain('open_preview');
+    expect($payload['_notes'])->toContain('review and edit');
+    expect($payload['data']['entry']['title'])->toBe('Invisible');
+    expect($payload['data']['entry']['url'])->toBeNull();
 });
 
-it('emits a generic Entry saved. note for MCP clients without referencing open_preview', function () {
+it('skips the open_preview prompt on MCP and keeps _notes scoped to the tool narration', function () {
     /** @var ToolContext $context */
     $context = Craft::$container->get(ToolContext::class);
     $context->begin(null, null, ClientType::MCP);
@@ -223,10 +220,9 @@ it('emits a generic Entry saved. note for MCP clients without referencing open_p
     ]));
 
     expect($payload)->toHaveKeys(['_notes', 'data']);
-    $output = $payload['data'];
-
-    expect($output)->toHaveKeys(['notes', 'entry']);
-    expect($output['notes'])->toBe('Entry saved.');
-    expect($output['notes'])->not->toContain('open_preview');
-    expect($output['entry']['title'])->toBe('For MCP');
+    expect($payload['_notes'])->not->toContain('open_preview');
+    expect($payload['_notes'])->not->toContain('review and edit');
+    // The tool's own narration still flows through unchanged.
+    expect($payload['_notes'])->toMatch('/(Created|Updated) entry id=/');
+    expect($payload['data']['entry']['title'])->toBe('For MCP');
 });

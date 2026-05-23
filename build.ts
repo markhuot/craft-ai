@@ -54,6 +54,13 @@ const bundles: Bundle[] = [
     cssOut: resolve(root, "src/web/assets/comments/dist/comments.css"),
   },
   {
+    name: "aistar",
+    jsEntry: resolve(root, "resources/aistar/index.ts"),
+    jsOut: "aistar.js",
+    cssEntry: resolve(root, "resources/aistar/styles.css"),
+    cssOut: resolve(root, "src/web/assets/aistar/dist/aistar.css"),
+  },
+  {
     // CKEditor 5 plugin that adds the "Comment" toolbar button.
     // Loaded by craftcms/ckeditor through registerCkeditorPackage(),
     // so this bundle has to be an ESM module that stamps itself onto

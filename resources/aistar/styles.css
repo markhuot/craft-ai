@@ -1,0 +1,61 @@
+/*
+ * CP-side styles for the per-field "AI fill" star overlay.
+ *
+ * The aistar bundle runs in the CP page's normal DOM (no Shadow DOM) so
+ * the button can sit alongside Craft's own heading markup without
+ * needing portals. Every selector is scoped under `craftai-aistar-*` so
+ * the rules can't collide with stock CP styles or any other plugin
+ * decorating entry edit screens.
+ */
+
+.craftai-aistar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-left: 6px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 9999px;
+  background: transparent;
+  cursor: pointer;
+  vertical-align: middle;
+  color: #8a5cf6; /* violet — distinct from the red comments dot */
+  transition: color 120ms ease, transform 120ms ease, background 120ms ease;
+}
+
+.craftai-aistar-button:hover {
+  color: #6d36ef;
+  background: rgba(138, 92, 246, 0.12);
+  transform: scale(1.06);
+}
+
+.craftai-aistar-button:focus-visible {
+  outline: 2px solid #8a5cf6;
+  outline-offset: 1px;
+}
+
+.craftai-aistar-button svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.craftai-aistar-button--busy {
+  cursor: progress;
+  animation: craftai-aistar-pulse 1.2s ease-in-out infinite;
+}
+
+.craftai-aistar-button--busy:hover {
+  transform: none;
+}
+
+@keyframes craftai-aistar-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

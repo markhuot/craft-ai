@@ -254,6 +254,14 @@ class Plugin extends BasePlugin
                 // comment payload to the editor JS for span wrapping.
                 $event->rules['POST ai/comments/create'] = 'craft-ai/comments/create';
 
+                // Per-field "AI fill" star. The CP overlay decorates
+                // every field on an entry edit screen with a star
+                // button — clicking it POSTs here to spin up a fresh
+                // session pre-seeded with element + field context, and
+                // the widget opens against the returned session id so
+                // the editor watches the agent fill the field live.
+                $event->rules['POST ai/ai-star/fill-field'] = 'craft-ai/ai-star/fill-field';
+
                 // Dedicated edit screen for a single slash command. The
                 // plugin settings page links here from each row in its
                 // (read-only) commands list, because a slash-command
@@ -314,6 +322,7 @@ class Plugin extends BasePlugin
             function (TemplateEvent $event): void {
                 $this->maybeInjectWidget($event);
                 $this->maybeInjectCommentsOverlay($event);
+                $this->maybeInjectAiStarOverlay($event);
             },
         );
     }
@@ -478,6 +487,80 @@ class Plugin extends BasePlugin
         $snippet = <<<HTML
 <link rel="stylesheet" href="{$cssUrl}">
 <script type="application/json" data-craftai-comments-bootstrap>{$bootstrapJson}</script>
+<script type="module" src="{$jsUrl}"></script>
+HTML;
+
+        if (str_contains($event->output, '</body>')) {
+            $event->output = (string) preg_replace(
+                '/<\/body>/i',
+                $snippet."\n</body>",
+                $event->output,
+                1,
+            );
+
+            return;
+        }
+
+        $event->output .= $snippet;
+    }
+
+    /**
+     * Append the per-field "AI fill" star overlay to every CP page response.
+     *
+     * Bundle behaviour mirrors the comments overlay — short-circuits when the
+     * page lacks an `elementId` / `draftId` hidden input — so registering
+     * globally is cheaper than trying to detect "is this an entry edit URL"
+     * server-side and getting it wrong on third-party plugin routes.
+     */
+    private function maybeInjectAiStarOverlay(TemplateEvent $event): void
+    {
+        if ($event->templateMode !== View::TEMPLATE_MODE_CP) {
+            return;
+        }
+
+        $request = Craft::$app->getRequest();
+        if (! $request instanceof \craft\web\Request) {
+            return;
+        }
+        if (! $request->getIsCpRequest() || $request->getIsAjax()) {
+            return;
+        }
+
+        if (Craft::$app->getUser()->getIsGuest()) {
+            return;
+        }
+
+        if ($event->output === '') {
+            return;
+        }
+
+        $assetManager = Craft::$app->getAssetManager();
+        $sourcePath = __DIR__.'/web/assets/aistar/dist';
+
+        try {
+            $published = $assetManager->publish($sourcePath);
+        } catch (\Throwable) {
+            return;
+        }
+
+        $baseUrl = $published[1] ?? null;
+        if (! is_string($baseUrl) || $baseUrl === '') {
+            return;
+        }
+
+        $bootstrap = [
+            'fillFieldUrl' => UrlHelper::actionUrl('craft-ai/ai-star/fill-field'),
+            'csrfTokenName' => Craft::$app->getConfig()->getGeneral()->csrfTokenName,
+            'csrfTokenValue' => $request->getCsrfToken(),
+        ];
+
+        $bootstrapJson = Json::htmlEncode($bootstrap);
+        $jsUrl = $baseUrl.'/aistar.js';
+        $cssUrl = $baseUrl.'/aistar.css';
+
+        $snippet = <<<HTML
+<link rel="stylesheet" href="{$cssUrl}">
+<script type="application/json" data-craftai-aistar-bootstrap>{$bootstrapJson}</script>
 <script type="module" src="{$jsUrl}"></script>
 HTML;
 

@@ -146,11 +146,85 @@ class Install extends Migration
             ['elementId', 'isDraft', 'fieldHandle', 'referenceId'],
         );
 
+        $this->createTable('{{%craftai_artifacts}}', [
+            'id' => $this->primaryKey(),
+            'sessionId' => $this->string(36)->notNull(),
+            'entryId' => $this->integer()->null(),
+            'title' => $this->string()->notNull()->defaultValue(''),
+            'html' => $this->longText()->notNull(),
+            'mimeType' => $this->string(64)->notNull()->defaultValue('text/html'),
+            'dateCreated' => $this->dateTime()->notNull(),
+            'dateUpdated' => $this->dateTime()->notNull(),
+            'uid' => $this->uid(),
+        ]);
+
+        $this->createIndex(
+            'idx_craftai_artifacts_session',
+            '{{%craftai_artifacts}}',
+            ['sessionId'],
+        );
+
+        $this->addForeignKey(
+            'fk_craftai_artifacts_session',
+            '{{%craftai_artifacts}}',
+            ['sessionId'],
+            '{{%craftai_sessions}}',
+            ['id'],
+            'CASCADE',
+            'CASCADE',
+        );
+
+        // Memoizes revision comparisons: one narration session + artifact per
+        // (entryId, siteId, aRef, bRef), so reopening the same comparison
+        // reuses them instead of re-narrating. See ComparisonRecord.
+        $this->createTable('{{%craftai_comparisons}}', [
+            'id' => $this->primaryKey(),
+            'entryId' => $this->integer()->notNull(),
+            'siteId' => $this->integer()->notNull(),
+            'aRef' => $this->string(64)->notNull(),
+            'bRef' => $this->string(64)->notNull(),
+            'fingerprint' => $this->string(64)->notNull(),
+            'sessionId' => $this->string(36)->notNull(),
+            'artifactId' => $this->integer()->null(),
+            'dateCreated' => $this->dateTime()->notNull(),
+            'dateUpdated' => $this->dateTime()->notNull(),
+            'uid' => $this->uid(),
+        ]);
+
+        $this->createIndex(
+            'idx_craftai_comparisons_lookup',
+            '{{%craftai_comparisons}}',
+            ['entryId', 'siteId', 'aRef', 'bRef'],
+            unique: true,
+        );
+
+        $this->addForeignKey(
+            'fk_craftai_comparisons_session',
+            '{{%craftai_comparisons}}',
+            ['sessionId'],
+            '{{%craftai_sessions}}',
+            ['id'],
+            'CASCADE',
+            'CASCADE',
+        );
+
+        $this->addForeignKey(
+            'fk_craftai_comparisons_artifact',
+            '{{%craftai_comparisons}}',
+            ['artifactId'],
+            '{{%craftai_artifacts}}',
+            ['id'],
+            'SET NULL',
+            'CASCADE',
+        );
+
         return true;
     }
 
     public function safeDown(): bool
     {
+        $this->dropTableIfExists('{{%craftai_comparisons}}');
+        $this->dropTableIfExists('{{%craftai_artifacts}}');
         $this->dropTableIfExists('{{%craftai_messages}}');
         $this->dropTableIfExists('{{%craftai_sessions}}');
         $this->dropTableIfExists('{{%craftai_preview_requests}}');

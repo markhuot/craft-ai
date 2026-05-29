@@ -174,6 +174,18 @@ class Command extends Model
                 PROMPT,
                 'enabled' => true,
             ],
+            [
+                'uid' => 'craft-ai--default-compare',
+                'name' => 'compare',
+                'prompt' => <<<'PROMPT'
+                Compare two versions of the current entry and explain what changed and why it matters.
+
+                The user names the two versions in {args} — e.g. "rev:120 rev:119", "rev:120 current", or just two revision ids like "120 119". Treat the first as version A and the second as version B; default B to "current" if only one is given.
+
+                Use `get_revisions` to discover which revisions exist if you need to, then call `diff_revisions` with the entry's id and the two refs to get a deterministic, field-by-field diff. Narrate the editorially-significant changes grouped by field, leading with what matters most. Finally call `render_artifact` to save the rendered diff as an artifact, then `open_artifact` with the returned artifactId to show it in the preview pane.
+                PROMPT,
+                'enabled' => true,
+            ],
         ];
     }
 }

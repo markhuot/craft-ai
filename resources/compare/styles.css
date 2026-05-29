@@ -1,0 +1,38 @@
+/*
+ * Tailwind v4 with the shared `ai` prefix so every utility (e.g. `ai:flex`,
+ * `ai:rounded-md`) is namespaced and can't collide with the Craft CP styles
+ * this view renders inside. Same setup as the chat bundle: import the theme +
+ * utilities entry points directly (no preflight, utilities emitted unlayered)
+ * so a single-class selector beats Craft's `*` resets without `!important`.
+ */
+@import "tailwindcss/theme.css" layer(theme) prefix(ai);
+@import "tailwindcss/utilities.css" prefix(ai);
+
+@theme {
+  --color-craftai-bg: #ffffff;
+  --color-craftai-fg: #1f2937;
+  --color-craftai-user: #f3f7fc;
+  --color-craftai-border: #e3e5e8;
+  --color-craftai-muted: #606d7b;
+}
+
+/* Scope to the compare root so nothing bleeds into the surrounding CP page. */
+.craftai-compare {
+  font-family: inherit;
+}
+
+.craftai-compare pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/*
+ * Pin the compare view to the viewport from wherever it lands in the CP page
+ * so the diff iframe and narrative share one frame instead of stretching the
+ * page taller as the diff grows. A fixed fallback covers the first paint; the
+ * surrounding Twig can override `--craftai-compare-height` if it measures a
+ * tighter fit.
+ */
+.craftai-compare {
+  height: var(--craftai-compare-height, calc(100dvh - 200px));
+  min-height: 360px;
+}

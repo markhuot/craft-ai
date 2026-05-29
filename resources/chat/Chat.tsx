@@ -31,6 +31,7 @@ import type {
   ChatBootstrap,
   ChatMessage,
   ContentBlock,
+  LastPreview,
   PreviewRequest,
   SlashCommand,
   TargetSelection,
@@ -170,11 +171,20 @@ export function Chat({
   // the URL the iframe is already showing would be a React no-op and the
   // tool would time out waiting for an onLoad that never fires.
   const [previewReloadKey, setPreviewReloadKey] = useState(0);
-  // Sticky pointer at the most recent URL the agent has opened in this
-  // session, sourced from the messages poll envelope. Drives the toolbar
-  // globe so a page reload (which wipes the previewUrl React state) still
-  // lets the user re-mount the iframe with one click.
-  const [lastPreviewUrl, setLastPreviewUrl] = useState<string | null>(null);
+  // Whether the currently-mounted preview is an untrusted artifact (sandboxed,
+  // labeled by title) versus a trusted open_preview URL. Drives the iframe's
+  // sandbox attribute and keeps the artifact's internal /ai/artifacts/{id} URL
+  // out of the page-context the next message rides along on.
+  const [previewSandboxed, setPreviewSandboxed] = useState(false);
+  // Title to show in the preview header for an artifact, instead of its raw
+  // internal URL. Null for trusted URL previews (which show the URL itself).
+  const [previewLabel, setPreviewLabel] = useState<string | null>(null);
+  // Sticky descriptor of the most recent preview the agent surfaced in this
+  // session — a trusted URL or a saved artifact — sourced from the messages
+  // poll envelope. Drives the toolbar globe so a page reload (which wipes the
+  // previewUrl React state) still lets the user re-mount it with one click,
+  // and carries the framing so an artifact reopens sandboxed and titled.
+  const [lastPreview, setLastPreview] = useState<LastPreview | null>(null);
   // Server-reported max prompt tokens for the configured model. Seeded
   // from bootstrap and refreshed on every messages poll so the gauge
   // picks up a config change without a page reload.
@@ -260,10 +270,17 @@ export function Chat({
       if (fetched.previewRequest) {
         void handlePreviewRequest(fetched.previewRequest);
       }
-      // The server's authoritative pointer at the most recent open. On the
-      // first poll after a page reload this is what restores the globe
-      // toggle to the toolbar even though previewUrl is null.
-      setLastPreviewUrl(fetched.lastPreviewUrl);
+      // The server's authoritative pointer at the most recent surfaced
+      // preview. On the first poll after a page reload this is what restores
+      // the globe toggle to the toolbar even though previewUrl is null. Old
+      // backends (and some test stubs) send only the scalar lastPreviewUrl;
+      // normalize that into an "open" descriptor.
+      setLastPreview(
+        fetched.lastPreview ??
+          (fetched.lastPreviewUrl
+            ? { url: fetched.lastPreviewUrl, kind: "open", title: null }
+            : null),
+      );
       // Pick up the latest context-window setting on every poll. The
       // value rarely changes mid-session but admins can edit
       // config/craft-ai.php without restarting and we want the gauge
@@ -322,10 +339,15 @@ export function Chat({
           });
           return;
         }
+        // A trusted, readable URL preview — clear any artifact framing left
+        // over from a prior open so get_preview can read it and the header
+        // shows the URL rather than a stale title.
+        setPreviewSandboxed(false);
+        setPreviewLabel(null);
         setPreviewUrl(url);
         // Optimistically update the globe pointer so the toolbar reflects
         // the new URL instantly, before the server's next poll round-trips.
-        setLastPreviewUrl(url);
+        setLastPreview({ url, kind: "open", title: null });
         // Bump the reload key so PreviewPane remounts the iframe even when
         // the URL hasn't changed (e.g. the agent re-opens the same URL
         // after an edit). Without this, React's diff skips the src= update
@@ -339,6 +361,32 @@ export function Chat({
         // The iframe's onLoad handler resolves the request once the new
         // URL finishes loading; we pin the request id so onLoad/onError
         // know which one to ack.
+        setPendingOpenRequestId(req.id);
+        return;
+      }
+
+      if (req.type === "artifact") {
+        // open_artifact: mount a saved artifact's standalone document
+        // (/ai/artifacts/{id}) in the same pane open_preview uses, but framed
+        // untrusted — sandboxed, labeled by title, and kept out of message
+        // context since the internal URL is meaningless to the agent.
+        const url = typeof req.input.url === "string" ? req.input.url : "";
+        if (!url) {
+          await safeRespond(req.id, "errored", {
+            error: "open_artifact was called without an artifact url.",
+          });
+          return;
+        }
+        const title = typeof req.input.title === "string" ? req.input.title : null;
+        setPreviewSandboxed(true);
+        setPreviewLabel(title);
+        // Optimistically pin the globe pointer to this artifact so closing and
+        // reopening works before the next poll confirms it server-side.
+        setLastPreview({ url, kind: "artifact", title });
+        setPreviewUrl(url);
+        // Remount even if the same artifact url is reopened, so onLoad fires
+        // and the tool unblocks (mirrors the open_preview reload-key bump).
+        setPreviewReloadKey((n) => n + 1);
         setPendingOpenRequestId(req.id);
         return;
       }
@@ -376,10 +424,16 @@ export function Chat({
       // actual URL as context. Fingerprint dedup in onSubmit prevents
       // the same URL from being re-sent across messages.
       //
-      // Note we deliberately don't touch lastPreviewUrl here: that pointer
-      // is server-authoritative (only the agent's resolved opens persist),
+      // Note we deliberately don't touch lastPreview here: that pointer
+      // is server-authoritative (only the agent's resolved previews persist),
       // so a client-only override would be undone by the next poll.
-      setPreviewLiveUrl(finalUrl);
+      //
+      // Skip artifacts: their /ai/artifacts/{id} URL is an internal, untrusted
+      // document the agent can't usefully fetch, so it shouldn't ride along as
+      // page context on the next message.
+      if (!previewSandboxed) {
+        setPreviewLiveUrl(finalUrl);
+      }
       const id = pendingOpenRequestId;
       if (id === null) return;
       setPendingOpenRequestId(null);
@@ -388,7 +442,7 @@ export function Chat({
         finalUrl,
       });
     },
-    [safeRespond, pendingOpenRequestId],
+    [safeRespond, pendingOpenRequestId, previewSandboxed],
   );
 
   const handlePreviewError = useCallback(
@@ -405,7 +459,7 @@ export function Chat({
     setPreviewUrl(null);
     setPreviewMode("peek");
     // Stop riding the closed iframe's URL into context sends. The globe
-    // still keeps lastPreviewUrl so the user can reopen, but until they do
+    // still keeps lastPreview so the user can reopen, but until they do
     // there's no "preview the user is looking at" to advertise.
     setPreviewLiveUrl(null);
     if (pendingOpenRequestId !== null) {
@@ -416,7 +470,7 @@ export function Chat({
       });
       setPendingOpenRequestId(null);
     }
-    // Note: lastPreviewUrl is intentionally preserved so the globe stays
+    // Note: lastPreview is intentionally preserved so the globe stays
     // available. "Close" is hide-for-now, not permanent dismissal.
   }, [safeRespond, pendingOpenRequestId]);
 
@@ -425,13 +479,18 @@ export function Chat({
       closePreview();
       return;
     }
-    if (lastPreviewUrl) {
-      // User-initiated reopen — no agent is waiting on this, so we don't
-      // pin a pendingOpenRequestId. Iframe just shows up.
-      setPreviewUrl(lastPreviewUrl);
+    if (lastPreview) {
+      // User-initiated reopen — no agent is waiting on this, so we don't pin a
+      // pendingOpenRequestId. Iframe just shows up. Restore the framing the
+      // preview had: an artifact comes back sandboxed and labeled by title; a
+      // trusted URL comes back plain.
+      const isArtifact = lastPreview.kind === "artifact";
+      setPreviewSandboxed(isArtifact);
+      setPreviewLabel(isArtifact ? lastPreview.title : null);
+      setPreviewUrl(lastPreview.url);
       setPreviewMode("peek");
     }
-  }, [previewUrl, lastPreviewUrl, closePreview]);
+  }, [previewUrl, lastPreview, closePreview]);
 
   useEffect(() => {
     // Fire once immediately so a freshly-mounted Chat (e.g. the widget
@@ -854,7 +913,7 @@ export function Chat({
               />
             )}
             <ContextProgress used={latestAssistantUsage} contextWindow={contextWindow} />
-            {lastPreviewUrl !== null && previewUrl === null && (
+            {lastPreview !== null && previewUrl === null && (
               // Only render when there's a preview to reopen but it's
               // currently hidden. While the pane is mounted, the X on its
               // own header is the close affordance — a redundant toolbar
@@ -894,6 +953,8 @@ export function Chat({
       mode={previewMode}
       loading={pendingOpenRequestId !== null}
       reloadKey={previewReloadKey}
+      sandboxed={previewSandboxed}
+      label={previewLabel}
       onLoad={handlePreviewLoaded}
       onError={handlePreviewError}
       onExpand={() => setPreviewMode("expanded")}

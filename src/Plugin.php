@@ -3,16 +3,19 @@
 namespace markhuot\craftai;
 
 use Craft;
+use craft\base\Element;
 use craft\base\ElementInterface;
 use craft\base\Model;
 use craft\base\Plugin as BasePlugin;
 use craft\elements\Asset;
 use craft\elements\Entry;
+use craft\events\DefineHtmlEvent;
 use craft\events\DraftEvent;
 use craft\events\ModelEvent;
 use craft\events\RegisterUrlRulesEvent;
 use craft\events\RegisterUserPermissionsEvent;
 use craft\events\TemplateEvent;
+use craft\helpers\Html;
 use craft\helpers\Json;
 use craft\helpers\UrlHelper;
 use craft\services\Drafts;
@@ -48,6 +51,7 @@ use markhuot\craftai\tools\DeleteEntries;
 use markhuot\craftai\tools\DeleteEntryTypes;
 use markhuot\craftai\tools\DeleteFields;
 use markhuot\craftai\tools\DeleteSections;
+use markhuot\craftai\tools\DiffRevisions;
 use markhuot\craftai\tools\FetchWebpage;
 use markhuot\craftai\tools\GenerateImageGptImage;
 use markhuot\craftai\tools\GenerateImageNanoBanana;
@@ -56,9 +60,13 @@ use markhuot\craftai\tools\GetAssets;
 use markhuot\craftai\tools\GetComments;
 use markhuot\craftai\tools\GetDraft;
 use markhuot\craftai\tools\LeaveComment;
+use markhuot\craftai\tools\OpenArtifact;
+use markhuot\craftai\tools\RenderArtifact;
 use markhuot\craftai\tools\ResolveComment;
 use markhuot\craftai\tools\GetImage;
 use markhuot\craftai\tools\GetPreview;
+use markhuot\craftai\tools\GetRevision;
+use markhuot\craftai\tools\GetRevisions;
 use markhuot\craftai\tools\GetDrafts;
 use markhuot\craftai\tools\GetEntries;
 use markhuot\craftai\tools\GetEntry;
@@ -98,7 +106,7 @@ class Plugin extends BasePlugin
      */
     public const EVENT_REGISTER_AGENT_TOOLS = 'registerAgentTools';
 
-    public string $schemaVersion = '1.11.0';
+    public string $schemaVersion = '1.12.0';
 
     public bool $hasCpSection = true;
 
@@ -173,6 +181,18 @@ class Plugin extends BasePlugin
         $this->toolRegistry->register(LeaveComment::class, cpOnly: true);
         $this->toolRegistry->register(ResolveComment::class, cpOnly: true);
         $this->toolRegistry->register(GetComments::class);
+        // Revision compare tools. All read-only, so they're available over MCP
+        // and in read-only sessions; render_artifact / open_artifact (below)
+        // are the CP-only pieces that persist and surface a rendered diff in
+        // the chat preview pane.
+        $this->toolRegistry->register(GetRevisions::class);
+        $this->toolRegistry->register(GetRevision::class);
+        $this->toolRegistry->register(DiffRevisions::class);
+        // CP-only artifact pair. render_artifact persists agent-authored HTML
+        // (e.g. a rendered diff) to the database; open_artifact mounts a saved
+        // artifact in the chat preview pane. Untrusted HTML, served sandboxed.
+        $this->toolRegistry->register(RenderArtifact::class, cpOnly: true);
+        $this->toolRegistry->register(OpenArtifact::class, cpOnly: true);
 
         $this->registerImageTools();
         $this->registerSearchTools();
@@ -198,6 +218,37 @@ class Plugin extends BasePlugin
         );
 
         $this->registerCkeditorCommentPlugin();
+
+        // Add a "Compare…" button to the entry-edit action buttons, alongside
+        // Preview. EVENT_DEFINE_ADDITIONAL_BUTTONS is the supported Craft 5
+        // extension point for that row — its HTML is appended next to Preview /
+        // Create-a-draft (the old cp.entries.edit.* Twig hooks were removed when
+        // the editor moved to CpScreen, and no JS is involved). Gated to saved
+        // entries/drafts that actually have revisions (same condition Craft uses
+        // for its own revision-notes field), and never shown on a revision view.
+        // Opens the compare page with B pinned to "current" and A left for the
+        // editor to pick.
+        Event::on(
+            Entry::class,
+            Element::EVENT_DEFINE_ADDITIONAL_BUTTONS,
+            static function (DefineHtmlEvent $event): void {
+                $entry = $event->sender;
+                if (! $entry instanceof Entry || $entry->getIsRevision() || ! $entry->hasRevisions()) {
+                    return;
+                }
+                $canonicalId = $entry->getCanonicalId();
+                if ($canonicalId === null) {
+                    return;
+                }
+
+                $url = UrlHelper::cpUrl('ai/compare', ['entryId' => $canonicalId, 'b' => 'current']);
+                $event->html .= Html::a(
+                    Craft::t('craft-ai', 'Compare…'),
+                    $url,
+                    ['class' => ['btn'], 'data' => ['craftai-compare-button' => true]],
+                );
+            },
+        );
 
         Event::on(
             UserPermissions::class,
@@ -262,6 +313,18 @@ class Plugin extends BasePlugin
                 // the widget opens against the returned session id so
                 // the editor watches the agent fill the field live.
                 $event->rules['POST ai/ai-star/fill-field'] = 'craft-ai/ai-star/fill-field';
+
+                // Serves an agent-authored HTML artifact (e.g. a rendered
+                // revision diff) as a standalone, sandboxed document. Auth +
+                // ownership are enforced in the controller.
+                $event->rules['ai/artifacts/<id:\d+>'] = 'craft-ai/artifacts/view';
+
+                // Revision compare view. `index` renders the full-page picker
+                // UI; `diff` is the synchronous recompute endpoint the pickers
+                // call; `revisions` lists revisions for the pickers as JSON.
+                $event->rules['ai/compare'] = 'craft-ai/compare/index';
+                $event->rules['ai/compare/revisions'] = 'craft-ai/compare/revisions';
+                $event->rules['POST ai/compare/diff'] = 'craft-ai/compare/diff';
 
                 // Dedicated edit screen for a single slash command. The
                 // plugin settings page links here from each row in its

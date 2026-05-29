@@ -46,14 +46,21 @@ class MessagesController extends Controller
         /** @var PreviewService $preview */
         $preview = Craft::$container->get(PreviewService::class);
 
+        // Sticky pointer at the most recent preview the agent surfaced —
+        // either a trusted URL (open_preview) or a saved artifact
+        // (open_artifact). Drives the toolbar globe so a page reload still lets
+        // the user re-mount the iframe — the in-memory React state is wiped but
+        // this row survives. The descriptor carries the framing (kind + title)
+        // so an artifact reopens sandboxed and labeled, a URL plain.
+        $lastPreview = $preview->lastSurfacedPreview($sessionId);
+
         return $this->asJson([
             'messages' => $messages,
             'previewRequest' => $this->nextPreviewRequest($sessionId, $preview),
-            // Sticky pointer at the most recent preview the agent successfully
-            // opened. Drives the toolbar globe so a page reload still lets
-            // the user re-mount the iframe — the in-memory React state is
-            // wiped but this row survives.
-            'lastPreviewUrl' => $preview->lastOpenedUrl($sessionId),
+            'lastPreview' => $lastPreview,
+            // Back-compat scalar mirror of $lastPreview['url'] for older
+            // front-ends that only read lastPreviewUrl.
+            'lastPreviewUrl' => is_array($lastPreview) ? $lastPreview['url'] : null,
             // Context-window gauge data. The frontend computes "% used"
             // from the latest assistant turn's tokens / contextWindow and
             // shows a circular progress indicator on the prompt toolbar.

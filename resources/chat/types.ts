@@ -132,26 +132,50 @@ export interface ToolModePayload {
 }
 
 /**
- * Out-of-band request from a blocking tool (OpenPreview/GetPreview) running
- * inside the agent loop. The chat surface picks these up by piggybacking on
- * the existing message poll, mounts/reads the iframe, and resolves them
+ * Out-of-band request from a blocking tool (OpenPreview/GetPreview/OpenArtifact)
+ * running inside the agent loop. The chat surface picks these up by piggybacking
+ * on the existing message poll, mounts/reads the iframe, and resolves them
  * through the preview-respond endpoint.
+ *
+ * - "open": load a trusted URL (input.url) in the pane, readable via "get".
+ * - "get": read the currently-open trusted preview's contents back.
+ * - "artifact": mount a saved, untrusted HTML artifact (input.url points at the
+ *   sandboxed /ai/artifacts/{id} document; input.title labels the pane).
  */
 export interface PreviewRequest {
   id: number;
-  type: "open" | "get";
+  type: "open" | "get" | "artifact";
   status: "pending";
   input: Record<string, unknown>;
+}
+
+/**
+ * Server-persisted descriptor of the most recent preview the agent surfaced
+ * (a trusted open_preview URL or a saved open_artifact). Lets the chat restore
+ * the "reopen preview" affordance — with the right framing — after the in-memory
+ * iframe state is gone (the user closed the pane, or reloaded the page).
+ */
+export interface LastPreview {
+  url: string;
+  /** "artifact" reopens sandboxed and labeled by title; "open" reopens plain. */
+  kind: "open" | "artifact";
+  /** Header label for an artifact; null for a trusted URL (which shows the URL). */
+  title: string | null;
 }
 
 export interface MessagesResponse {
   messages: ChatMessage[];
   previewRequest: PreviewRequest | null;
   /**
-   * URL of the most recent successfully-opened preview for this session,
-   * or null if the session has never had one. Sticky on the server side —
-   * survives page reload so the chat surface can render a "reopen preview"
-   * affordance even after the in-memory iframe state is wiped.
+   * Descriptor of the most recent surfaced preview for this session, or null
+   * if the session has never had one. Sticky on the server side — survives
+   * page reload. Optional on the wire: older backends (and test stubs) emit
+   * only `lastPreviewUrl`, which the client normalizes into an "open" kind.
+   */
+  lastPreview?: LastPreview | null;
+  /**
+   * Back-compat scalar URL of the most recent surfaced preview, mirroring
+   * `lastPreview.url`. Retained so older stubs/backends keep working.
    */
   lastPreviewUrl: string | null;
   /**

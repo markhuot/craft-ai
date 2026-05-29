@@ -1,6 +1,7 @@
 import type {
   Attachment,
   ChatMessage,
+  LastPreview,
   MessagesResponse,
   PreviewRequest,
   SlashCommand,
@@ -189,6 +190,7 @@ function parseMessagesResponse(data: unknown): MessagesResponse {
     return {
       messages: data as ChatMessage[],
       previewRequest: null,
+      lastPreview: null,
       lastPreviewUrl: null,
       contextWindow: null,
       slashCommands: undefined,
@@ -199,6 +201,7 @@ function parseMessagesResponse(data: unknown): MessagesResponse {
     return {
       messages: [],
       previewRequest: null,
+      lastPreview: null,
       lastPreviewUrl: null,
       contextWindow: null,
       slashCommands: undefined,
@@ -208,6 +211,7 @@ function parseMessagesResponse(data: unknown): MessagesResponse {
   const obj = data as {
     messages?: unknown;
     previewRequest?: unknown;
+    lastPreview?: unknown;
     lastPreviewUrl?: unknown;
     contextWindow?: unknown;
     slashCommands?: unknown;
@@ -225,11 +229,32 @@ function parseMessagesResponse(data: unknown): MessagesResponse {
   return {
     messages,
     previewRequest: parsePreviewRequest(obj.previewRequest),
+    lastPreview: parseLastPreview(obj.lastPreview, lastPreviewUrl),
     lastPreviewUrl,
     contextWindow,
     slashCommands: parseSlashCommands(obj.slashCommands),
     session: parseSessionMeta(obj.session),
   };
+}
+
+/**
+ * Normalize the server's `lastPreview` descriptor. Falls back to synthesizing
+ * an "open" descriptor from the legacy `lastPreviewUrl` scalar so older
+ * backends (which only emit the URL) still drive the reopen affordance.
+ */
+function parseLastPreview(value: unknown, lastPreviewUrl: string | null): LastPreview | null {
+  if (typeof value === "object" && value !== null) {
+    const obj = value as Record<string, unknown>;
+    if (typeof obj.url === "string" && obj.url !== "") {
+      const kind = obj.kind === "artifact" ? "artifact" : "open";
+      const title = typeof obj.title === "string" && obj.title !== "" ? obj.title : null;
+      return { url: obj.url, kind, title };
+    }
+  }
+  if (lastPreviewUrl) {
+    return { url: lastPreviewUrl, kind: "open", title: null };
+  }
+  return null;
 }
 
 function parseSessionMeta(value: unknown): MessagesResponse["session"] {
@@ -307,7 +332,7 @@ function parsePreviewRequest(value: unknown): PreviewRequest | null {
   if (typeof value !== "object" || value === null) return null;
   const obj = value as Record<string, unknown>;
   if (typeof obj.id !== "number") return null;
-  if (obj.type !== "open" && obj.type !== "get") return null;
+  if (obj.type !== "open" && obj.type !== "get" && obj.type !== "artifact") return null;
   if (obj.status !== "pending") return null;
   const input = typeof obj.input === "object" && obj.input !== null
     ? (obj.input as Record<string, unknown>)

@@ -5,6 +5,7 @@ import { ChatApi } from "../api";
 import type {
   ChatBootstrap,
   ChatMessage,
+  LastPreview,
   MessagesResponse,
   PreviewRequest,
 } from "../types";
@@ -37,8 +38,9 @@ function envelope(
   messages: ChatMessage[],
   previewRequest: PreviewRequest | null = null,
   lastPreviewUrl: string | null = null,
+  lastPreview: LastPreview | null = null,
 ): MessagesResponse {
-  return { messages, previewRequest, lastPreviewUrl };
+  return { messages, previewRequest, lastPreviewUrl, lastPreview };
 }
 
 interface ApiHandlers {
@@ -97,6 +99,65 @@ describe("<Chat /> preview pane integration", () => {
     expect(layout.dataset.previewMode).toBe("peek");
     const iframe = screen.getByTestId("preview-iframe") as HTMLIFrameElement;
     expect(iframe.src).toContain("https://example.com");
+  });
+
+  test("mounts a saved artifact sandboxed, labeled by title, and resolves on load", async () => {
+    const responses: Array<{ id: number; status: string }> = [];
+    let polls = 0;
+    const api = makeApi({
+      fetchMessagesAfter: async () => {
+        polls += 1;
+        if (polls === 1) {
+          return envelope([], {
+            id: 200,
+            type: "artifact",
+            status: "pending",
+            input: {
+              artifactId: 7,
+              title: "Revision 7 → Current",
+              url: "http://localhost/admin/ai/artifacts/7",
+            },
+          });
+        }
+        return envelope([]);
+      },
+      respondToPreviewRequest: async (id, status) => {
+        responses.push({ id, status });
+      },
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
+
+    await waitFor(() => expect(screen.getByTestId("preview-pane")).toBeTruthy());
+    const iframe = screen.getByTestId("preview-iframe") as HTMLIFrameElement;
+    // Untrusted artifact → the iframe is sandboxed (no scripts, no same-origin).
+    expect(iframe.getAttribute("sandbox")).toBe("");
+    expect(iframe.src).toContain("/ai/artifacts/7");
+    // The header shows the artifact's title, not its internal URL.
+    expect(screen.getByTestId("preview-url").textContent).toBe("Revision 7 → Current");
+
+    fireEvent.load(iframe);
+    await waitFor(() => expect(responses.length).toBe(1));
+    expect(responses[0]).toMatchObject({ id: 200, status: "completed" });
+  });
+
+  test("an open_preview URL stays unsandboxed (so get_preview can read it)", async () => {
+    const api = makeApi({
+      fetchMessagesAfter: async () =>
+        envelope([], {
+          id: 201,
+          type: "open",
+          status: "pending",
+          input: { url: "https://example.com" },
+        }),
+      respondToPreviewRequest: async () => {},
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
+    await waitFor(() => screen.getByTestId("preview-iframe"));
+
+    const iframe = screen.getByTestId("preview-iframe") as HTMLIFrameElement;
+    expect(iframe.hasAttribute("sandbox")).toBe(false);
   });
 
   test("resolves the open request as completed when the iframe finishes loading", async () => {
@@ -336,6 +397,62 @@ describe("<Chat /> preview pane integration", () => {
     // Once the iframe is mounted, the toolbar globe steps aside — the X on
     // the preview pane header is the close affordance from here on.
     expect(screen.queryByTestId("preview-toggle")).toBeNull();
+  });
+
+  test("after reload, the globe reopens a saved artifact sandboxed and titled", async () => {
+    // Server-persisted lastPreview of kind 'artifact' survives the reload;
+    // clicking the globe must restore the sandbox + title, not treat it as a
+    // trusted URL.
+    const api = makeApi({
+      fetchMessagesAfter: async () =>
+        envelope([], null, "http://localhost/admin/ai/artifacts/7", {
+          url: "http://localhost/admin/ai/artifacts/7",
+          kind: "artifact",
+          title: "Revision 7 → Current",
+        }),
+      respondToPreviewRequest: async () => {},
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
+
+    fireEvent.click(await screen.findByTestId("preview-toggle"));
+
+    const iframe = (await screen.findByTestId("preview-iframe")) as HTMLIFrameElement;
+    expect(iframe.getAttribute("sandbox")).toBe("");
+    expect(iframe.src).toContain("/ai/artifacts/7");
+    expect(screen.getByTestId("preview-url").textContent).toBe("Revision 7 → Current");
+    expect(screen.queryByTestId("preview-toggle")).toBeNull();
+  });
+
+  test("an artifact survives a close → reopen cycle with sandbox + title intact", async () => {
+    // Server keeps reporting the artifact as the last surfaced preview (the
+    // realistic steady state once open_artifact has completed), so closing and
+    // reopening must restore the same framing each time.
+    const api = makeApi({
+      fetchMessagesAfter: async () =>
+        envelope([], null, "http://localhost/admin/ai/artifacts/7", {
+          url: "http://localhost/admin/ai/artifacts/7",
+          kind: "artifact",
+          title: "Diff",
+        }),
+      respondToPreviewRequest: async () => {},
+    });
+
+    render(<Chat bootstrap={bootstrap()} api={api} pollIntervalMs={1_000_000} />);
+
+    // Open via the globe.
+    fireEvent.click(await screen.findByTestId("preview-toggle"));
+    let iframe = (await screen.findByTestId("preview-iframe")) as HTMLIFrameElement;
+    expect(iframe.getAttribute("sandbox")).toBe("");
+
+    // Close, then reopen — the sandbox + title come back.
+    fireEvent.click(screen.getByTestId("preview-close"));
+    await waitFor(() => expect(screen.queryByTestId("preview-iframe")).toBeNull());
+
+    fireEvent.click(screen.getByTestId("preview-toggle"));
+    iframe = (await screen.findByTestId("preview-iframe")) as HTMLIFrameElement;
+    expect(iframe.getAttribute("sandbox")).toBe("");
+    expect(screen.getByTestId("preview-url").textContent).toBe("Diff");
   });
 
   test("closing via the pane X brings the globe back so the user can reopen", async () => {

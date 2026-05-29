@@ -184,6 +184,34 @@ it('exposes the last successfully-opened preview URL on the messages envelope', 
 
     $response->assertOk();
     $response->assertJsonPath('lastPreviewUrl', 'https://example.com/x/final');
+    // The richer descriptor mirrors it as an "open" kind.
+    $response->assertJsonPath('lastPreview.url', 'https://example.com/x/final');
+    $response->assertJsonPath('lastPreview.kind', 'open');
+});
+
+it('exposes a saved artifact as the last preview, framed for sandboxed reopen', function () {
+    $r = new MessageRecord();
+    $r->sessionId = 'mc-last-artifact';
+    $r->role = 'user';
+    $r->content = json_encode([['type' => 'text', 'text' => 'hi']]);
+    $r->save();
+
+    $service = new \markhuot\craftai\preview\PreviewService();
+    $id = $service->create('mc-last-artifact', null, 'artifact', [
+        'artifactId' => 7,
+        'title' => 'Revision 7 → Current',
+        'url' => 'https://example.com/admin/ai/artifacts/7',
+    ]);
+    $service->complete($id, ['loadedAt' => 1]);
+
+    $response = test()->get('admin?action=craft-ai/messages&sessionId=mc-last-artifact');
+
+    $response->assertOk();
+    $response->assertJsonPath('lastPreview.kind', 'artifact');
+    $response->assertJsonPath('lastPreview.title', 'Revision 7 → Current');
+    $response->assertJsonPath('lastPreview.url', 'https://example.com/admin/ai/artifacts/7');
+    // Back-compat scalar still mirrors the URL.
+    $response->assertJsonPath('lastPreviewUrl', 'https://example.com/admin/ai/artifacts/7');
 });
 
 it('refuses to list messages for a session owned by another user', function () {

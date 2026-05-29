@@ -21,6 +21,12 @@ class TestCase extends PestTestCase
             $migrated = true;
             $db = Craft::$app->getDb();
             foreach ([
+                // Drop FK-child tables before the tables they reference —
+                // craftai_comparisons has foreign keys onto craftai_artifacts
+                // and craftai_sessions, and craftai_artifacts has one onto
+                // craftai_sessions, so they have to go first.
+                '{{%craftai_comparisons}}',
+                '{{%craftai_artifacts}}',
                 '{{%craftai_messages}}',
                 '{{%craftai_sessions}}',
                 '{{%craftai_preview_requests}}',

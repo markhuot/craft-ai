@@ -146,6 +146,61 @@ class PreviewService
     }
 
     /**
+     * Return the most recent *surfaced* preview for the session — the latest
+     * completed open OR artifact request — as a small descriptor the chat
+     * surface can reopen from after the in-memory iframe state is gone (the
+     * user closed the pane, or reloaded the page). Unlike {@see lastOpenedUrl()}
+     * this spans both preview kinds and carries the framing the UI needs to
+     * remount correctly: an artifact must come back sandboxed and labeled by
+     * its title; a trusted URL must not.
+     *
+     * @return array{url: string, kind: string, title: string|null}|null
+     */
+    public function lastSurfacedPreview(string $sessionId): ?array
+    {
+        /** @var ?PreviewRequestRecord $record */
+        $record = PreviewRequestRecord::find()
+            ->where([
+                'sessionId' => $sessionId,
+                'status' => PreviewRequestRecord::STATUS_COMPLETED,
+                'type' => [PreviewRequestRecord::TYPE_OPEN, PreviewRequestRecord::TYPE_ARTIFACT],
+            ])
+            ->orderBy(['id' => SORT_DESC])
+            ->one();
+
+        if ($record === null) {
+            return null;
+        }
+
+        $input = $this->decodeInput($record);
+
+        if ($record->type === PreviewRequestRecord::TYPE_ARTIFACT) {
+            $url = is_string($input['url'] ?? null) ? $input['url'] : '';
+            if ($url === '') {
+                return null;
+            }
+
+            return [
+                'url' => $url,
+                'kind' => 'artifact',
+                'title' => is_string($input['title'] ?? null) ? $input['title'] : null,
+            ];
+        }
+
+        // open: prefer the resolved finalUrl (captures redirect landings),
+        // fall back to the requested input url when the result was thin.
+        $result = $this->decodeResult($record);
+        $url = is_string($result['finalUrl'] ?? null) && $result['finalUrl'] !== ''
+            ? $result['finalUrl']
+            : (is_string($input['url'] ?? null) ? $input['url'] : '');
+        if ($url === '') {
+            return null;
+        }
+
+        return ['url' => $url, 'kind' => 'open', 'title' => null];
+    }
+
+    /**
      * Return the oldest pending request for the session — what the front-end's
      * poll handler should pick up next. Returns null when nothing is pending.
      * The front-end's local dedup keeps a single tab from re-handling the

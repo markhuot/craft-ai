@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Craft AI — a CMS-native agent for Craft CMS</title>
-  <meta name="description" content="An AI agent built into Craft CMS — control panel chat, inline review comments, event-driven automations, code-component authoring, web search, image generation, and an MCP server. All running as the current Craft user with full permission checks." />
+  <meta name="description" content="An AI agent built into Craft CMS — control panel chat, inline review comments, event-driven automations, code-component authoring, revision diffing, web search, image generation, and an MCP server. All running as the current Craft user with full permission checks." />
   <style>
     :root {
       --brand: #E5422B;
@@ -560,6 +560,63 @@
       font-weight: 600;
     }
 
+    /* revision diff mockup */
+    .diff { margin-top: auto; }
+    .diff-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .diff-pill {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg-tint);
+      color: var(--muted);
+    }
+    .diff-pill.changed { background: #fff7ed; color: #b45309; border-color: #fed7aa; }
+    .diff-pill.added { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+    .diff-pill.removed { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+    .diff-rows {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .diff-row { padding: 8px 11px; }
+    .diff-row + .diff-row { border-top: 1px solid var(--border); }
+    .diff-row .field {
+      font-family: var(--font-sans);
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted-2);
+      margin-bottom: 4px;
+    }
+    .diff-row .text {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: var(--ink-2);
+    }
+    .diff-row del {
+      background: #fef2f2;
+      color: #b91c1c;
+      text-decoration: line-through;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+    .diff-row ins {
+      background: #ecfdf5;
+      color: #047857;
+      text-decoration: none;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+
     /* — footer — */
     .foot {
       margin-top: 56px;
@@ -735,6 +792,38 @@
             <span class="step">get_entry · site: spanish</span>
             <span class="arrow">›</span>
             <span class="step">upsert_draft</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- COMPARE REVISIONS -->
+      <article class="cell span-2">
+        <div class="cell-head">
+          <span class="icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M11 18H8a2 2 0 0 1-2-2V9"/></svg>
+          </span>
+          <div class="titles">
+            <span class="eyebrow">Compare revisions</span>
+            <h3>Diff any two versions — narrated, not judged.</h3>
+          </div>
+        </div>
+        <p>Pick any two versions of an entry — revisions, drafts, or the live row — and get a deterministic, field-by-field diff: word-level text changes, relation add/removes, and Matrix block moves, rendered as a sandboxed artifact. The agent narrates the <em>semantics</em> of what changed — no editorial verdicts, just what's different. Reopen the same pair and it reuses the session, so the model never re-narrates an identical diff.</p>
+        <div class="diff" aria-hidden="true">
+          <div class="diff-summary">
+            <span class="diff-pill changed">1 changed</span>
+            <span class="diff-pill added">1 added</span>
+            <span class="diff-pill removed">0 removed</span>
+            <span class="diff-pill">5 unchanged</span>
+          </div>
+          <div class="diff-rows">
+            <div class="diff-row">
+              <div class="field">Title</div>
+              <div class="text"><del>Our spring menu is here</del> <ins>Brewed slowly, served carefully</ins></div>
+            </div>
+            <div class="diff-row">
+              <div class="field">Summary · added</div>
+              <div class="text"><ins>A seasonal pour-over flight, three origins.</ins></div>
+            </div>
           </div>
         </div>
       </article>

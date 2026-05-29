@@ -8,7 +8,7 @@ use craft\db\ActiveRecord;
  * @property int $id
  * @property string $sessionId
  * @property string|null $toolUseId Anthropic tool_use id this request belongs to (for correlation)
- * @property string $type 'open' for OpenPreview, 'get' for GetPreview
+ * @property string $type 'open' for OpenPreview, 'get' for GetPreview, 'artifact' for OpenArtifact
  * @property string $input JSON-encoded input payload (e.g. {"url": "..."} or {"fullHtml": true})
  * @property string $status 'pending' | 'completed' | 'errored'
  * @property string|null $result JSON-encoded payload returned from the front-end
@@ -27,6 +27,9 @@ class PreviewRequestRecord extends ActiveRecord
     public const TYPE_OPEN = 'open';
 
     public const TYPE_GET = 'get';
+
+    /** Mounts a saved agent-authored HTML artifact (e.g. a revision diff) in the CP preview pane. */
+    public const TYPE_ARTIFACT = 'artifact';
 
     public static function tableName(): string
     {

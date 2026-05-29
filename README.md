@@ -18,6 +18,7 @@ Craft AI gives an LLM access to Craft-aware tools that can:
 - Open a Craft entry or draft in a side-by-side preview pane and read the rendered page back so the agent can iterate on its own output.
 - Search the web (Brave or DuckDuckGo, keyless) and fetch webpage content for research and content assistance.
 - Leave inline review comments on entries, drafts, individual fields, Matrix blocks, and even specific spans of CKEditor text — then resolve them when the feedback has been addressed.
+- Compare any two revisions of an entry (or a revision against the current version) with a deterministic, field-by-field diff rendered in the control panel, alongside an AI narration of what changed and why it matters.
 - Attach Craft assets to chat prompts and fetch images for multimodal inspection.
 - Keep per-user AI sessions with conversation history, generated session titles, stop controls, a context-window gauge, automatic conversation compaction, and queued background processing.
 - Scope each session's tool surface — pick `full`, `draft`-only, `readonly`, or a `custom` allowlist when you want to keep an agent run on a tighter rail.
@@ -120,6 +121,15 @@ The agent can leave inline review comments on entries, drafts, and individual fi
 - **CKEditor span comments** — when `craftcms/ckeditor` is installed, the Comment plugin appears in the CKEditor toolbar. Selecting text and clicking Comment mints a fresh agent session anchored to that exact span; the agent's reply (and the user's reply to that reply) lands as messages in the new session.
 - **Matrix-block scoping** — each Matrix block is a first-class entry in Craft 5, so comments target the block's own entry ID rather than the outer Matrix field. The popover walks up the block hierarchy to surface every comment in the page.
 
+### Compare revisions
+
+Click **Compare revisions** in an entry's edit sidebar to diff two versions of that entry side by side. The compare view's header has two revision pickers — choose any revision (or the current version) for each side and recompute in place. Underneath, Craft AI shows:
+
+- A **deterministic, field-by-field diff** computed in PHP — word-level text diffs for plain-text and CKEditor fields, added/removed/reordered detail for relation fields, and per-block changes for Matrix. No LLM sits on the critical path, so recompute is instant.
+- An **AI narration** of what changed and why it matters, grouped by field, streaming in alongside the diff from a read-only session.
+
+The rendered diff is served as a standalone, sandboxed `diff.html` (strict CSP, no scripts) you can open on its own or download. From the chat widget you can also run **`/compare <a> <b>`** (e.g. `/compare rev:120 current`) to get the same narrated diff in the preview pane.
+
 ### Slash commands
 
 Slash commands let you bake a reusable prompt into a single keystroke. The plugin ships built-ins:
@@ -127,7 +137,7 @@ Slash commands let you bake a reusable prompt into a single keystroke. The plugi
 - **`/compact`** — summarize the conversation so far and discard prior turns to free up the context window.
 - **`/review`** — autonomous editorial review of an entry or draft (see above).
 
-You can also define your own under **Settings → Craft AI → Slash commands**. Each command pairs a slug-safe name (e.g. `translate`) with a prompt template that supports a `{args}` placeholder for whatever the editor types after the slash. Two are seeded by default — `translate` and `editorial-review` — so you can see the shape before authoring your own. Commands live in plugin settings, which means they round-trip through project config and are version-controllable.
+You can also define your own under **Settings → Craft AI → Slash commands**. Each command pairs a slug-safe name (e.g. `translate`) with a prompt template that supports a `{args}` placeholder for whatever the editor types after the slash. Three are seeded by default — `translate`, `editorial-review`, and `compare` (which diffs two revisions; see above) — so you can see the shape before authoring your own. Commands live in plugin settings, which means they round-trip through project config and are version-controllable.
 
 ### Automations
 

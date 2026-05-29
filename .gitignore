@@ -7,3 +7,5 @@
 .DS_Store
 .env
 /node_modules/
+# Regenerated per-change by the diff-summary tooling; not a repo artifact.
+/diff.html

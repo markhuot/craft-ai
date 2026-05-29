@@ -61,6 +61,15 @@ const bundles: Bundle[] = [
     cssOut: resolve(root, "src/web/assets/aistar/dist/aistar.css"),
   },
   {
+    // Full-page "compare revisions" view (revision pickers + sandboxed diff
+    // iframe + AI narration panel), rendered by craft-ai/compare/view.twig.
+    name: "compare",
+    jsEntry: resolve(root, "resources/compare/index.tsx"),
+    jsOut: "compare.js",
+    cssEntry: resolve(root, "resources/compare/styles.css"),
+    cssOut: resolve(root, "src/web/assets/compare/dist/compare.css"),
+  },
+  {
     // CKEditor 5 plugin that adds the "Comment" toolbar button.
     // Loaded by craftcms/ckeditor through registerCkeditorPackage(),
     // so this bundle has to be an ESM module that stamps itself onto

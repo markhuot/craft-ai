@@ -1,0 +1,35 @@
+{% extends "_layouts/cp.twig" %}
+
+{% set title = "Compare revisions"|t('craft-ai') %}
+{% set fullPageForm = false %}
+
+{# `crumbs` is the native trail built by CompareController::buildCrumbs
+   (site ▸ Entries ▸ section ▸ entry); _layouts/cp.twig renders it. #}
+
+{% do view.registerAssetBundle("markhuot\\craftai\\web\\assets\\compare\\CompareAsset") %}
+
+{% set bootstrap = {
+    entryId: entryId,
+    entryTitle: entryTitle,
+    siteId: siteId,
+    a: a,
+    b: b,
+    revisions: revisions,
+    diffUrl: actionUrl('craft-ai/compare/diff'),
+    revisionsUrl: actionUrl('craft-ai/compare/revisions'),
+    messagesUrl: actionUrl('craft-ai/messages'),
+    compareBaseUrl: cpUrl('ai/compare'),
+    csrfTokenName: craft.app.config.general.csrfTokenName,
+    csrfTokenValue: craft.app.request.csrfToken,
+} %}
+
+{% block content %}
+    <div data-craftai-compare-root>
+        <noscript>
+            <p class="light">{{ "JavaScript is required to compare revisions."|t('craft-ai') }}</p>
+        </noscript>
+        <script type="application/json" data-craftai-compare-bootstrap>
+            {{ bootstrap|json_encode(constant('JSON_HEX_TAG') b-or constant('JSON_HEX_AMP') b-or constant('JSON_HEX_APOS') b-or constant('JSON_HEX_QUOT'))|raw }}
+        </script>
+    </div>
+{% endblock %}

@@ -29,6 +29,19 @@ export interface PreviewPaneProps {
    * request would time out.
    */
   reloadKey?: number;
+  /**
+   * Frame the iframe with a restrictive `sandbox` attribute (no scripts, no
+   * same-origin). Set for untrusted, model-authored artifacts; left off for
+   * trusted `open_preview` URLs that `get_preview` needs to read back. Sandboxed
+   * frames render an opaque-origin document, so `readContents` will throw — the
+   * artifact flow never calls it.
+   */
+  sandboxed?: boolean;
+  /**
+   * Human label shown in the header instead of the raw URL — used to show an
+   * artifact's title rather than its internal /ai/artifacts/{id} address.
+   */
+  label?: string | null;
   onLoad: (finalUrl: string) => void;
   onError: (message: string) => void;
   onExpand: () => void;
@@ -46,7 +59,7 @@ export interface PreviewPaneProps {
  * iframe text/HTML when a `GetPreview` tool request comes through.
  */
 export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(function PreviewPane(
-  { url, mode, loading, reloadKey = 0, onLoad, onError, onExpand, onCollapse, onClose },
+  { url, mode, loading, reloadKey = 0, sandboxed = false, label = null, onLoad, onError, onExpand, onCollapse, onClose },
   ref,
 ) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -128,9 +141,9 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(funct
         <span
           data-testid="preview-url"
           className="ai:flex-1 ai:truncate ai:text-craftai-muted"
-          title={loadedUrl ?? url}
+          title={label ?? loadedUrl ?? url}
         >
-          {loadedUrl ?? url}
+          {label ?? loadedUrl ?? url}
         </span>
         {mode === "peek" ? (
           <button
@@ -174,7 +187,11 @@ export const PreviewPane = forwardRef<PreviewPaneHandle, PreviewPaneProps>(funct
           ref={iframeRef}
           data-testid="preview-iframe"
           src={url}
-          title="Preview"
+          title={label ?? "Preview"}
+          // Untrusted artifacts get a maximally-restrictive sandbox (no
+          // scripts, no same-origin) on top of the document's own CSP. Trusted
+          // open_preview URLs stay unsandboxed so get_preview can read them.
+          sandbox={sandboxed ? "" : undefined}
           onLoad={handleLoad}
           onError={handleError}
           className="ai:h-full ai:w-full ai:border-0"

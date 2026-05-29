@@ -145,6 +145,69 @@ it('lastOpenedUrl returns null for a session that has never had a preview', func
     expect((new PreviewService())->lastOpenedUrl('session-none'))->toBeNull();
 });
 
+it('lastSurfacedPreview returns an artifact descriptor carrying its title', function () {
+    $service = new PreviewService();
+
+    $id = $service->create('session-surf-art', null, 'artifact', [
+        'artifactId' => 42,
+        'title' => 'Revision 7 → Current',
+        'url' => 'https://example.com/admin/ai/artifacts/42',
+    ]);
+    $service->complete($id, ['loadedAt' => 1]);
+
+    expect($service->lastSurfacedPreview('session-surf-art'))->toBe([
+        'url' => 'https://example.com/admin/ai/artifacts/42',
+        'kind' => 'artifact',
+        'title' => 'Revision 7 → Current',
+    ]);
+});
+
+it('lastSurfacedPreview returns the most recent across open and artifact kinds', function () {
+    $service = new PreviewService();
+
+    $open = $service->create('session-surf-mix', null, 'open', ['url' => 'https://example.com/page']);
+    $service->complete($open, ['loadedAt' => 1, 'finalUrl' => 'https://example.com/page/final']);
+
+    // A newer artifact should win over the older open.
+    $art = $service->create('session-surf-mix', null, 'artifact', [
+        'artifactId' => 9,
+        'title' => 'Diff',
+        'url' => 'https://example.com/admin/ai/artifacts/9',
+    ]);
+    $service->complete($art, ['loadedAt' => 2]);
+
+    expect($service->lastSurfacedPreview('session-surf-mix'))->toBe([
+        'url' => 'https://example.com/admin/ai/artifacts/9',
+        'kind' => 'artifact',
+        'title' => 'Diff',
+    ]);
+
+    // A still-newer open flips it back.
+    $open2 = $service->create('session-surf-mix', null, 'open', ['url' => 'https://example.com/next']);
+    $service->complete($open2, ['loadedAt' => 3, 'finalUrl' => 'https://example.com/next/final']);
+
+    expect($service->lastSurfacedPreview('session-surf-mix'))->toBe([
+        'url' => 'https://example.com/next/final',
+        'kind' => 'open',
+        'title' => null,
+    ]);
+});
+
+it('lastSurfacedPreview ignores get requests and pending/errored previews', function () {
+    $service = new PreviewService();
+
+    $get = $service->create('session-surf-skip', null, 'get', ['fullHtml' => false]);
+    $service->complete($get, ['content' => 'x', 'mode' => 'text']);
+
+    $service->create('session-surf-skip', null, 'artifact', ['artifactId' => 1, 'title' => 'x', 'url' => '/pending']);
+
+    expect($service->lastSurfacedPreview('session-surf-skip'))->toBeNull();
+});
+
+it('lastSurfacedPreview returns null for a session that has never had a preview', function () {
+    expect((new PreviewService())->lastSurfacedPreview('session-surf-none'))->toBeNull();
+});
+
 it('complete is idempotent — re-completing a finished row is a no-op', function () {
     $service = new PreviewService();
 

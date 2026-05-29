@@ -105,8 +105,15 @@ export class WidgetApi {
     if (this.bootstrap.commentsCreateUrl) {
       return this.bootstrap.commentsCreateUrl;
     }
+    // Swap the trailing `sessions/new` action segment for
+    // `comments/create`. Match it when it's followed by end-of-string,
+    // a query (`?`/`&`), or a fragment (`#`) — NOT just `$` — because
+    // Craft appends `?site=<handle>` to CP URLs on multi-site installs,
+    // and a `$`-anchored pattern silently no-ops there, leaving the
+    // POST pointed at `sessions/new` (whose `{sessionId,url}` response
+    // then reads as a "malformed" comments/create payload).
     return this.bootstrap.newSessionUrl.replace(
-      /sessions\/new$/,
+      /sessions\/new(?![\w/])/,
       "comments/create",
     );
   }

@@ -128,4 +128,69 @@ describe("WidgetApi", () => {
     }
     expect(caught).toBeInstanceOf(Error);
   });
+
+  const draft = {
+    elementId: 1,
+    isDraft: false,
+    fieldHandle: "body",
+    referenceId: "ref-1",
+    selectionText: "hi",
+  };
+  const commentResponse = () =>
+    new Response(
+      JSON.stringify({ ok: true, comment: { id: 7, sessionId: "s-1" } }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+
+  test("createComment posts to commentsCreateUrl when the bootstrap ships it", async () => {
+    let url: string | undefined;
+    const api = new WidgetApi({
+      bootstrap: {
+        ...bootstrap(),
+        commentsCreateUrl: "http://localhost/comments/create",
+      },
+      fetchImpl: async (input) => {
+        url = String(input);
+        return commentResponse();
+      },
+    });
+
+    await api.createComment(draft, "a comment");
+    expect(url).toBe("http://localhost/comments/create");
+  });
+
+  test("createComment falls back to swapping the sessions/new segment", async () => {
+    let url: string | undefined;
+    const api = new WidgetApi({
+      bootstrap: bootstrap(), // no commentsCreateUrl
+      fetchImpl: async (input) => {
+        url = String(input);
+        return commentResponse();
+      },
+    });
+
+    await api.createComment(draft, "a comment");
+    expect(url).toBe("http://localhost/comments/create");
+  });
+
+  // Regression: on multi-site installs Craft appends `?site=<handle>` to
+  // CP URLs. A `$`-anchored fallback regex silently no-ops there, so the
+  // comment POST went to `sessions/new` and its `{sessionId,url}` body
+  // surfaced as "Malformed response from comments/create endpoint".
+  test("createComment fallback survives a trailing ?site= query string", async () => {
+    let url: string | undefined;
+    const api = new WidgetApi({
+      bootstrap: {
+        ...bootstrap(),
+        newSessionUrl: "http://localhost/sessions/new?site=english",
+      },
+      fetchImpl: async (input) => {
+        url = String(input);
+        return commentResponse();
+      },
+    });
+
+    await api.createComment(draft, "a comment");
+    expect(url).toBe("http://localhost/comments/create?site=english");
+  });
 });

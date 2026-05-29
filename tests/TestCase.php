@@ -55,6 +55,20 @@ class TestCase extends PestTestCase
 
         parent::setUp();
 
+        // craft-pest's Application::bootstrap() injects an `X-Debug: enable`
+        // header whenever devMode is on, which makes Craft bootstrap the
+        // yii2-debug module. Its LogTarget then buffers every log message and
+        // DB query for the life of the PHP process — there's no per-request
+        // flush in the test harness — and the debug panels try to serialize
+        // the whole accumulated pile, which blows past the memory limit partway
+        // through a full-suite run (a ~600MB single allocation in
+        // yii\debug\LogTarget::export()). Detaching the target keeps the leak
+        // from ever starting; it's idempotent, so running it each setUp is fine.
+        $log = Craft::$app->getLog();
+        if (isset($log->targets['debug'])) {
+            unset($log->targets['debug']);
+        }
+
         // Tool execution now goes through Craft permission checks. Default to
         // an admin identity so existing tests pass; tests that need to verify
         // permission denial can override the identity within the test body.

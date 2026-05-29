@@ -53,6 +53,25 @@ class TestCase extends PestTestCase
             }
         }
 
+        // Re-align the cached configVersion with the database before craft-pest
+        // opens this test's transaction (it captures the version inside
+        // parent::setUp()). A project-config write that triggers an
+        // auto-committed DDL bumps the info table's configVersion in a way that
+        // outlives the transaction rollback, while craft-pest only restores the
+        // *in-memory* Info. A fresh-install database (every CI run) hits this;
+        // a long-lived dev database usually doesn't, which is why it reproduced
+        // only in CI. Left unhandled, the next project-config write reads a DB
+        // version that no longer matches the cached one and
+        // ProjectConfig::_acquireLock() throws StaleResourceException — which
+        // then cascades across every project-config-touching test.
+        $storedConfigVersion = (new \craft\db\Query())
+            ->select(['configVersion'])
+            ->from(\craft\db\Table::INFO)
+            ->scalar();
+        if (is_string($storedConfigVersion) && $storedConfigVersion !== '') {
+            Craft::$app->getInfo()->configVersion = $storedConfigVersion;
+        }
+
         parent::setUp();
 
         // craft-pest's Application::bootstrap() injects an `X-Debug: enable`

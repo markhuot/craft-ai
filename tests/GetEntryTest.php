@@ -91,6 +91,12 @@ it('returns the entry as it exists on the requested site', function () {
         'hasUrls' => false,
     ]);
     Craft::$app->sites->saveSite($spanish);
+    // saveSite() leaves Craft's `withTrashed` multi-site memo stale, and
+    // that memo is what ElementQuery uses to decide whether to apply a
+    // `siteId` filter. A real multi-site install has it set at bootstrap;
+    // here the site is born mid-test, so force the recompute to model the
+    // multi-site path the tool actually runs against in production.
+    Craft::$app->getIsMultiSite(true, true);
 
     $sectionHandle = 'multisite'.bin2hex(random_bytes(3));
     Section::factory()->name(ucfirst($sectionHandle))->handle($sectionHandle)->create();

@@ -128,6 +128,18 @@ class UpsertSite extends Tool
             );
         }
 
+        // saveSite() runs refreshSites(), but that only refreshes Craft's
+        // `getIsMultiSite()` memo — NOT the separate `withTrashed` memo that
+        // ElementQuery::beforePrepare() consults to decide whether to apply a
+        // `siteId` filter. On an install that was single-site when the first
+        // element query ran this request, that memo is stuck at `false`, so
+        // every subsequent siteId-scoped query silently drops the filter and
+        // returns the primary-site row. That's exactly the /translate flow:
+        // create a locale here, then translate into it within the same
+        // request. Force the memo to recompute so reads/writes against the
+        // freshly created site actually target it.
+        Craft::$app->getIsMultiSite(true, true);
+
         $verb = $isUpdate ? 'Updated' : 'Created';
         $notes = sprintf(
             '%s site id=%d (handle="%s", language="%s"). To translate content into this locale, call upsert_entry or upsert_draft with `site="%s"` so the translated field values save against this site instead of overwriting the source.',

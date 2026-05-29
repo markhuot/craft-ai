@@ -133,6 +133,45 @@ it('mentions translation workflow in the _notes hint', function () {
     expect($payload['_notes'])->toContain('itIT');
 });
 
+it('refreshes the multi-site memo so content created this request reads back on the new locale', function () {
+    // Reproduce the /translate precondition: prime Craft's `withTrashed`
+    // multi-site memo while the install is still single-site. ElementQuery
+    // consults that memo to decide whether to apply a `siteId` filter, so a
+    // stale `false` makes every later siteId-scoped query silently return the
+    // primary-site row — the entry gets "translated" into the wrong locale.
+    Craft::$app->getIsMultiSite(true, true);
+
+    $this->registry->register(\markhuot\craftai\tools\GetEntry::class);
+
+    // Create the locale through the tool — this is the path the agent takes.
+    $output = $this->registry->execute('upsert_site', [
+        'name' => 'Spanish',
+        'handle' => 'spanish',
+        'language' => 'es',
+    ]);
+    expect($output->isError)->toBeFalse($output->text);
+    $spanish = Craft::$app->sites->getSiteByHandle('spanish');
+
+    // A second, live site now exists, so the memo MUST read true; if
+    // UpsertSite hadn't refreshed it the primed `false` would persist.
+    expect(Craft::$app->getIsMultiSite(false, true))->toBeTrue();
+
+    // And prove the behavioral payoff: a section created now covers both
+    // locales, its entry propagates to es, and reading it back on `spanish`
+    // returns the Spanish row rather than the primary one.
+    $sectionHandle = 'multisite'.bin2hex(random_bytes(3));
+    \markhuot\craftpest\factories\Section::factory()
+        ->name(ucfirst($sectionHandle))->handle($sectionHandle)->create();
+    $entry = \markhuot\craftpest\factories\Entry::factory()
+        ->section($sectionHandle)->title('Hola')->create();
+
+    $read = decode($this->registry->execute('get_entry', [
+        'id' => $entry->id,
+        'site' => 'spanish',
+    ]));
+    expect($read['data']['siteId'])->toBe($spanish->id);
+});
+
 it('warns when existing sections do not enable the newly created site', function () {
     $h = 'warnsite'.bin2hex(random_bytes(3));
     \markhuot\craftpest\factories\Section::factory()

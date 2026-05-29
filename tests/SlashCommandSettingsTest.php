@@ -21,12 +21,12 @@ it('round-trips command rows through set/get', function () {
     expect($models[0]->uid)->not->toBe('');
 });
 
-it('seeds the translate and editorial-review defaults when no commands have been configured', function () {
+it('seeds the translate, editorial-review, and compare defaults when no commands have been configured', function () {
     $settings = new Settings();
 
     $names = array_map(static fn (Command $c) => $c->name, $settings->getCommands());
 
-    expect($names)->toBe(['translate', 'editorial-review']);
+    expect($names)->toBe(['translate', 'editorial-review', 'compare']);
 });
 
 it('treats an explicit empty list as "user cleared the table" rather than re-seeding defaults', function () {
@@ -143,5 +143,5 @@ it('keeps null commands distinct from an empty array across attribute round-trip
     $settings->setAttributes(['commands' => null], false);
 
     $names = array_map(static fn (Command $c) => $c->name, $settings->getCommands());
-    expect($names)->toBe(['translate', 'editorial-review']);
+    expect($names)->toBe(['translate', 'editorial-review', 'compare']);
 });

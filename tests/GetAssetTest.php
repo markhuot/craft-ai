@@ -46,6 +46,9 @@ it('returns metadata + url for an existing asset', function () {
     expect($payload['data']['filename'])->toBe('lookup.jpg');
     expect($payload['data'])->toHaveKey('mimeType');
     expect($payload['data'])->toHaveKey('url');
+    // Image assets should point the agent at get_image so vision-capable
+    // providers can actually see the bytes, not just the URL.
+    expect($payload['_notes'])->toContain('get_image');
 });
 
 it('returns an error for an unknown asset id', function () {

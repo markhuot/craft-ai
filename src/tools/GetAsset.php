@@ -38,8 +38,13 @@ class GetAsset extends Tool
         $data['mimeType'] = $id->getMimeType();
         $data['url'] = $id->getUrl();
 
+        $notes = "Asset #{$id->id} (\"{$id->filename}\") loaded. Use the `url` to fetch the file, or call upsert_asset with this id to modify it.";
+        if ($id->kind === Asset::KIND_IMAGE) {
+            $notes .= ' To actually see the image, pass the `url` to get_image, which surfaces the bytes to vision-capable providers.';
+        }
+
         return [
-            '_notes' => "Asset #{$id->id} (\"{$id->filename}\") loaded. Use the `url` to fetch the file, or call upsert_asset with this id to modify it.",
+            '_notes' => $notes,
             'data' => $data,
         ];
     }

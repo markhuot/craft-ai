@@ -14,6 +14,8 @@ use markhuot\craftpest\factories\Field;
 use markhuot\craftpest\factories\MatrixField as MatrixFieldFactory;
 use markhuot\craftpest\factories\Section;
 
+require_once __DIR__.'/stubs/CkeditorFieldStub.php';
+
 beforeEach(function () {
     Section::factory()->name('Posts')->handle('posts')->create();
 
@@ -96,6 +98,61 @@ it('errors when the agent passes referenceId without a fieldHandle', function ()
     expect($output->isError)->toBeTrue();
     expect($output->text)->toContain('referenceId');
     expect($output->text)->toContain('fieldHandle');
+});
+
+it('rejects a whole-field comment on a CKEditor field', function () {
+    // CKEditor fields can pin a comment to an individual span, and a
+    // field-level dot on long-form prose isn't actionable — the editor
+    // can't tell which sentence the feedback is about. Without a
+    // referenceId the call must fail and tell the agent to wrap a span.
+    $ckeditorField = Field::factory()
+        ->name('Body Content')
+        ->handle('bodyContent')
+        ->type(\craft\ckeditor\Field::class)
+        ->create();
+    Section::factory()->name('Articles')->handle('articles')->fields($ckeditorField)->create();
+
+    $entry = Entry::factory()->section('articles')->title('Post')->create();
+
+    $output = $this->registry->execute('leave_comment', [
+        'entryId' => $entry->id,
+        'fieldHandle' => 'bodyContent',
+        'body' => 'This whole field is weak.',
+    ]);
+
+    expect($output->isError)->toBeTrue();
+    expect($output->text)->toContain('bodyContent');
+    expect($output->text)->toContain('referenceId');
+    expect($output->text)->toContain('craft-ai-comment-mark');
+
+    // Nothing should have been persisted for the rejected comment.
+    expect(CommentRecord::find()->count())->toBe(0);
+});
+
+it('allows a span-pinned comment on a CKEditor field', function () {
+    $ckeditorField = Field::factory()
+        ->name('Body Content')
+        ->handle('bodyContent')
+        ->type(\craft\ckeditor\Field::class)
+        ->create();
+    Section::factory()->name('Articles')->handle('articles')->fields($ckeditorField)->create();
+
+    $entry = Entry::factory()->section('articles')->title('Post')->create();
+
+    $output = $this->registry->execute('leave_comment', [
+        'entryId' => $entry->id,
+        'fieldHandle' => 'bodyContent',
+        'referenceId' => 'span-uuid-001',
+        'body' => 'This sentence buries the lede.',
+    ]);
+
+    expect($output->isError)->toBeFalse($output->text);
+    $payload = decode($output);
+    expect($payload['data']['fieldHandle'])->toBe('bodyContent');
+    expect($payload['data']['referenceId'])->toBe('span-uuid-001');
+
+    $record = CommentRecord::findOne(['id' => $payload['data']['id']]);
+    expect($record->referenceId)->toBe('span-uuid-001');
 });
 
 it('saves a top-level comment when fieldHandle is omitted', function () {

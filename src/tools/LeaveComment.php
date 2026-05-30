@@ -39,11 +39,13 @@ use markhuot\craftai\validators\ExistingEntry;
  * ## Pinning a comment to specific text in a CKEditor (or other HTML)
  * field
  *
- * For long-form fields like CKEditor, you can — and SHOULD when the
- * feedback is about a specific paragraph, sentence, or phrase — pin
- * the indicator to that exact range of prose instead of dotting the
- * whole field heading. This is what the "Comment" toolbar plugin in
- * the CP does for human editors, but **you can do the same yourself**:
+ * For long-form CKEditor fields you MUST pin the indicator to a
+ * specific range of prose — a whole-field comment on a CKEditor field
+ * is rejected, because the editor can't tell which sentence the
+ * feedback is about. Pin the indicator to that exact range instead of
+ * dotting the whole field heading. This is what the "Comment" toolbar
+ * plugin in the CP does for human editors, but **you do the same
+ * yourself**:
  *
  *   1. Mint a referenceId. Any short string works (max 64 chars); a
  *      UUID is recommended (e.g. `crypto.randomUUID()`-style format).
@@ -80,9 +82,9 @@ use markhuot\craftai\validators\ExistingEntry;
  *     body="Lead with the conclusion — this paragraph buries the lede.")
  *
  * Omit `referenceId` for field-level comments (the indicator dots the
- * field heading) — that's still the default and remains correct for
- * feedback that's about the field as a whole rather than a specific
- * range.
+ * field heading) on non-CKEditor fields — that remains correct for
+ * feedback about a `title`, image, or other short field as a whole.
+ * CKEditor fields are the exception: they always require a span.
  */
 class LeaveComment extends Tool
 {
@@ -117,7 +119,7 @@ class LeaveComment extends Tool
         #[Validate('string', max: 255)]
         ?string $fieldHandle = null,
 
-        #[Description('Optional stable id pinning this comment to a specific span of text inside the field. To use it: pick any short string (UUID recommended), wrap the target text in the field HTML with `<span class="craft-ai-comment-mark" data-craft-ai-comment-id="<your-id>">…</span>` via `upsert_entry`/`upsert_draft`, then pass the SAME id here. The indicator will land on that exact text instead of the field heading. Requires `fieldHandle`. Leave null for whole-field comments. The marker is automatically stripped on resolve.')]
+        #[Description('Stable id pinning this comment to a specific span of text inside the field. REQUIRED for CKEditor fields (a whole-field comment on a CKEditor field is rejected); optional for other fields. To use it: pick any short string (UUID recommended), wrap the target text in the field HTML with `<span class="craft-ai-comment-mark" data-craft-ai-comment-id="<your-id>">…</span>` via `upsert_entry`/`upsert_draft`, then pass the SAME id here. The indicator will land on that exact text instead of the field heading. Requires `fieldHandle`. Leave null only for whole-field comments on non-CKEditor fields. The marker is automatically stripped on resolve.')]
         #[Validate('string', max: 64)]
         ?string $referenceId = null,
     ): array|ToolOutput {
@@ -159,6 +161,28 @@ class LeaveComment extends Tool
                 'leave_comment: `referenceId` requires `fieldHandle` to identify which CKEditor field the marker belongs to.',
                 isError: true,
             );
+        }
+
+        // CKEditor fields support pinning a comment to an individual span
+        // of prose, and a whole-field dot on a long-form field is rarely
+        // actionable — the editor can't tell which sentence the feedback
+        // is about. Require the span anchor for CKEditor targets: bail
+        // unless the caller also wrapped the text and passed a matching
+        // `referenceId`. Plain-text/other fields keep the field-level dot.
+        if ($normalizedFieldHandle !== null && $normalizedReferenceId === null) {
+            $field = $element->getFieldLayout()?->getFieldByHandle($normalizedFieldHandle);
+            if ($field instanceof \craft\ckeditor\Field) {
+                return new ToolOutput(
+                    sprintf(
+                        'leave_comment: comments on the CKEditor field `%s` must be pinned to a specific span of text, '
+                        .'not the field as a whole. Wrap the target text in the field HTML with '
+                        .'`<span class="craft-ai-comment-mark" data-craft-ai-comment-id="<your-id>">…</span>` via '
+                        .'`upsert_entry`/`upsert_draft`, then call leave_comment again passing that same id as `referenceId`.',
+                        $normalizedFieldHandle,
+                    ),
+                    isError: true,
+                );
+            }
         }
 
         $record = new CommentRecord();

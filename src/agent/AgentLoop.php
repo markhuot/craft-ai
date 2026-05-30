@@ -963,6 +963,12 @@ PROMPT;
      * @param int|null $inputTokens Prompt tokens from the provider's usage payload.
      * @param int|null $outputTokens Completion tokens from the provider's usage payload.
      */
+    /**
+     * Thin internal recorder: the loop builds content blocks in session-id
+     * terms, then hands them to {@see SessionRecord::pushMessage()} — the
+     * canonical home for encoding/persisting a transcript message — which
+     * works off the id without a record lookup on this hot per-turn path.
+     */
     private function saveMessage(
         string $sessionId,
         string $role,
@@ -972,30 +978,15 @@ PROMPT;
         ?int $inputTokens = null,
         ?int $outputTokens = null,
     ): MessageRecord {
-        // INVALID_UTF8_SUBSTITUTE is defense-in-depth: tools should return
-        // valid UTF-8, but a single stray byte from any external source (a
-        // fetched page, a tool that shells out, a provider's raw payload)
-        // would otherwise abort the turn and leave the conversation with an
-        // unanswered tool_use that the next provider call rejects. Replacing
-        // bad bytes with U+FFFD keeps the loop moving; THROW_ON_ERROR still
-        // catches the structural failures (recursion, NaN/INF) we care about.
-        $flags = JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE;
-
-        $record = new MessageRecord();
-        $record->sessionId = $sessionId;
-        $record->role = $role;
-        $record->content = json_encode($content, $flags);
-        $record->rawResponse = $rawResponse === null
-            ? null
-            : json_encode($rawResponse, $flags);
-        $record->assetIds = $assetIds === []
-            ? null
-            : json_encode(array_map('intval', $assetIds), $flags);
-        $record->inputTokens = $inputTokens;
-        $record->outputTokens = $outputTokens;
-        $record->save();
-
-        return $record;
+        return SessionRecord::pushMessage(
+            $sessionId,
+            $role,
+            $content,
+            $rawResponse,
+            $assetIds,
+            $inputTokens,
+            $outputTokens,
+        );
     }
 
     /**

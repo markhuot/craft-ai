@@ -12,7 +12,6 @@ use craft\helpers\StringHelper;
 use craft\helpers\UrlHelper;
 use craft\models\Site;
 use craft\web\Controller;
-use markhuot\craftai\agent\AgentLoop;
 use markhuot\craftai\queue\AgentJob;
 use markhuot\craftai\records\SessionRecord;
 use yii\web\BadRequestHttpException;
@@ -134,9 +133,6 @@ class AiStarController extends Controller
         }
         $sessionId = (string) $session->id;
 
-        /** @var AgentLoop $loop */
-        $loop = Craft::$container->get(AgentLoop::class);
-
         // System note pinning the element + field context. The agent's
         // first turn sees this alongside the user message and decides
         // which tools to call.
@@ -150,7 +146,7 @@ class AiStarController extends Controller
             blockTypeHandle: $blockTypeHandle,
             site: $site,
         );
-        $loop->appendSystemContext($sessionId, $systemNote);
+        $session->addSystemNote($systemNote);
 
         // User-role directive. Kept short and instruction-shaped so the
         // agent can immediately call its lookup tools without parsing a
@@ -162,7 +158,7 @@ class AiStarController extends Controller
             isDraft: $isDraft,
             blockElementId: $blockElementId,
         );
-        $loop->appendUserMessage($sessionId, $userMessage);
+        $session->addUserMessage($userMessage);
 
         Craft::$app->getQueue()->push(new AgentJob([
             'sessionId' => $sessionId,

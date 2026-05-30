@@ -100,6 +100,30 @@ trait ResolvesRequestParams
         return $this->coerceStringParam($name, $this->request->getQueryParam($name), $default, $trim, $maxLength);
     }
 
+    /**
+     * Coerce a query param to one of a fixed set of allowed values.
+     *
+     * A missing param falls back to `$default`; a present-but-unrecognized
+     * value is a 400. Callers get back a value guaranteed to be in
+     * `$allowed`, so they don't need to re-check it themselves.
+     *
+     * @param non-empty-list<string> $allowed
+     */
+    private function getStringEnumQueryParam(string $name, array $allowed, string $default): string
+    {
+        $value = $this->request->getQueryParam($name);
+
+        if (! is_string($value) || $value === '') {
+            return $default;
+        }
+
+        if (! in_array($value, $allowed, true)) {
+            throw new BadRequestHttpException("{$name} must be one of: " . implode(', ', $allowed) . '.');
+        }
+
+        return $value;
+    }
+
     private function requireIntParam(string $name, mixed $value): int
     {
         if (! is_numeric($value)) {

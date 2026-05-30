@@ -55,11 +55,7 @@ class CommentsController extends Controller
         $elementId = $this->getRequiredIntQueryParam('elementId');
         $isDraft = $this->getBoolQueryParam('isDraft');
 
-        $status = $this->getStringQueryParam('status', 'open');
-
-        if (! in_array($status, ['open', 'resolved', 'all'], true)) {
-            throw new BadRequestHttpException('status must be one of: open, resolved, all.');
-        }
+        $status = $this->getStringEnumQueryParam('status', ['open', 'resolved', 'all'], 'open');
 
         // Matrix blocks are entries: a comment on a field inside a block
         // is filed against the block's own elementId, not the page entry.

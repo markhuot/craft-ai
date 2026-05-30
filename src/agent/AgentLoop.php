@@ -1239,14 +1239,10 @@ PROMPT;
         }
 
         try {
-            $settings = Plugin::getInstance()->getSettingsArray();
+            return Plugin::getInstance()->getContextWindow();
         } catch (\Throwable) {
             return null;
         }
-
-        $value = $settings['contextWindow'] ?? null;
-
-        return is_int($value) && $value > 0 ? $value : null;
     }
 
     /**

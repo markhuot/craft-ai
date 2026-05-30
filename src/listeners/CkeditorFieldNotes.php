@@ -1,6 +1,6 @@
 <?php
 
-namespace markhuot\craftai\notes;
+namespace markhuot\craftai\listeners;
 
 use markhuot\craftai\events\DefineFieldNotesEvent;
 

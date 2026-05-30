@@ -12,7 +12,7 @@ use markhuot\craftai\tools\ToolDescriptor;
  * Chat Completions format. Internal canonical format stays Anthropic-style so
  * MessageRecord history works regardless of which provider is configured.
  */
-class OpenAiProvider implements LlmProvider
+class OpenAiProvider implements LlmProvider, ReportsContextWindow
 {
     private readonly ClientInterface $http;
 
@@ -77,6 +77,63 @@ class OpenAiProvider implements LlmProvider
             inputTokens: $usage['prompt_tokens'] ?? null,
             outputTokens: $usage['completion_tokens'] ?? null,
         );
+    }
+
+    /**
+     * Ask the gateway's `GET /models` listing for the configured model's
+     * context window. The canonical OpenAI API omits this field (so first-party
+     * setups return null and fall back to the conservative default), but
+     * OpenAI-compatible gateways — OpenRouter, opencode.ai zen, etc. — report
+     * it as `context_length`. Any failure (endpoint missing, network error,
+     * model not listed) resolves to null rather than throwing, since this only
+     * feeds the optional progress gauge.
+     */
+    public function contextWindow(): ?int
+    {
+        try {
+            $response = $this->http->request('GET', 'v1/models');
+            /** @var array{data?: mixed} $payload */
+            $payload = json_decode((string) $response->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $models = is_array($payload['data'] ?? null) ? $payload['data'] : [];
+        foreach ($models as $entry) {
+            if (is_array($entry) && ($entry['id'] ?? null) === $this->model) {
+                return $this->extractContextLength($entry);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Pull a context-window size out of a `/models` entry, tolerating the
+     * handful of key spellings gateways use (`context_length` is OpenRouter's;
+     * OpenRouter also nests one under `top_provider`). Returns null when none
+     * is present or the value isn't a positive int.
+     *
+     * @param array<array-key, mixed> $entry
+     */
+    private function extractContextLength(array $entry): ?int
+    {
+        foreach (['context_length', 'context_window', 'max_context_length'] as $key) {
+            $value = $entry[$key] ?? null;
+            if (is_int($value) && $value > 0) {
+                return $value;
+            }
+        }
+
+        $topProvider = $entry['top_provider'] ?? null;
+        if (is_array($topProvider)) {
+            $nested = $topProvider['context_length'] ?? null;
+            if (is_int($nested) && $nested > 0) {
+                return $nested;
+            }
+        }
+
+        return null;
     }
 
     /**

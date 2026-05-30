@@ -276,3 +276,68 @@ it('flattens an array tool_result to a text-only tool message and drops image co
     // parts — that's what was breaking DeepSeek's strict deserializer.
     expect($sent['messages'])->toHaveCount(3);
 });
+
+/**
+ * Build an OpenAiProvider whose `/models` call returns $body, for the given
+ * configured model. Returns [provider, &history] so a test can assert the
+ * request path too.
+ */
+function openAiModelsProvider(string $model, string $body, int $status = 200): OpenAiProvider
+{
+    $mock = new MockHandler([new Response($status, [], $body)]);
+    $stack = HandlerStack::create($mock);
+    $client = new Client(['handler' => $stack]);
+
+    return new OpenAiProvider('test-key', $model, $client);
+}
+
+it('reads context_length from the /models listing for the configured model', function () {
+    $provider = openAiModelsProvider('deepseek-chat', json_encode([
+        'data' => [
+            ['id' => 'gpt-4o', 'context_length' => 128000],
+            ['id' => 'deepseek-chat', 'context_length' => 1048576],
+        ],
+    ]));
+
+    expect($provider->contextWindow())->toBe(1048576);
+});
+
+it('falls back to top_provider.context_length (OpenRouter shape)', function () {
+    $provider = openAiModelsProvider('anthropic/claude-3.5-sonnet', json_encode([
+        'data' => [
+            ['id' => 'anthropic/claude-3.5-sonnet', 'top_provider' => ['context_length' => 200000]],
+        ],
+    ]));
+
+    expect($provider->contextWindow())->toBe(200000);
+});
+
+it('returns null when the configured model is not in the /models listing', function () {
+    $provider = openAiModelsProvider('some-private-model', json_encode([
+        'data' => [
+            ['id' => 'gpt-4o', 'context_length' => 128000],
+        ],
+    ]));
+
+    expect($provider->contextWindow())->toBeNull();
+});
+
+it('returns null when the matched model omits any context-window field (canonical OpenAI)', function () {
+    // The first-party OpenAI /models entry has no context_length — the gauge
+    // then leans on the per-provider fallback in Plugin::getContextWindow().
+    $provider = openAiModelsProvider('gpt-4o', json_encode([
+        'data' => [
+            ['id' => 'gpt-4o', 'object' => 'model', 'owned_by' => 'openai'],
+        ],
+    ]));
+
+    expect($provider->contextWindow())->toBeNull();
+});
+
+it('returns null rather than throwing when /models errors', function () {
+    // A gateway without a /models endpoint (or a transient failure) must not
+    // break the gauge — discovery swallows it and the caller falls back.
+    $provider = openAiModelsProvider('gpt-4o', 'not json', 500);
+
+    expect($provider->contextWindow())->toBeNull();
+});

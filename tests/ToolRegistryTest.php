@@ -3,7 +3,6 @@
 use Craft;
 use craft\elements\User;
 use markhuot\craftai\permissions\ToolPermissionDeniedException;
-use markhuot\craftai\permissions\ToolPermissions;
 use markhuot\craftai\tools\DeleteDrafts;
 use markhuot\craftai\tools\GetHealth;
 use markhuot\craftai\tools\Tool;
@@ -160,7 +159,7 @@ it('returns an error ToolOutput when no user is logged in', function () {
 
     expect($output->isError)->toBeTrue();
     expect($output->text)->toContain('do not have permission');
-    expect($output->text)->toContain(ToolPermissions::name('get_health'));
+    expect($output->text)->toContain(ToolRegistry::permissionName('get_health'));
 });
 
 it('throws a permission exception from assertPermission for a guest', function () {

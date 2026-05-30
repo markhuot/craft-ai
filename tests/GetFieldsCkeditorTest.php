@@ -33,7 +33,7 @@ it('publishes the span-comment workflow in the ckeditor field notes', function (
     // The notes string itself is the contract — assert the literal
     // wrapper attributes appear so a future edit that softens the
     // guidance back into passive voice gets caught here.
-    $contents = file_get_contents(__DIR__.'/../src/notes/CkeditorFieldNotes.php');
+    $contents = file_get_contents(__DIR__.'/../src/listeners/CkeditorFieldNotes.php');
 
     expect($contents)->toContain('craft-ai-comment-mark');
     expect($contents)->toContain('data-craft-ai-comment-id');

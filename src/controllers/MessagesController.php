@@ -149,21 +149,17 @@ class MessagesController extends Controller
     }
 
     /**
-     * Pull the configured context window from plugin settings. Returns null
-     * when the setting (and the per-model fallback in Plugin::getSettingsArray)
-     * can't resolve a value — the frontend hides its gauge in that case.
+     * Resolve the model's context window (config → API discovery → fallback).
+     * Returns null when none can be determined — the frontend hides its gauge
+     * in that case.
      */
     private static function contextWindow(): ?int
     {
         try {
-            $settings = Plugin::getInstance()->getSettingsArray();
+            return Plugin::getInstance()->getContextWindow();
         } catch (\Throwable) {
             return null;
         }
-
-        $window = $settings['contextWindow'] ?? null;
-
-        return is_int($window) && $window > 0 ? $window : null;
     }
 
     /**

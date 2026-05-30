@@ -7,12 +7,20 @@ use markhuot\craftai\agent\ClientType;
 use markhuot\craftai\attributes\Bind;
 use markhuot\craftai\binders\Binder;
 use markhuot\craftai\permissions\ToolPermissionDeniedException;
-use markhuot\craftai\permissions\ToolPermissions;
 use ReflectionMethod;
 use Throwable;
 
 class ToolRegistry
 {
+    /**
+     * Prefix for the per-tool Craft user permission, e.g.
+     * `craftAi:useTool:get_entries`. Lives here — the central tool authority —
+     * so the permission *registrar* ({@see \markhuot\craftai\listeners\RegisterCraftAiPermissions})
+     * and the *checker* ({@see assertPermission}) build the exact same name and
+     * can't drift apart.
+     */
+    public const PERMISSION_PREFIX = 'craftAi:useTool:';
+
     /** @var array<string, class-string<Tool>> */
     private array $tools = [];
 
@@ -240,6 +248,15 @@ class ToolRegistry
     }
 
     /**
+     * The Craft user permission name gating a tool, e.g.
+     * `craftAi:useTool:get_entries`.
+     */
+    public static function permissionName(string $toolName): string
+    {
+        return self::PERMISSION_PREFIX.$toolName;
+    }
+
+    /**
      * Throws if the current Craft user lacks permission to use this tool.
      *
      * Admins always pass. Guests/unauthenticated requests are denied; callers
@@ -252,7 +269,7 @@ class ToolRegistry
             throw new \RuntimeException("Unknown tool: {$name}");
         }
 
-        $permission = ToolPermissions::name($name);
+        $permission = self::permissionName($name);
         $userComponent = Craft::$app->getUser();
         $identity = $userComponent->getIdentity();
 

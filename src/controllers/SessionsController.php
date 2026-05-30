@@ -248,23 +248,18 @@ class SessionsController extends Controller
     }
 
     /**
-     * Bootstrap the chat surface with the configured context window so its
-     * progress gauge can render before the first messages poll. Falls back
-     * to null when the host hasn't configured one (and Plugin's per-model
-     * defaults can't resolve a value either) — the gauge hides itself in
-     * that case.
+     * Bootstrap the chat surface with the resolved context window (config →
+     * API discovery → fallback) so its progress gauge can render before the
+     * first messages poll. Falls back to null when none can be determined —
+     * the gauge hides itself in that case.
      */
     private function contextWindowSetting(): ?int
     {
         try {
-            $settings = Plugin::getInstance()->getSettingsArray();
+            return Plugin::getInstance()->getContextWindow();
         } catch (\Throwable) {
             return null;
         }
-
-        $window = $settings['contextWindow'] ?? null;
-
-        return is_int($window) && $window > 0 ? $window : null;
     }
 
     public function actionDelete(): Response

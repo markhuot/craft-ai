@@ -37,8 +37,15 @@ return [
     // trigger — when a conversation passes ~95% of this value, the plugin
     // summarizes prior turns and replaces them with a single summary message
     // so the conversation can continue without hitting the provider's hard
-    // limit. Leave null to use the per-provider/model defaults; set explicitly
-    // for self-hosted or non-OpenAI/Anthropic models. Examples:
+    // limit.
+    //
+    // Leave null and the plugin resolves it for you: it asks the provider's
+    // `/models` endpoint (OpenAI-compatible gateways like OpenRouter and
+    // opencode.ai zen report `context_length` there, cached for a day), then
+    // falls back to a conservative per-provider default (200000 Anthropic /
+    // 128000 OpenAI) for the first-party APIs, which don't expose the window.
+    // Set this explicitly to pin an exact value or to cover a self-hosted model
+    // whose gateway doesn't advertise its window. Examples:
     //   200000 — Anthropic Claude (Sonnet, Haiku, Opus)
     //   128000 — OpenAI GPT-4o / GPT-4o-mini
     //  1048576 — DeepSeek via opencode.ai zen

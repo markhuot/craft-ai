@@ -53,15 +53,8 @@ class GetDraft extends Tool
         }
 
         $draft = $draftId;
-        if ($site instanceof Site && $draft->siteId !== $site->id) {
-            $reFetched = Entry::find()
-                ->draftId($draft->draftId)
-                ->siteId($site->id)
-                ->status(null)
-                ->one();
-            if ($reFetched instanceof Entry) {
-                $draft = $reFetched;
-            }
+        if ($site instanceof Site) {
+            $draft = $this->resolveOnSite($draft, $site, fn () => Entry::find()->draftId($draftId->draftId));
         }
 
         $data = $draft->toArray();

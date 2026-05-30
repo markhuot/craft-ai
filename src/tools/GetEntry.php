@@ -53,15 +53,8 @@ class GetEntry extends Tool
         }
 
         $entry = $id;
-        if ($site instanceof Site && $entry->siteId !== $site->id) {
-            $reFetched = Entry::find()
-                ->id($entry->id)
-                ->siteId($site->id)
-                ->status(null)
-                ->one();
-            if ($reFetched instanceof Entry) {
-                $entry = $reFetched;
-            }
+        if ($site instanceof Site) {
+            $entry = $this->resolveOnSite($entry, $site, fn () => Entry::find()->id($id->id));
         }
 
         $siteContext = $this->renderSiteContext($this->siteOfEntry($entry));

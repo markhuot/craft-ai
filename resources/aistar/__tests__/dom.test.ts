@@ -100,6 +100,45 @@ describe("findAllFields", () => {
     expect(found.map((f) => f.handle)).toEqual(["summary"]);
   });
 
+  test("scopes to #content-container, skipping #details-container fields", () => {
+    document.body.innerHTML = `
+      <form>
+        <div id="content-container">
+          <div class="field" id="fields-summary-field" data-attribute="summary">
+            <div class="heading"><label>Summary</label></div>
+          </div>
+        </div>
+        <div id="details-container">
+          <div class="field" id="fields-postDate-field" data-attribute="postDate">
+            <div class="heading"><label>Post Date</label></div>
+          </div>
+          <div class="field" id="fields-author-field" data-attribute="author">
+            <div class="heading"><label>Author</label></div>
+          </div>
+        </div>
+      </form>
+    `;
+    const found = findAllFields();
+    expect(found.map((f) => f.handle)).toEqual(["summary"]);
+  });
+
+  test("excludes #details-container fields even without a #content-container", () => {
+    document.body.innerHTML = `
+      <form>
+        <div class="field" id="fields-summary-field" data-attribute="summary">
+          <div class="heading"><label>Summary</label></div>
+        </div>
+        <div id="details-container">
+          <div class="field" id="fields-author-field" data-attribute="author">
+            <div class="heading"><label>Author</label></div>
+          </div>
+        </div>
+      </form>
+    `;
+    const found = findAllFields();
+    expect(found.map((f) => f.handle)).toEqual(["summary"]);
+  });
+
   test("detects the enclosing matrix block for nested fields", () => {
     document.body.innerHTML = `
       <form>

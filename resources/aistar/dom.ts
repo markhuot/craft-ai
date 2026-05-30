@@ -55,21 +55,33 @@ function readSiteId(): number | null {
  * `id="…fields-{handle}-field"` as a secondary handle source — we read
  * either, preferring `data-attribute` because it's the canonical one.
  *
+ * Scope: only the main `#content-container` is scanned. The right-hand
+ * `#details-container` holds the meta sidebar — Author, Post Date,
+ * status, etc. Those aren't free-text custom fields the AI can fill, so
+ * we deliberately leave them out. When `#content-container` is absent
+ * (non-standard screens, tests) we fall back to the whole document but
+ * still skip anything living inside `#details-container`.
+ *
  * Fields inside collapsed matrix blocks / inactive tabs aren't returned
  * here; the caller re-scans via MutationObserver whenever the DOM
  * changes so a field that appears later picks up its star then.
  */
-export function findAllFields(root: ParentNode = document): DiscoveredField[] {
+export function findAllFields(root?: ParentNode): DiscoveredField[] {
+  const scanRoot = root ?? resolveScanRoot();
   const out: DiscoveredField[] = [];
   const seen = new Set<HTMLElement>();
 
-  const candidates = root.querySelectorAll<HTMLElement>(
+  const candidates = scanRoot.querySelectorAll<HTMLElement>(
     "div.field, .field[data-attribute]",
   );
 
   for (const container of Array.from(candidates)) {
     if (seen.has(container)) continue;
     seen.add(container);
+
+    // Belt-and-suspenders: even when we fall back to scanning the whole
+    // document, never decorate the meta sidebar's fields.
+    if (container.closest("#details-container")) continue;
 
     const handle = readFieldHandle(container);
     if (!handle) continue;
@@ -90,6 +102,17 @@ export function findAllFields(root: ParentNode = document): DiscoveredField[] {
   }
 
   return out;
+}
+
+/**
+ * The root we hand to `querySelectorAll`. Prefer Craft's main content
+ * column so the meta sidebar (`#details-container`) is excluded by
+ * construction; fall back to the whole document when that container is
+ * missing (custom screens, tests).
+ */
+function resolveScanRoot(): ParentNode {
+  if (typeof document === "undefined") return document;
+  return document.querySelector<HTMLElement>("#content-container") ?? document;
 }
 
 /**

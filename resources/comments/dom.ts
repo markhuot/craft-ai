@@ -1,40 +1,12 @@
-import type { Comment, ElementContext } from "./types";
+import type { Comment } from "./types";
 
-/**
- * Detect the entry/draft currently being edited by scanning the page's
- * main form for the hidden inputs Craft injects on element edit screens.
- * Returns null when no entry edit is in progress (settings page, listing,
- * etc.), in which case the comments bundle short-circuits and does
- * nothing.
- *
- * `draftId` is the most reliable signal that we're looking at a draft;
- * `elementId` falls back to the canonical entry. We deliberately do NOT
- * trust query-string params — Craft can render the draft form for an
- * unsaved fresh draft where the URL has no element id at all.
- */
-export function readElementContext(): ElementContext | null {
-  const draftInput = document.querySelector<HTMLInputElement>(
-    'form input[name="draftId"]',
-  );
-  if (draftInput && draftInput.value && draftInput.value !== "0") {
-    const id = Number.parseInt(draftInput.value, 10);
-    if (Number.isFinite(id) && id > 0) {
-      return { elementId: id, isDraft: true };
-    }
-  }
-
-  const elementInput = document.querySelector<HTMLInputElement>(
-    'form input[name="elementId"], form input[name="sourceId"]',
-  );
-  if (elementInput && elementInput.value) {
-    const id = Number.parseInt(elementInput.value, 10);
-    if (Number.isFinite(id) && id > 0) {
-      return { elementId: id, isDraft: false };
-    }
-  }
-
-  return null;
-}
+// Element-context resolution lives in a shared module because the
+// CKEditor "Comment" plugin (resources/ckeditorcomment) must stamp new
+// comments with the exact same (elementId, isDraft) identity the overlay
+// reads them back by — see the long note there about Craft hiding the
+// draftId from the form. Re-exported so existing imports from "./dom"
+// keep working.
+export { readElementContext } from "../shared/elementContext";
 
 /**
  * Locate the DOM node for a given field handle, optionally scoped to a

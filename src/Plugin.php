@@ -6,6 +6,7 @@ use Craft;
 use craft\base\Element;
 use craft\base\Model;
 use craft\base\Plugin as BasePlugin;
+use craft\controllers\ElementsController;
 use craft\elements\Asset;
 use craft\elements\Entry;
 use craft\services\Drafts;
@@ -26,6 +27,7 @@ use markhuot\craftai\listeners\DispatchEntrySaveAutomation;
 use markhuot\craftai\listeners\InjectAiStarOverlay;
 use markhuot\craftai\listeners\InjectChatWidget;
 use markhuot\craftai\listeners\InjectCommentsOverlay;
+use markhuot\craftai\listeners\InjectElementContext;
 use markhuot\craftai\listeners\RegisterCkeditorCommentImport;
 use markhuot\craftai\listeners\RegisterCpUrlRules;
 use markhuot\craftai\listeners\RegisterCraftAiPermissions;
@@ -210,6 +212,14 @@ class Plugin extends BasePlugin
             View::class,
             View::EVENT_AFTER_RENDER_PAGE_TEMPLATE,
             new InjectCommentsOverlay(),
+        );
+        // Hand the front-end the authoritative (canonical/draft) identity
+        // of the element being edited, so the comments overlay never has
+        // to infer it from Craft's (canonical-only) form inputs.
+        Event::on(
+            ElementsController::class,
+            ElementsController::EVENT_DEFINE_EDITOR_CONTENT,
+            new InjectElementContext(),
         );
         Event::on(
             View::class,

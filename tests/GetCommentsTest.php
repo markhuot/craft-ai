@@ -58,12 +58,11 @@ it('lists all comments when status is "all"', function () {
     expect($payload['data'])->toHaveCount(2);
 });
 
-it('returns comments on both sides of the draft/canonical pair regardless of scope', function () {
-    // `CommentScope::pairsFor` bridges draft↔canonical in both directions
-    // so a comment authored on the draft sticks to the entry when the
-    // editor later views the canonical, and vice versa. Both surfaces
-    // therefore return the same merged set; each row still carries its
-    // own `isDraft` flag so the caller can tell where it was anchored.
+it('scopes comments strictly to each side of the draft/canonical pair', function () {
+    // `CommentScope::pairsFor` does NOT bridge draft↔canonical: a comment
+    // authored on the draft is in-flight feedback about that working copy
+    // and must not leak onto the live entry (or vice versa). Each surface
+    // returns only the comments anchored to its own identity.
     $entry = Entry::factory()->section('posts')->title('Entry')->create();
     $draft = \Craft::$app->drafts->createDraft($entry, 1);
 
@@ -73,19 +72,16 @@ it('returns comments on both sides of the draft/canonical pair regardless of sco
     $fromCanonical = decode($this->registry->execute('get_comments', ['entryId' => $entry->id]));
     $fromDraft = decode($this->registry->execute('get_comments', ['draftId' => $draft->draftId]));
 
-    expect($fromCanonical['data'])->toHaveCount(2);
-    expect($fromDraft['data'])->toHaveCount(2);
+    expect($fromCanonical['data'])->toHaveCount(1);
+    expect($fromDraft['data'])->toHaveCount(1);
 
-    $bodiesFromCanonical = array_column($fromCanonical['data'], 'body');
-    expect($bodiesFromCanonical)->toContain('on canonical');
-    expect($bodiesFromCanonical)->toContain('on draft');
+    // The canonical view sees only the canonical-anchored comment.
+    expect($fromCanonical['data'][0]['body'])->toBe('on canonical');
+    expect($fromCanonical['data'][0]['isDraft'])->toBeFalse();
 
-    // The per-row isDraft flag is preserved so callers can still split
-    // the merged result themselves.
-    $canonicalRow = collect($fromCanonical['data'])->firstWhere('body', 'on canonical');
-    $draftRow = collect($fromCanonical['data'])->firstWhere('body', 'on draft');
-    expect($canonicalRow['isDraft'])->toBeFalse();
-    expect($draftRow['isDraft'])->toBeTrue();
+    // The draft view sees only the draft-anchored comment.
+    expect($fromDraft['data'][0]['body'])->toBe('on draft');
+    expect($fromDraft['data'][0]['isDraft'])->toBeTrue();
 });
 
 it('includes comments on nested Matrix block entries when scoped to the parent entry', function () {

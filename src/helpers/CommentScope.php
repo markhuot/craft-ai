@@ -14,20 +14,34 @@ use craft\elements\Entry;
  * `get_comments`) want one query that covers the whole tree so editors
  * see every dot at once.
  *
- * Drafts: when the page is a draft, we walk from the draft entry and
- * surface descendants by their own draftIds where present, falling back
- * to the canonical id otherwise. We also bridge across the
- * draft/canonical boundary in *both* directions — viewing a canonical
- * sees comments left on any of its drafts, viewing a draft sees
- * comments left on the canonical (or on sibling drafts). Without that
- * bridge, a comment authored on a draft disappears the moment the draft
- * is applied, and a comment authored on a canonical is invisible while
- * the editor is working in a draft.
+ * Drafts are scoped *strictly*: a canonical entry surfaces only the
+ * comments anchored to the canonical and its canonical block subtree,
+ * and a draft surfaces only the comments anchored to that draft and its
+ * own block subtree. We deliberately do NOT bridge across the
+ * draft/canonical boundary — comments left on a draft are about that
+ * draft's in-flight content and must not leak onto the live entry (or
+ * onto a sibling draft), and vice versa. Each working copy owns a
+ * separate comment thread.
+ *
+ * This isolation falls out of Craft's ownership model for free: nested
+ * entries are owned (via `elements_owners`) by a specific owner element
+ * id — canonical blocks by the canonical, draft blocks by the draft
+ * element — so walking `ownerId($current->id)` down from the page root
+ * can only ever reach that page's own subtree. The single place the old
+ * implementation crossed the boundary was a "sibling roots" seed that
+ * folded a canonical's drafts (and a draft's canonical) into the query;
+ * that seed is gone.
+ *
+ * Note: a comment authored on a draft is stamped with that draftId, so
+ * once the draft is applied (and the draftId ceases to exist) the
+ * comment no longer resolves to any visible element. That's an accepted
+ * trade-off of strict scoping — open draft feedback is not graduated to
+ * the canonical on apply.
  *
  * The controller still filters records by the literal (elementId,
  * isDraft) pair stamped on each row, so every element-id only matches
  * the comments authored against that exact identity — we just feed in
- * a wider list of identities.
+ * the list of identities for the page's own tree.
  */
 final class CommentScope
 {
@@ -49,33 +63,17 @@ final class CommentScope
         $visited = [self::keyFor($elementId, $isDraft) => true];
         $queue = [$root];
 
-        // Seed the queue with every "sibling identity" of the root —
-        // its canonical (when the root is a draft) and every draft of
-        // its canonical (when the root is a canonical). All siblings
-        // share the same Matrix-block subtree on the canonical side
-        // but may have draft-side copies too, so we still walk each
-        // one's owned children below.
-        foreach (self::siblingRoots($root) as $sibling) {
-            $siblingId = $sibling->draftId !== null
-                ? (int) $sibling->draftId
-                : (int) $sibling->id;
-            $siblingIsDraft = $sibling->draftId !== null;
-            $key = self::keyFor($siblingId, $siblingIsDraft);
-            if (isset($visited[$key])) {
-                continue;
-            }
-            $visited[$key] = true;
-            $pairs[] = [$siblingId, $siblingIsDraft];
-            $queue[] = $sibling;
-        }
-
         while ($queue !== []) {
             $current = array_shift($queue);
 
-            // ownerId() resolves the canonical owner relation Craft
-            // tracks for Matrix-nested entries. It picks up both
-            // canonical-side blocks and the draft-side variants Craft
-            // duplicates when a parent draft is edited.
+            // ownerId() resolves the owner relation Craft tracks for
+            // Matrix-nested entries. Because a draft's blocks are owned
+            // by the draft element (not the canonical), walking down from
+            // the page root stays on the page's own side of the
+            // draft/canonical boundary: a canonical root only reaches
+            // canonical blocks, a draft root only reaches that draft's
+            // blocks. drafts(null) is needed so the draft-side nested
+            // entries (which carry their own draftId) aren't filtered out.
             $children = Entry::find()
                 ->ownerId((int) $current->id)
                 ->drafts(null)
@@ -99,44 +97,6 @@ final class CommentScope
         }
 
         return $pairs;
-    }
-
-    /**
-     * Return the canonical / draft "siblings" of a given root.
-     *
-     *  - Canonical root → returns every draft of it (so canonical-view
-     *    sees draft-only comments after a draft is applied or while
-     *    a parallel draft is in flight).
-     *  - Draft root → returns the canonical (so draft-view sees
-     *    canonical-anchored comments left before the draft existed).
-     *
-     * Provisional drafts are deliberately included — Craft auto-creates
-     * one when an editor opens an entry, and a comment left during
-     * that session is filed against the provisional draftId. Without
-     * including them the next person to open the entry would see an
-     * empty overlay.
-     *
-     * @return list<Entry>
-     */
-    private static function siblingRoots(Entry $root): array
-    {
-        if ($root->draftId !== null) {
-            $canonicalId = (int) $root->canonicalId;
-            if ($canonicalId <= 0) {
-                return [];
-            }
-            $canonical = Entry::find()->id($canonicalId)->status(null)->one();
-            return $canonical instanceof Entry ? [$canonical] : [];
-        }
-
-        // Canonical root — find all drafts (including provisionals).
-        /** @var list<Entry> $drafts */
-        $drafts = Entry::find()
-            ->draftOf($root)
-            ->status(null)
-            ->provisionalDrafts(null)
-            ->all();
-        return $drafts;
     }
 
     /**

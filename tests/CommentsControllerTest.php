@@ -378,12 +378,11 @@ it('404s on create when the elementId points at nothing', function () {
         ->send();
 })->throws(\yii\web\NotFoundHttpException::class);
 
-it('surfaces a comment left on a draft when the user views the canonical', function () {
-    // Repro of the "agent commented on a draft → editor reloads the
-    // canonical view → no popover" bug. CommentScope::pairsFor needs
-    // to bridge draft<->canonical in both directions so a comment
-    // sticks to the entry regardless of which surface the editor is
-    // looking at.
+it('does not surface a draft comment when the user views the canonical', function () {
+    // Strict scoping: a comment authored on a draft is in-flight feedback
+    // about that working copy and must NOT leak onto the live entry. The
+    // canonical view returns an empty set when the only comment lives on
+    // a draft.
     $entry = Entry::factory()->section('posts')->title('Test Entry')->create();
     $draft = \Craft::$app->drafts->createDraft($entry, 1);
 
@@ -397,12 +396,12 @@ it('surfaces a comment left on a draft when the user views the canonical', funct
     $response = test()->get('admin?action=craft-ai/comments&elementId='.$entry->id.'&isDraft=0');
 
     $response->assertOk();
-    $response->assertJsonCount(1, 'comments');
-    $payload = json_decode((string) $response->content, true);
-    expect($payload['comments'][0]['body'])->toBe('comment authored on the draft');
+    $response->assertJsonCount(0, 'comments');
 });
 
-it('surfaces a comment left on the canonical when the user views a draft', function () {
+it('does not surface a canonical comment when the user views a draft', function () {
+    // The mirror case: a draft is its own working copy and only shows the
+    // feedback anchored to that draft.
     $entry = Entry::factory()->section('posts')->title('Test Entry')->create();
     $draft = \Craft::$app->drafts->createDraft($entry, 1);
 
@@ -416,9 +415,37 @@ it('surfaces a comment left on the canonical when the user views a draft', funct
     $response = test()->get('admin?action=craft-ai/comments&elementId='.$draft->draftId.'&isDraft=1');
 
     $response->assertOk();
-    $response->assertJsonCount(1, 'comments');
-    $payload = json_decode((string) $response->content, true);
-    expect($payload['comments'][0]['body'])->toBe('comment authored on the canonical');
+    $response->assertJsonCount(0, 'comments');
+});
+
+it('surfaces only the matching side when comments exist on both the canonical and a draft', function () {
+    // The core of the reported bug: entry 334 showed its drafts' comments.
+    // With strict scoping each surface returns exactly its own comment.
+    $entry = Entry::factory()->section('posts')->title('Test Entry')->create();
+    $draft = \Craft::$app->drafts->createDraft($entry, 1);
+
+    makeStoredComment([
+        'elementId' => (int) $entry->id,
+        'isDraft' => false,
+        'fieldHandle' => 'storyContent',
+        'body' => 'on canonical',
+    ]);
+    makeStoredComment([
+        'elementId' => (int) $draft->draftId,
+        'isDraft' => true,
+        'fieldHandle' => 'storyContent',
+        'body' => 'on draft',
+    ]);
+
+    $canonical = test()->get('admin?action=craft-ai/comments&elementId='.$entry->id.'&isDraft=0');
+    $canonical->assertOk();
+    $canonical->assertJsonCount(1, 'comments');
+    expect(json_decode((string) $canonical->content, true)['comments'][0]['body'])->toBe('on canonical');
+
+    $draftView = test()->get('admin?action=craft-ai/comments&elementId='.$draft->draftId.'&isDraft=1');
+    $draftView->assertOk();
+    $draftView->assertJsonCount(1, 'comments');
+    expect(json_decode((string) $draftView->content, true)['comments'][0]['body'])->toBe('on draft');
 });
 
 it('serializes existing comments with referenceId in the index payload', function () {

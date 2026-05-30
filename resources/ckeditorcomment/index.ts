@@ -43,44 +43,13 @@
 // dependencies just for compile-time hints.
 import { ButtonView, ClickObserver, Command, Plugin } from "ckeditor5";
 
-interface ElementContext {
-  elementId: number;
-  isDraft: boolean;
-}
-
-/**
- * Walk up from the editor's source element to the surrounding entry
- * form, then read `draftId` / `elementId` / `sourceId` the same way the
- * comments overlay does. We scope to the closest form ancestor instead
- * of `document.querySelector` so a page with multiple forms still picks
- * up the right element id.
- */
-function readElementContext(rootEl: HTMLElement): ElementContext | null {
-  const form = rootEl.closest("form");
-  const scope: ParentNode = form ?? document;
-
-  const draftInput = scope.querySelector<HTMLInputElement>(
-    'input[name="draftId"]',
-  );
-  if (draftInput && draftInput.value && draftInput.value !== "0") {
-    const id = Number.parseInt(draftInput.value, 10);
-    if (Number.isFinite(id) && id > 0) {
-      return { elementId: id, isDraft: true };
-    }
-  }
-
-  const elementInput = scope.querySelector<HTMLInputElement>(
-    'input[name="elementId"], input[name="sourceId"]',
-  );
-  if (elementInput && elementInput.value) {
-    const id = Number.parseInt(elementInput.value, 10);
-    if (Number.isFinite(id) && id > 0) {
-      return { elementId: id, isDraft: false };
-    }
-  }
-
-  return null;
-}
+// Shared with the comments overlay so a comment authored here is stamped
+// with the exact (elementId, isDraft) identity the overlay reads it back
+// by. Passing the editor's source element biases resolution toward the
+// nearest form/slideout on multi-form pages. See the module for why the
+// draftId can't be read off a form input.
+import { readElementContext } from "../shared/elementContext";
+import type { ElementContext } from "../shared/elementContext";
 
 /**
  * Read the CKEditor field's handle off the surrounding markup.

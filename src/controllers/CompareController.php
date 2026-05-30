@@ -39,6 +39,8 @@ use yii\web\Response;
  */
 class CompareController extends Controller
 {
+    use ResolvesRequestParams;
+
     public array|bool|int $allowAnonymous = false;
 
     public function actionIndex(): Response
@@ -46,8 +48,8 @@ class CompareController extends Controller
         $this->requireLogin();
 
         $entry = $this->resolveEntry();
-        $a = $this->refParam('a', '');
-        $b = $this->refParam('b', 'current');
+        $a = $this->getStringParam('a', '');
+        $b = $this->getStringParam('b', 'current');
 
         return $this->renderTemplate('craft-ai/compare/view', [
             'entryId' => (int) $entry->id,
@@ -257,15 +259,12 @@ class CompareController extends Controller
 
     private function resolveEntry(): Entry
     {
-        $rawId = $this->request->getParam('entryId');
-        if (! is_numeric($rawId)) {
-            throw new BadRequestHttpException('entryId must be numeric.');
-        }
+        $entryId = $this->getRequiredIntParam('entryId');
 
-        $query = Entry::find()->id((int) $rawId)->status(null);
-        $rawSite = $this->request->getParam('siteId');
-        if (is_numeric($rawSite)) {
-            $query->siteId((int) $rawSite);
+        $query = Entry::find()->id($entryId)->status(null);
+        $siteId = $this->getIntParam('siteId');
+        if ($siteId !== null) {
+            $query->siteId($siteId);
         }
 
         $entry = $query->one();
@@ -274,13 +273,6 @@ class CompareController extends Controller
         }
 
         return $entry;
-    }
-
-    private function refParam(string $name, string $default): string
-    {
-        $value = $this->request->getParam($name);
-
-        return is_string($value) && $value !== '' ? $value : $default;
     }
 
     /**

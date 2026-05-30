@@ -39,6 +39,8 @@ use yii\web\Response;
  */
 class AiStarController extends Controller
 {
+    use ResolvesRequestParams;
+
     public array|bool|int $allowAnonymous = false;
 
     /**
@@ -72,30 +74,17 @@ class AiStarController extends Controller
         $this->requirePostRequest();
         $this->requireLogin();
 
-        $elementIdRaw = $this->request->getRequiredBodyParam('elementId');
-        if (! is_numeric($elementIdRaw)) {
-            throw new BadRequestHttpException('elementId must be numeric.');
-        }
-        $elementId = (int) $elementIdRaw;
-        $isDraft = (bool) $this->request->getBodyParam('isDraft', false);
+        $elementId = $this->getRequiredIntBodyParam('elementId');
+        $isDraft = $this->getBoolBodyParam('isDraft');
 
-        $fieldHandle = $this->request->getRequiredBodyParam('fieldHandle');
-        if (! is_string($fieldHandle) || $fieldHandle === '') {
-            throw new BadRequestHttpException('fieldHandle must be a non-empty string.');
-        }
+        $fieldHandle = $this->getRequiredStringBodyParam('fieldHandle');
 
-        $fieldLabelRaw = $this->request->getBodyParam('fieldLabel');
-        $fieldLabel = is_string($fieldLabelRaw) && $fieldLabelRaw !== '' ? $fieldLabelRaw : null;
+        $fieldLabel = $this->getStringBodyParam('fieldLabel');
 
-        $blockElementIdRaw = $this->request->getBodyParam('blockElementId');
-        $blockElementId = is_numeric($blockElementIdRaw) ? (int) $blockElementIdRaw : null;
-        $blockTypeHandleRaw = $this->request->getBodyParam('blockTypeHandle');
-        $blockTypeHandle = is_string($blockTypeHandleRaw) && $blockTypeHandleRaw !== ''
-            ? $blockTypeHandleRaw
-            : null;
+        $blockElementId = $this->getIntBodyParam('blockElementId');
+        $blockTypeHandle = $this->getStringBodyParam('blockTypeHandle');
 
-        $siteIdRaw = $this->request->getBodyParam('siteId');
-        $siteId = is_numeric($siteIdRaw) ? (int) $siteIdRaw : null;
+        $siteId = $this->getIntBodyParam('siteId');
         // Resolve the site server-side so a fabricated id from the browser
         // doesn't end up in the system note. Unknown ids fall through to
         // null, which the prompt builder handles by simply omitting the

@@ -33,6 +33,8 @@ use yii\web\Response;
  */
 class CommentsController extends Controller
 {
+    use ResolvesRequestParams;
+
     public array|bool|int $allowAnonymous = false;
 
     /**
@@ -50,15 +52,10 @@ class CommentsController extends Controller
     {
         $this->requireLogin();
 
-        $elementIdRaw = $this->request->getRequiredQueryParam('elementId');
-        if (! is_numeric($elementIdRaw)) {
-            throw new BadRequestHttpException('elementId must be numeric.');
-        }
-        $elementId = (int) $elementIdRaw;
-        $isDraft = (bool) $this->request->getQueryParam('isDraft', false);
+        $elementId = $this->getRequiredIntQueryParam('elementId');
+        $isDraft = $this->getBoolQueryParam('isDraft');
 
-        $statusRaw = $this->request->getQueryParam('status', 'open');
-        $status = is_string($statusRaw) ? $statusRaw : 'open';
+        $status = $this->getStringQueryParam('status', 'open');
 
         if (! in_array($status, ['open', 'resolved', 'all'], true)) {
             throw new BadRequestHttpException('status must be one of: open, resolved, all.');
@@ -143,35 +140,15 @@ class CommentsController extends Controller
         $this->requirePostRequest();
         $this->requireLogin();
 
-        $elementIdRaw = $this->request->getRequiredBodyParam('elementId');
-        if (! is_numeric($elementIdRaw)) {
-            throw new BadRequestHttpException('elementId must be numeric.');
-        }
-        $elementId = (int) $elementIdRaw;
-        $isDraft = (bool) $this->request->getBodyParam('isDraft', false);
+        $elementId = $this->getRequiredIntBodyParam('elementId');
+        $isDraft = $this->getBoolBodyParam('isDraft');
 
-        $fieldHandle = $this->request->getRequiredBodyParam('fieldHandle');
-        if (! is_string($fieldHandle) || $fieldHandle === '') {
-            throw new BadRequestHttpException('fieldHandle must be a non-empty string.');
-        }
+        $fieldHandle = $this->getRequiredStringBodyParam('fieldHandle');
 
-        $body = $this->request->getRequiredBodyParam('body');
-        if (! is_string($body) || trim($body) === '') {
-            throw new BadRequestHttpException('body must be a non-empty string.');
-        }
-        $body = trim($body);
-        if (strlen($body) > 4000) {
-            throw new BadRequestHttpException('body must be 4000 characters or fewer.');
-        }
+        $body = $this->getRequiredStringBodyParam('body', trim: true, maxLength: 4000);
 
-        $referenceIdRaw = $this->request->getBodyParam('referenceId');
-        $referenceId = is_string($referenceIdRaw) && $referenceIdRaw !== ''
-            ? $referenceIdRaw
-            : \craft\helpers\StringHelper::UUID();
-
-        if (strlen($referenceId) > 64) {
-            throw new BadRequestHttpException('referenceId must be 64 characters or fewer.');
-        }
+        $referenceId = $this->getStringBodyParam('referenceId', maxLength: 64)
+            ?? \craft\helpers\StringHelper::UUID();
 
         // Confirm the target element actually exists so we don't write
         // an orphan row. We accept either canonical entries or drafts;
@@ -202,9 +179,9 @@ class CommentsController extends Controller
         $userId = Craft::$app->getUser()->getId();
         $userIdInt = is_numeric($userId) ? (int) $userId : null;
 
-        $providedSessionId = $this->request->getBodyParam('sessionId');
+        $providedSessionId = $this->getStringBodyParam('sessionId');
         $session = null;
-        if (is_string($providedSessionId) && $providedSessionId !== '') {
+        if ($providedSessionId !== null) {
             $session = SessionRecord::findOne(['id' => $providedSessionId]);
             if ($session === null) {
                 throw new NotFoundHttpException("No session found with id {$providedSessionId}.");
@@ -240,8 +217,8 @@ class CommentsController extends Controller
         // Apply tool-mode + custom allowlist when the composer sent them.
         // We accept the same modes the SessionsController whitelists so a
         // stale client can't sneak through an unsupported value.
-        $toolModeParam = $this->request->getBodyParam('toolMode');
-        if (is_string($toolModeParam) && $toolModeParam !== '') {
+        $toolModeParam = $this->getStringBodyParam('toolMode');
+        if ($toolModeParam !== null) {
             $allowedModes = ['full', 'draft', 'readonly', 'custom'];
             if (! in_array($toolModeParam, $allowedModes, true)) {
                 throw new BadRequestHttpException('toolMode must be one of: '.implode(', ', $allowedModes));
@@ -336,11 +313,7 @@ class CommentsController extends Controller
         $this->requirePostRequest();
         $this->requireLogin();
 
-        $commentIdRaw = $this->request->getRequiredBodyParam('commentId');
-        if (! is_numeric($commentIdRaw)) {
-            throw new BadRequestHttpException('commentId must be numeric.');
-        }
-        $commentId = (int) $commentIdRaw;
+        $commentId = $this->getRequiredIntBodyParam('commentId');
         $record = CommentRecord::findOne(['id' => $commentId]);
 
         if ($record === null) {
@@ -393,11 +366,7 @@ class CommentsController extends Controller
         $this->requirePostRequest();
         $this->requireLogin();
 
-        $commentIdRaw = $this->request->getRequiredBodyParam('commentId');
-        if (! is_numeric($commentIdRaw)) {
-            throw new BadRequestHttpException('commentId must be numeric.');
-        }
-        $commentId = (int) $commentIdRaw;
+        $commentId = $this->getRequiredIntBodyParam('commentId');
 
         $record = CommentRecord::findOne(['id' => $commentId]);
         if ($record === null) {

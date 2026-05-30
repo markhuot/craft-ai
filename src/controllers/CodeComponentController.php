@@ -35,6 +35,8 @@ use yii\web\Response;
  */
 class CodeComponentController extends Controller
 {
+    use ResolvesRequestParams;
+
     /**
      * GET craft-ai/code-component/state?(entryId|draftId)=N&fieldHandle=...
      *
@@ -74,9 +76,8 @@ class CodeComponentController extends Controller
 
         [$element, , $handle] = $this->resolveTarget();
 
-        $rawSession = $this->request->getBodyParam('sessionId');
-        $sessionId = is_string($rawSession) ? trim($rawSession) : '';
-        if ($sessionId === '') {
+        $sessionId = $this->getStringBodyParam('sessionId', trim: true);
+        if ($sessionId === null) {
             throw new BadRequestHttpException('sessionId is required.');
         }
 
@@ -123,11 +124,8 @@ class CodeComponentController extends Controller
     {
         $entryId = $this->paramAsInt('entryId');
         $draftId = $this->paramAsInt('draftId');
-        $rawHandle = $this->request->getQueryParam('fieldHandle')
-            ?? $this->request->getBodyParam('fieldHandle');
-        $fieldHandle = is_string($rawHandle) ? trim($rawHandle) : '';
-
-        if ($fieldHandle === '') {
+        $fieldHandle = $this->getStringParam('fieldHandle', trim: true);
+        if ($fieldHandle === null) {
             throw new BadRequestHttpException('fieldHandle is required.');
         }
 

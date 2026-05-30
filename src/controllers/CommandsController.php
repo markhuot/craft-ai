@@ -26,6 +26,8 @@ use yii\web\Response;
  */
 class CommandsController extends Controller
 {
+    use ResolvesRequestParams;
+
     /**
      * @param \yii\base\Action<\yii\base\Controller<\yii\base\Module>> $action
      */
@@ -91,7 +93,7 @@ class CommandsController extends Controller
         $uid = $this->stringParam('uid');
         $name = $this->stringParam('name');
         $prompt = $this->stringParam('prompt');
-        $enabled = (bool) $this->request->getBodyParam('enabled', false);
+        $enabled = $this->getBoolBodyParam('enabled');
 
         $incoming = Command::fromArray([
             // Empty uid means "new" — fromArray will mint one.

@@ -24,6 +24,8 @@ use yii\web\Response;
  */
 class PreviewController extends Controller
 {
+    use ResolvesRequestParams;
+
     public array|bool|int $allowAnonymous = false;
 
     public function actionRespond(): Response
@@ -34,8 +36,8 @@ class PreviewController extends Controller
 
         $request = $this->loadOwnedRequest();
 
-        $status = $this->request->getRequiredBodyParam('status');
-        if (! is_string($status) || ($status !== 'completed' && $status !== 'errored')) {
+        $status = $this->getRequiredStringBodyParam('status');
+        if ($status !== 'completed' && $status !== 'errored') {
             throw new \yii\web\BadRequestHttpException('status must be "completed" or "errored".');
         }
 
@@ -61,11 +63,7 @@ class PreviewController extends Controller
 
     private function loadOwnedRequest(): PreviewRequestRecord
     {
-        $rawId = $this->request->getRequiredBodyParam('id');
-        if (! is_numeric($rawId)) {
-            throw new \yii\web\BadRequestHttpException('id must be numeric.');
-        }
-        $id = (int) $rawId;
+        $id = $this->getRequiredIntBodyParam('id');
 
         /** @var ?PreviewRequestRecord $record */
         $record = PreviewRequestRecord::findOne(['id' => $id]);

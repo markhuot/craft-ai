@@ -18,6 +18,8 @@ use yii\web\Response;
 
 class SessionsController extends Controller
 {
+    use ResolvesRequestParams;
+
     public function actionIndex(): Response
     {
         if (($setup = $this->renderSetupIfNeeded()) !== null) {
@@ -198,10 +200,8 @@ class SessionsController extends Controller
         // that know they're a more specific surface, e.g. the
         // CodeComponent field's Prompt tab passes `code-component-field`
         // so its session never picks up tools that belong elsewhere.
-        $rawClient = $this->request->getBodyParam('clientType');
-        $clientType = is_string($rawClient) && $rawClient !== ''
-            ? ClientType::tryFrom($rawClient)
-            : null;
+        $rawClient = $this->getStringBodyParam('clientType');
+        $clientType = $rawClient !== null ? ClientType::tryFrom($rawClient) : null;
         $session->clientType = ($clientType ?? $this->resolveClientType())->value;
         $session->save();
 
@@ -266,11 +266,7 @@ class SessionsController extends Controller
     {
         $this->requirePostRequest();
 
-        $sessionId = $this->request->getRequiredBodyParam('sessionId');
-
-        if (! is_string($sessionId) || $sessionId === '') {
-            throw new \yii\web\BadRequestHttpException('sessionId must be a non-empty string.');
-        }
+        $sessionId = $this->getRequiredStringBodyParam('sessionId');
 
         $session = SessionRecord::findOne(['id' => $sessionId]);
 
@@ -300,11 +296,8 @@ class SessionsController extends Controller
         // Fall back to body params so production query-param requests and the
         // test harness both reach the same handler — matching the same
         // pattern AssetsController uses for its `ids` param.
-        $sessionId = $this->request->getQueryParam('sessionId');
-        if (! is_string($sessionId) || $sessionId === '') {
-            $sessionId = $this->request->getBodyParam('sessionId');
-        }
-        if (! is_string($sessionId) || $sessionId === '') {
+        $sessionId = $this->getStringQueryParam('sessionId') ?? $this->getStringBodyParam('sessionId');
+        if ($sessionId === null) {
             throw new \yii\web\BadRequestHttpException('sessionId is required.');
         }
 
@@ -334,12 +327,8 @@ class SessionsController extends Controller
         $this->requirePostRequest();
         $this->requireAcceptsJson();
 
-        $sessionId = $this->request->getRequiredBodyParam('sessionId');
-        $mode = $this->request->getRequiredBodyParam('mode');
-
-        if (! is_string($sessionId) || $sessionId === '' || ! is_string($mode)) {
-            throw new \yii\web\BadRequestHttpException('sessionId and mode must be non-empty strings.');
-        }
+        $sessionId = $this->getRequiredStringBodyParam('sessionId');
+        $mode = $this->getRequiredStringBodyParam('mode');
 
         $allowedModes = ['full', 'draft', 'readonly', 'custom'];
         if (! in_array($mode, $allowedModes, true)) {
@@ -435,11 +424,7 @@ class SessionsController extends Controller
     {
         $this->requirePostRequest();
 
-        $sessionId = $this->request->getRequiredBodyParam('sessionId');
-
-        if (! is_string($sessionId) || $sessionId === '') {
-            throw new \yii\web\BadRequestHttpException('sessionId must be a non-empty string.');
-        }
+        $sessionId = $this->getRequiredStringBodyParam('sessionId');
 
         $session = SessionRecord::findOne(['id' => $sessionId]);
 

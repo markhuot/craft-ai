@@ -22,6 +22,8 @@ use yii\web\Response;
  */
 class ArtifactsController extends Controller
 {
+    use ResolvesRequestParams;
+
     public array|bool|int $allowAnonymous = false;
 
     public function actionView(?int $id = null): Response
@@ -32,8 +34,7 @@ class ArtifactsController extends Controller
         // fall back to a request param so the action is also reachable via
         // `?action=…&id=…`.
         if ($id === null) {
-            $raw = $this->request->getParam('id');
-            $id = is_numeric($raw) ? (int) $raw : null;
+            $id = $this->getIntParam('id');
         }
         if ($id === null) {
             throw new BadRequestHttpException('A numeric artifact id is required.');

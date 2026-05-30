@@ -16,20 +16,18 @@ use yii\web\Response;
 
 class MessagesController extends Controller
 {
+    use ResolvesRequestParams;
+
     public array|bool|int $allowAnonymous = false;
 
     public function actionIndex(): Response
     {
         $this->requireLogin();
 
-        $sessionId = $this->request->getRequiredQueryParam('sessionId');
-        if (! is_string($sessionId) || $sessionId === '') {
-            throw new \yii\web\BadRequestHttpException('sessionId must be a non-empty string.');
-        }
+        $sessionId = $this->getRequiredStringQueryParam('sessionId');
         $this->ensureSessionOwnership($sessionId);
 
-        $afterParam = $this->request->getQueryParam('after', '0');
-        $after = is_numeric($afterParam) ? (int) $afterParam : 0;
+        $after = $this->getIntQueryParam('after', 0);
 
         /** @var list<MessageRecord> $records */
         $records = MessageRecord::find()
@@ -297,7 +295,7 @@ class MessagesController extends Controller
         }
         $this->ensureSessionOwnership($sessionId);
 
-        $async = (bool) $this->request->getBodyParam('async', false);
+        $async = $this->getBoolBodyParam('async');
 
         /** @var AgentLoop $loop */
         $loop = Craft::$container->get(AgentLoop::class);

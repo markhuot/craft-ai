@@ -2,7 +2,9 @@
 
 namespace markhuot\craftai\records;
 
+use Craft;
 use craft\db\ActiveRecord;
+use yii\web\NotFoundHttpException;
 
 /**
  * @property string $id UUID identifying the session
@@ -26,6 +28,56 @@ class SessionRecord extends ActiveRecord
     public static function tableName(): string
     {
         return '{{%craftai_sessions}}';
+    }
+
+    /**
+     * Find a session by id, scoped to the currently logged-in user.
+     *
+     * Sessions are per-user, so anything that reads one on behalf of a
+     * request should go through here rather than a raw `findOne` — it keeps
+     * one user from reaching into another user's session (and the comments
+     * that hang off it). Returns `null` both when the row is missing and when
+     * it belongs to someone else, so callers surface a single, non-leaking
+     * 404 either way. A `null` `userId` is legacy (older rows predate user
+     * scoping) and is treated as "any owner allowed."
+     */
+    public static function findOneForCurrentUser(string $sessionId): ?self
+    {
+        $session = static::findOne(['id' => $sessionId]);
+        if ($session === null) {
+            return null;
+        }
+
+        $identity = Craft::$app->getUser()->getIdentity();
+        $userId = $identity !== null ? (int) $identity->id : null;
+
+        if ($session->userId !== null && $session->userId !== $userId) {
+            return null;
+        }
+
+        return $session;
+    }
+
+    /**
+     * Like {@see findOneForCurrentUser()}, but throws a 404 instead of
+     * returning null when the session is missing or owned by another user.
+     *
+     * Use this at request entry points that need the session to exist (and to
+     * belong to the caller) — it folds the "not found / not yours → 404" guard
+     * into the lookup so the call site reads as a single expression. Prefer the
+     * nullable {@see findOneForCurrentUser()} where a missing session is a
+     * valid, handled case rather than an error.
+     *
+     * @throws NotFoundHttpException
+     */
+    public static function findOneOrFailForCurrentUser(string $sessionId): self
+    {
+        $session = static::findOneForCurrentUser($sessionId);
+        if ($session === null) {
+            throw new NotFoundHttpException("No session found with id {$sessionId}.");
+        }
+
+        return $session;
     }
 
     /**

@@ -178,16 +178,10 @@ class CommentsController extends Controller
         $providedSessionId = $this->getStringBodyParam('sessionId');
         $session = null;
         if ($providedSessionId !== null) {
-            $session = SessionRecord::findOne(['id' => $providedSessionId]);
-            if ($session === null) {
-                throw new NotFoundHttpException("No session found with id {$providedSessionId}.");
-            }
-            // Don't let one user write a comment against another user's
-            // session — sessions are per-user. `null` is legacy (older
-            // rows) so we treat it as "any owner allowed."
-            if ($session->userId !== null && $session->userId !== $userIdInt) {
-                throw new NotFoundHttpException("No session found with id {$providedSessionId}.");
-            }
+            // Scoped lookup that 404s when the session is missing *or* owned by
+            // another user, so one editor can't attach a comment to someone
+            // else's session (and the existence of it doesn't leak either way).
+            $session = SessionRecord::findOneOrFailForCurrentUser($providedSessionId);
         }
 
         if ($session === null) {
@@ -274,10 +268,7 @@ class CommentsController extends Controller
         // for user-authored comments the "parent" session is empty
         // bookkeeping, so the fork copies nothing of value but keeps
         // the data model consistent with agent-left comments.
-        /** @var AgentLoop $loop */
-        $loop = Craft::$container->get(AgentLoop::class);
-        $loop->appendSystemContext(
-            $sessionId,
+        $session->addSystemNote(
             sprintf(
                 "[Editor left a comment on a span in field `%s` of %s #%d] Comment body: \"%s\". The editor will open this thread to discuss the feedback — respond when they reply, and call resolve_comment(commentId: %d) once they're satisfied.",
                 $fieldHandle,
@@ -295,7 +286,7 @@ class CommentsController extends Controller
         // fork would start from the system note alone, which reads
         // awkwardly back ("you said…" but no prior user turn).
         if ($body !== '') {
-            $loop->appendUserMessage($sessionId, $body, $assetIds);
+            $session->addUserMessage($body, $assetIds);
         }
 
         return $this->asJson([

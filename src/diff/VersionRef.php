@@ -2,6 +2,7 @@
 
 namespace markhuot\craftai\diff;
 
+use craft\behaviors\DraftBehavior;
 use craft\behaviors\RevisionBehavior;
 use craft\elements\db\EntryQuery;
 use craft\elements\Entry;
@@ -60,7 +61,7 @@ final class VersionRef
 
     /**
      * Short human label for a resolved version, e.g. "Current", "Revision 7",
-     * or "Draft".
+     * or a named draft like "Draft: Holiday copy".
      */
     public static function label(Entry $entry): string
     {
@@ -70,7 +71,9 @@ final class VersionRef
             return $behavior !== null ? "Revision {$behavior->revisionNum}" : 'Revision';
         }
         if ($entry->getIsDraft()) {
-            return 'Draft';
+            $name = self::draftBehavior($entry)?->draftName;
+
+            return is_string($name) && $name !== '' ? "Draft: {$name}" : 'Draft';
         }
 
         return 'Current';
@@ -104,6 +107,22 @@ final class VersionRef
     {
         foreach ($entry->getBehaviors() as $behavior) {
             if ($behavior instanceof RevisionBehavior) {
+                return $behavior;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Locate the DraftBehavior on an element (the draft sibling of
+     * {@see revisionBehavior}), exposing `draftName`, the creator, etc. in a
+     * way PHPStan can type. Returns null on non-draft elements.
+     */
+    public static function draftBehavior(Entry $entry): ?DraftBehavior
+    {
+        foreach ($entry->getBehaviors() as $behavior) {
+            if ($behavior instanceof DraftBehavior) {
                 return $behavior;
             }
         }

@@ -284,9 +284,11 @@ class CompareController extends Controller
     }
 
     /**
-     * The current entry plus each of its revisions, newest-first, as picker
-     * options. Mirrors the shape {@see \markhuot\craftai\tools\GetRevisions}
-     * returns, plus a synthetic "current" option.
+     * The current entry, then its open drafts, then each revision newest-first,
+     * as picker options — so an editor can compare a work-in-progress draft
+     * against the live entry or any past revision. Revision rows mirror the
+     * shape {@see \markhuot\craftai\tools\GetRevisions} returns; the "current"
+     * row is synthetic.
      *
      * @return list<array<string, mixed>>
      */
@@ -301,6 +303,51 @@ class CompareController extends Controller
             'isCurrent' => true,
         ];
 
+        return [$current, ...$this->draftOptions($entry), ...$this->revisionRows($entry)];
+    }
+
+    /**
+     * The entry's saved drafts, newest-edited first. Provisional drafts (Craft's
+     * per-user autosave scratch space behind the entry-edit screen) are excluded
+     * — they're transient editing state, not versions a user would deliberately
+     * line up for comparison.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function draftOptions(Entry $entry): array
+    {
+        $query = Entry::find()->draftOf($entry->id)->provisionalDrafts(false)->status(null);
+        if ($entry->siteId !== null) {
+            $query->siteId($entry->siteId);
+        }
+
+        $rows = [];
+        foreach ($query->all() as $draft) {
+            $behavior = VersionRef::draftBehavior($draft);
+            $rows[] = [
+                'ref' => VersionRef::refFor($draft),
+                'label' => VersionRef::label($draft),
+                'revisionNum' => null,
+                'savedBy' => $behavior?->getCreator()?->username,
+                'dateUpdated' => $draft->dateUpdated?->format(\DateTimeInterface::ATOM),
+                'isCurrent' => false,
+            ];
+        }
+        usort($rows, static fn (array $x, array $y): int => strcmp(
+            is_string($y['dateUpdated'] ?? null) ? $y['dateUpdated'] : '',
+            is_string($x['dateUpdated'] ?? null) ? $x['dateUpdated'] : '',
+        ));
+
+        return $rows;
+    }
+
+    /**
+     * The entry's revisions, newest-first.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function revisionRows(Entry $entry): array
+    {
         $query = Entry::find()->revisionOf($entry->id)->status(null);
         if ($entry->siteId !== null) {
             $query->siteId($entry->siteId);
@@ -320,7 +367,7 @@ class CompareController extends Controller
         }
         usort($rows, static fn (array $x, array $y): int => ($y['revisionNum'] ?? 0) <=> ($x['revisionNum'] ?? 0));
 
-        return [$current, ...$rows];
+        return $rows;
     }
 
     /**

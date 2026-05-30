@@ -65,6 +65,60 @@ it('lists current + revisions for the pickers, newest-first', function () {
     expect(array_search('rev:'.$r2, $refs, true))->toBeLessThan(array_search('rev:'.$r1, $refs, true));
 });
 
+it('lists open drafts in the pickers and can diff a draft against current', function () {
+    [$entry, $r1, $r2] = compareEntryWithRevisions();
+
+    // A saved (non-provisional) draft off the canonical entry, with changed
+    // content so the diff is non-trivial.
+    $draft = Craft::$app->getDrafts()->createDraft($entry, $entry->authorId ?? 1, 'Holiday copy');
+    $draft->title = 'Title C';
+    $draft->setFieldValue('body', 'gamma');
+    Craft::$app->elements->saveElement($draft);
+
+    // The picker advertises the draft, named, alongside current + revisions.
+    $listing = test()->get('admin?action=craft-ai/compare/revisions&entryId='.$entry->id);
+    $listing->assertOk();
+    $options = json_decode((string) $listing->content, true)['revisions'];
+    $byRef = collect($options)->keyBy('ref');
+
+    expect($byRef->has('draft:'.$draft->draftId))->toBeTrue();
+    expect($byRef->get('draft:'.$draft->draftId)['label'])->toBe('Draft: Holiday copy');
+    // Ordering: current, then drafts, then revisions.
+    $refs = collect($options)->pluck('ref')->all();
+    expect($refs[0])->toBe('current');
+    expect(array_search('draft:'.$draft->draftId, $refs, true))
+        ->toBeLessThan(array_search('rev:'.$r2, $refs, true));
+
+    // And the draft is a usable side of an actual diff.
+    $response = postDiff(['entryId' => $entry->id, 'a' => 'current', 'b' => 'draft:'.$draft->draftId]);
+    $response->assertOk();
+    $data = json_decode((string) $response->content, true);
+    expect($data['ok'])->toBeTrue();
+    expect($data['b']['ref'])->toBe('draft:'.$draft->draftId);
+    expect($data['html'])->toContain('gamma');
+});
+
+it('omits provisional (autosave) drafts from the pickers', function () {
+    [$entry] = compareEntryWithRevisions();
+
+    // Provisional drafts are Craft's per-user autosave scratch space behind the
+    // entry-edit screen — transient editing state, not a deliberate version.
+    $provisional = Craft::$app->getDrafts()->createDraft(
+        $entry,
+        $entry->authorId ?? 1,
+        null,
+        null,
+        [],
+        provisional: true,
+    );
+
+    $listing = test()->get('admin?action=craft-ai/compare/revisions&entryId='.$entry->id);
+    $listing->assertOk();
+    $refs = collect(json_decode((string) $listing->content, true)['revisions'])->pluck('ref')->all();
+
+    expect($refs)->not->toContain('draft:'.$provisional->draftId);
+});
+
 it('renders the compare page', function () {
     [$entry] = compareEntryWithRevisions();
 

@@ -9,6 +9,7 @@ use markhuot\craftai\agent\ToolContext;
 use markhuot\craftai\migrations\Install;
 use markhuot\craftpest\test\RefreshesDatabase;
 use markhuot\craftpest\test\TestCase as PestTestCase;
+use yii\base\Event;
 
 class TestCase extends PestTestCase
 {
@@ -16,6 +17,8 @@ class TestCase extends PestTestCase
 
     protected function setUp(): void
     {
+        $this->disableDebugToolbar();
+
         static $migrated = false;
         if (! $migrated) {
             $migrated = true;
@@ -69,5 +72,69 @@ class TestCase extends PestTestCase
         /** @var ToolContext $context */
         $context = Craft::$container->get(ToolContext::class);
         $context->begin('test-session', null, ClientType::CP);
+    }
+
+    /**
+     * Tear down Craft's debug toolbar so it can't accumulate state across the
+     * whole test process.
+     *
+     * craft-pest's web Application adds an `X-Debug: enable` header whenever
+     * devMode is on, which makes Craft bootstrap the full debug toolbar
+     * (craft\debug\Module) once, at app construction. In a real request the
+     * toolbar's per-request data is exported and reset on EVENT_AFTER_REQUEST,
+     * but the test process reuses a single long-lived Craft::$app and never
+     * completes that cycle. So the module's panels keep collecting forever:
+     * the EventPanel attaches a wildcard Event::on('*', '*') listener that
+     * records *every* event fired in *every* test, and the log/profiling
+     * panels record every message and DB query. Left alone this grows the heap
+     * to ~1GB by mid-suite and, because each fired event now runs the wildcard
+     * collector, makes every later test 10-60x slower than it is in isolation.
+     *
+     * We can't stop craft-pest sending the header, so instead we dismantle the
+     * toolbar once: drop its log target, remove the wildcard event listener,
+     * and clear whatever the panels have already collected. devMode itself
+     * stays on, so error reporting, deprecation handling, and Twig behavior are
+     * unchanged.
+     */
+    protected function disableDebugToolbar(): void
+    {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        $done = true;
+
+        $debug = Craft::$app->getModule('debug', false);
+        if ($debug === null) {
+            return;
+        }
+
+        // Stop the logger feeding the debug log target.
+        $dispatcher = Craft::getLogger()->dispatcher;
+        $targets = $dispatcher->targets;
+        unset($targets['debug']);
+        $dispatcher->targets = $targets;
+
+        // Remove the EventPanel's wildcard listener (Event::on('*', '*', ...))
+        // that records every event fired anywhere in the app, and clear any
+        // data the panels have already buffered.
+        Event::off('*', '*');
+
+        $ref = new \ReflectionObject($debug);
+        if ($ref->hasProperty('panels')) {
+            $panels = $ref->getProperty('panels');
+            $panels->setAccessible(true);
+            foreach ((array) $panels->getValue($debug) as $panel) {
+                if (! is_object($panel)) {
+                    continue;
+                }
+                $pref = new \ReflectionObject($panel);
+                if ($pref->hasProperty('_events')) {
+                    $events = $pref->getProperty('_events');
+                    $events->setAccessible(true);
+                    $events->setValue($panel, []);
+                }
+            }
+        }
     }
 }

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Craft AI — a CMS-native agent for Craft CMS</title>
-  <meta name="description" content="An AI agent built into Craft CMS — control panel chat, inline review comments, event-driven automations, code-component authoring, revision diffing, web search, image generation, and an MCP server. All running as the current Craft user with full permission checks." />
+  <meta name="description" content="An AI agent built into Craft CMS — control panel chat, inline review comments, event-driven automations, calendar-driven scheduled agents, code-component authoring, revision diffing, web search, image generation, and an MCP server. All running as the current Craft user with full permission checks." />
   <style>
     :root {
       --brand: #E5422B;
@@ -371,6 +371,85 @@
       background: var(--bg-tint);
       color: var(--ink-2);
     }
+
+    /* schedule mockup */
+    .schedule {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: auto;
+    }
+    .sched-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .sched-row.next {
+      border-color: rgba(229, 66, 43, 0.3);
+      background: var(--brand-soft);
+    }
+    .sched-clock {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: var(--bg-tint);
+      color: var(--brand);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+    .sched-row.next .sched-clock { background: #fff; }
+    .sched-clock svg { width: 16px; height: 16px; }
+    .sched-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+      flex: 1;
+    }
+    .sched-prompt {
+      font-family: var(--font-sans);
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sched-cron {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .sched-freq {
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--bg-tint);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sched-row.next .sched-freq {
+      background: var(--brand);
+      color: #fff;
+      border-color: var(--brand);
+    }
+    .sched-next {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted-2);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .sched-row.next .sched-next { color: var(--brand); font-weight: 600; }
 
     /* mcp / search badges */
     .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
@@ -898,6 +977,68 @@
           <span class="event-chip">draft.applied</span>
           <span class="event-chip">entry.deleted</span>
           <span class="event-chip">asset.saved</span>
+        </div>
+      </article>
+
+      <!-- SCHEDULED AGENTS (flagship) -->
+      <article class="cell span-2 row-span-2">
+        <div class="cell-head">
+          <span class="icon" aria-hidden="true">
+            <!-- calendar + clock -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><circle cx="18" cy="18" r="4"/><path d="M18 16.5V18l1 1"/></svg>
+          </span>
+          <div class="titles">
+            <span class="eyebrow">Scheduled agents</span>
+            <h3>Put the agent on a calendar.</h3>
+          </div>
+        </div>
+        <p>The time-triggered counterpart to automations: instead of waiting for a Craft event, each schedule fires its prompt on a clock — <code>once</code>, hourly, daily, weekly, monthly, or a raw five-field cron expression for everything in between. "Write a weekly roundup of the latest LLM advances," every Monday at 9am, lands as a fresh session ready to run.</p>
+        <p>Runs execute as the admin who created the schedule, so tool permissions and content attribution flow from that user. Every slot is logged — including ones <em>missed</em> while the site was down (skipped past a 15-minute grace window, never stacked) — and each run links straight to its session. A single <code>* * * * *</code> crontab tick drives the whole thing.</p>
+        <div class="schedule" aria-hidden="true">
+          <div class="sched-row next">
+            <span class="sched-clock">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            </span>
+            <div class="sched-meta">
+              <span class="sched-prompt">Write a weekly roundup of LLM advances</span>
+              <span class="sched-cron">0 9 * * 1 · Mon 09:00</span>
+            </div>
+            <span class="sched-freq">weekly</span>
+            <span class="sched-next">in 3 days</span>
+          </div>
+          <div class="sched-row">
+            <span class="sched-clock">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            </span>
+            <div class="sched-meta">
+              <span class="sched-prompt">Draft tomorrow's social posts</span>
+              <span class="sched-cron">0 6 * * * · 06:00</span>
+            </div>
+            <span class="sched-freq">daily</span>
+            <span class="sched-next">in 14h</span>
+          </div>
+          <div class="sched-row">
+            <span class="sched-clock">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            </span>
+            <div class="sched-meta">
+              <span class="sched-prompt">Sweep expired promo banners</span>
+              <span class="sched-cron">0 */6 * * *</span>
+            </div>
+            <span class="sched-freq">custom</span>
+            <span class="sched-next">in 2h</span>
+          </div>
+          <div class="sched-row">
+            <span class="sched-clock">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            </span>
+            <div class="sched-meta">
+              <span class="sched-prompt">Publish the launch announcement</span>
+              <span class="sched-cron">Jun 24, 2026 · 08:00</span>
+            </div>
+            <span class="sched-freq">once</span>
+            <span class="sched-next">Jun 24</span>
+          </div>
         </div>
       </article>
 

@@ -81,5 +81,13 @@ class RegisterCpUrlRules
         $event->rules['ai/automations/<uid:[A-Za-z0-9\-]+>'] = 'craft-ai/automations/edit';
         $event->rules['POST ai/automations/save'] = 'craft-ai/automations/save';
         $event->rules['POST ai/automations/delete'] = 'craft-ai/automations/delete';
+
+        // Scheduled agents: dedicated edit screen mirrors the automation
+        // flow above. Same `new`-first ordering so the literal route
+        // short-circuits the parameterized one.
+        $event->rules['ai/scheduled-agents/new'] = 'craft-ai/scheduled-agents/edit';
+        $event->rules['ai/scheduled-agents/<uid:[A-Za-z0-9\-]+>'] = 'craft-ai/scheduled-agents/edit';
+        $event->rules['POST ai/scheduled-agents/save'] = 'craft-ai/scheduled-agents/save';
+        $event->rules['POST ai/scheduled-agents/delete'] = 'craft-ai/scheduled-agents/delete';
     }
 }

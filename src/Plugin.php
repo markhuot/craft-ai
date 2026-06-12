@@ -9,6 +9,7 @@ use craft\base\Plugin as BasePlugin;
 use craft\controllers\ElementsController;
 use craft\elements\Asset;
 use craft\elements\Entry;
+use craft\helpers\DateTimeHelper;
 use craft\services\Drafts;
 use craft\services\UserPermissions;
 use craft\web\UrlManager;
@@ -35,7 +36,9 @@ use markhuot\craftai\listeners\RegisterSiteUrlRules;
 use markhuot\craftai\models\Automation;
 use markhuot\craftai\models\Settings;
 use markhuot\craftai\preview\PreviewService;
+use markhuot\craftai\records\ScheduledRunRecord;
 use markhuot\craftai\services\AutomationDispatcher;
+use markhuot\craftai\services\ScheduleDispatcher;
 use markhuot\craftai\agent\providers\BraveSearchProvider;
 use markhuot\craftai\agent\providers\DuckDuckGoSearchProvider;
 use markhuot\craftai\agent\providers\GeminiImageProvider;
@@ -107,7 +110,7 @@ class Plugin extends BasePlugin
      */
     public const EVENT_REGISTER_AGENT_TOOLS = 'registerAgentTools';
 
-    public string $schemaVersion = '1.12.0';
+    public string $schemaVersion = '1.13.0';
 
     public bool $hasCpSection = true;
 
@@ -450,6 +453,7 @@ class Plugin extends BasePlugin
         Craft::$container->setSingleton(ToolContext::class);
         Craft::$container->setSingleton(PreviewService::class);
         Craft::$container->setSingleton(AutomationDispatcher::class);
+        Craft::$container->setSingleton(ScheduleDispatcher::class);
 
         Craft::$container->setSingleton(LlmProvider::class, function (): LlmProvider {
             $settings = $this->getSettingsArray();
@@ -828,7 +832,49 @@ class Plugin extends BasePlugin
             'settings' => $settings,
             'eventChoices' => $eventChoices,
             'scopeByEvent' => $scopeByEvent,
+            'scheduleInfo' => $this->scheduleInfo($settings),
         ]);
+    }
+
+    /**
+     * Per-agent runtime state for the settings page's scheduled-agents
+     * list: the staged next slot plus the most recent adjudicated run.
+     * Read from `craftai_scheduled_runs` — this is per-environment state
+     * deliberately kept out of the settings model / project config.
+     *
+     * @return array<string, array{nextRun: ?\DateTime, lastRun: ?\DateTime, lastStatus: ?string}>
+     */
+    private function scheduleInfo(Settings $settings): array
+    {
+        $info = [];
+
+        foreach ($settings->getScheduledAgents() as $agent) {
+            $entry = ['nextRun' => null, 'lastRun' => null, 'lastStatus' => null];
+
+            $pending = ScheduledRunRecord::findOne([
+                'scheduledAgentUid' => $agent->uid,
+                'status' => ScheduledRunRecord::STATUS_PENDING,
+            ]);
+            if ($pending !== null) {
+                $parsed = DateTimeHelper::toDateTime($pending->scheduledFor);
+                $entry['nextRun'] = $parsed === false ? null : $parsed;
+            }
+
+            $last = ScheduledRunRecord::find()
+                ->where(['scheduledAgentUid' => $agent->uid])
+                ->andWhere(['!=', 'status', ScheduledRunRecord::STATUS_PENDING])
+                ->orderBy(['scheduledFor' => SORT_DESC])
+                ->one();
+            if ($last instanceof ScheduledRunRecord) {
+                $parsed = DateTimeHelper::toDateTime($last->scheduledFor);
+                $entry['lastRun'] = $parsed === false ? null : $parsed;
+                $entry['lastStatus'] = $last->status;
+            }
+
+            $info[$agent->uid] = $entry;
+        }
+
+        return $info;
     }
 
     /**

@@ -16,7 +16,8 @@ use craft\base\Model;
  * config doubles as the contract for "what the LLM is configured with",
  * and we don't want a CP edit to override what the file declares.
  *
- * The fields owned by this model (automations, commands) flow through
+ * The fields owned by this model (automations, scheduledAgents,
+ * commands) flow through
  * Craft's plugin-settings → project-config pipeline automatically:
  * {@see \craft\services\Plugins::savePluginSettings()} writes
  * `$this->toArray()` into `plugins.craft-ai.settings` in project config,
@@ -36,6 +37,19 @@ class Settings extends Model
      * @var list<array<string, mixed>>
      */
     public array $automations = [];
+
+    /**
+     * Raw scheduled-agent rows. Same storage shape as {@see $automations}:
+     * plain arrays so Craft's JSON-encoded `plugins.settings` column
+     * round-trips cleanly. Use {@see getScheduledAgents()} to materialize
+     * them. Only the schedule *definitions* live here — runtime state
+     * (pending slot, run history) lives in the `craftai_scheduled_runs`
+     * table because it's per-environment and must not sync through
+     * project config.
+     *
+     * @var list<array<string, mixed>>
+     */
+    public array $scheduledAgents = [];
 
     /**
      * Raw command rows. Nullable so the model can distinguish "never
@@ -89,6 +103,45 @@ class Settings extends Model
             $normalized[] = Automation::fromArray($row)->toConfigArray();
         }
         $this->automations = $normalized;
+    }
+
+    /**
+     * @return list<ScheduledAgent>
+     */
+    public function getScheduledAgents(): array
+    {
+        $models = [];
+        foreach ($this->scheduledAgents as $row) {
+            $models[] = ScheduledAgent::fromArray($row);
+        }
+        return $models;
+    }
+
+    /**
+     * Accepts either a list of arrays (from a Craft form post) or a list
+     * of ScheduledAgent models (from programmatic setup) and stores them
+     * as plain arrays internally. Drops rows with empty prompts so blank
+     * stubs never reach the dispatcher.
+     *
+     * @param array<int|string, mixed> $value
+     */
+    public function setScheduledAgents(array $value): void
+    {
+        $normalized = [];
+        foreach ($value as $row) {
+            if ($row instanceof ScheduledAgent) {
+                $row = $row->toConfigArray();
+            }
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $prompt = $row['prompt'] ?? '';
+            if (! is_string($prompt) || trim($prompt) === '') continue;
+
+            $normalized[] = ScheduledAgent::fromArray($row)->toConfigArray();
+        }
+        $this->scheduledAgents = $normalized;
     }
 
     /**
@@ -210,6 +263,13 @@ class Settings extends Model
             }
             unset($values['automations']);
         }
+        if (array_key_exists('scheduledAgents', $values)) {
+            $scheduledAgents = $values['scheduledAgents'] ?? [];
+            if (is_array($scheduledAgents)) {
+                $this->setScheduledAgents($scheduledAgents);
+            }
+            unset($values['scheduledAgents']);
+        }
 
         parent::setAttributes($values, $safeOnly);
     }
@@ -221,6 +281,7 @@ class Settings extends Model
     {
         return [
             ['automations', 'validateAutomations'],
+            ['scheduledAgents', 'validateScheduledAgents'],
             ['commands', 'validateCommands'],
         ];
     }
@@ -230,6 +291,17 @@ class Settings extends Model
         foreach ($this->getAutomations() as $i => $auto) {
             if (! $auto->validate()) {
                 foreach ($auto->getFirstErrors() as $field => $msg) {
+                    $this->addError($attribute, "Row {$i} ({$field}): {$msg}");
+                }
+            }
+        }
+    }
+
+    public function validateScheduledAgents(string $attribute): void
+    {
+        foreach ($this->getScheduledAgents() as $i => $agent) {
+            if (! $agent->validate()) {
+                foreach ($agent->getFirstErrors() as $field => $msg) {
                     $this->addError($attribute, "Row {$i} ({$field}): {$msg}");
                 }
             }

@@ -34,6 +34,7 @@ class TestCase extends PestTestCase
                 '{{%craftai_sessions}}',
                 '{{%craftai_preview_requests}}',
                 '{{%craftai_comments}}',
+                '{{%craftai_scheduled_runs}}',
             ] as $table) {
                 if ($db->getSchema()->getTableSchema($table, true) !== null) {
                     $db->createCommand()->dropTable($table)->execute();

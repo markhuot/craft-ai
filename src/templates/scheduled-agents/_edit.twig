@@ -1,0 +1,250 @@
+{% extends "_layouts/cp.twig" %}
+{% import "_includes/forms.twig" as forms %}
+
+{#
+  Dedicated edit screen for a single scheduled agent. Linked from the
+  plugin settings page's read-only scheduled-agents list so the prompt
+  gets a full-width textarea and the schedule picker can swap its fields
+  per frequency.
+
+  The frequency select drives which schedule fields are visible — a
+  one-time run shows a datetime picker, weekly shows day-of-week + time,
+  custom shows a raw cron input, etc. All variants render up-front and
+  the JS controller below flips `hidden`, mirroring the section/volume
+  swap on the automations edit screen: values survive switching away and
+  back without us tracking state.
+
+  Parameters:
+    agent:            ScheduledAgent — the model being edited (fresh for "new").
+    isNew:            bool — toggles title and hides delete + run history.
+    frequencyChoices: array<string, string>
+    dayOfWeekChoices: array<int, string>
+    runs:             list<{status, detail, sessionId, scheduledFor}> — recent
+                      adjudicated slots, newest first.
+    nextRun:          DateTime|null — the pending slot, when one is staged.
+#}
+
+{% set title = isNew
+    ? "New scheduled agent"|t('craft-ai')
+    : (agent.name ?: "Edit scheduled agent"|t('craft-ai')) %}
+
+{% set fullPageForm = true %}
+
+{% set crumbs = [
+    { label: "Settings"|t('app'), url: url('settings') },
+    { label: "Craft AI"|t('craft-ai'), url: url('settings/plugins/craft-ai') },
+] %}
+
+{% if not isNew %}
+    {% set actionMenu = disclosureMenu([
+        {
+            icon: 'trash',
+            label: 'Delete'|t('craft-ai'),
+            destructive: true,
+            action: 'craft-ai/scheduled-agents/delete',
+            params: {uid: agent.uid},
+            confirm: 'Delete this scheduled agent? Its run history will be removed and no further runs will fire.'|t('craft-ai'),
+            redirect: 'settings/plugins/craft-ai',
+        },
+    ], {
+        hiddenLabel: 'Actions'|t('app'),
+        buttonAttributes: {
+            class: ['action-btn'],
+            title: 'Actions'|t('app'),
+        },
+    }) %}
+{% endif %}
+
+{% block content %}
+    {{ actionInput('craft-ai/scheduled-agents/save') }}
+    {{ redirectInput('settings/plugins/craft-ai') }}
+    {{ hiddenInput('uid', agent.uid) }}
+
+    {{ forms.textField({
+        first: true,
+        label: "Name"|t('craft-ai'),
+        instructions: "Optional human label. Surfaces in session titles and the run history so you can tell which schedule fired."|t('craft-ai'),
+        id: 'name',
+        name: 'name',
+        value: agent.name,
+        errors: agent.getErrors('name'),
+        placeholder: "Weekly LLM roundup"|t('craft-ai'),
+        autofocus: isNew,
+    }) }}
+
+    {{ forms.selectField({
+        label: "Frequency"|t('craft-ai'),
+        instructions: "How often this agent should run. All times are in the system timezone ({tz})."|t('craft-ai', {tz: craft.app.timeZone}),
+        id: 'frequency',
+        name: 'frequency',
+        options: frequencyChoices,
+        value: agent.frequency,
+        errors: agent.getErrors('frequency'),
+        required: true,
+        inputAttributes: {
+            'data-craftai-frequency': true,
+        },
+    }) }}
+
+    {#
+      Every schedule-field variant renders up-front; the JS controller
+      below flips `hidden` based on the chosen frequency. See template
+      header for why.
+    #}
+    <div data-craftai-schedule-wrap>
+        <div data-craftai-when="once">
+            {{ forms.textField({
+                label: "Run at"|t('craft-ai'),
+                instructions: "The single date and time this agent should run. One-time schedules don’t repeat — after this moment passes the agent is done."|t('craft-ai'),
+                id: 'runDate',
+                name: 'runDate',
+                type: 'datetime-local',
+                value: agent.runDate,
+                errors: agent.getErrors('runDate'),
+            }) }}
+        </div>
+        <div data-craftai-when="hourly">
+            {{ forms.textField({
+                label: "Minute of the hour"|t('craft-ai'),
+                instructions: "0–59. The agent fires at this minute past every hour."|t('craft-ai'),
+                id: 'minute',
+                name: 'minute',
+                type: 'number',
+                min: 0,
+                max: 59,
+                size: 4,
+                value: agent.minute,
+                errors: agent.getErrors('minute'),
+            }) }}
+        </div>
+        <div data-craftai-when="weekly">
+            {{ forms.selectField({
+                label: "Day of week"|t('craft-ai'),
+                id: 'dayOfWeek',
+                name: 'dayOfWeek',
+                options: dayOfWeekChoices,
+                value: agent.dayOfWeek,
+                errors: agent.getErrors('dayOfWeek'),
+            }) }}
+        </div>
+        <div data-craftai-when="monthly">
+            {{ forms.textField({
+                label: "Day of month"|t('craft-ai'),
+                instructions: "1–31. Days past a month’s end simply skip that month (standard cron behavior) — day 31 never fires in April."|t('craft-ai'),
+                id: 'dayOfMonth',
+                name: 'dayOfMonth',
+                type: 'number',
+                min: 1,
+                max: 31,
+                size: 4,
+                value: agent.dayOfMonth,
+                errors: agent.getErrors('dayOfMonth'),
+            }) }}
+        </div>
+        <div data-craftai-when="daily weekly monthly">
+            {{ forms.textField({
+                label: "Time"|t('craft-ai'),
+                id: 'time',
+                name: 'time',
+                type: 'time',
+                value: agent.time,
+                errors: agent.getErrors('time'),
+            }) }}
+        </div>
+        <div data-craftai-when="custom">
+            {{ forms.textField({
+                label: "Cron expression"|t('craft-ai'),
+                instructions: "Standard 5-field cron: minute, hour, day of month, month, day of week — e.g. `0 9 * * 1` for Mondays at 9:00 AM. Ranges (`1-5`), steps (`*/15`), lists (`1,15`), and names (`MON`, `JAN`) are supported."|t('craft-ai'),
+                id: 'cronExpression',
+                name: 'cronExpression',
+                value: agent.cronExpression,
+                errors: agent.getErrors('cronExpression'),
+                placeholder: '0 9 * * 1',
+                class: 'code',
+            }) }}
+        </div>
+    </div>
+
+    {{ forms.textareaField({
+        label: "Prompt"|t('craft-ai'),
+        instructions: "Sent to the agent each time the schedule fires. The agent runs unattended (as you), so write the prompt as a complete, self-sufficient task."|t('craft-ai'),
+        id: 'prompt',
+        name: 'prompt',
+        value: agent.prompt,
+        errors: agent.getErrors('prompt'),
+        rows: 14,
+        placeholder: "Create a post about the latest advancements in LLM technology."|t('craft-ai'),
+        required: true,
+    }) }}
+
+    {{ forms.lightswitchField({
+        label: "Enabled"|t('craft-ai'),
+        instructions: "Disabled schedules stay configured but won't fire. Slots passed while disabled are not logged as missed."|t('craft-ai'),
+        id: 'enabled',
+        name: 'enabled',
+        on: agent.enabled,
+    }) }}
+
+    {% if not isNew %}
+        <hr>
+        <h2>{{ "Run history"|t('craft-ai') }}</h2>
+
+        {% if nextRun %}
+            <p class="light">{{ "Next run: {date}"|t('craft-ai', {date: nextRun|datetime('short')}) }}</p>
+        {% endif %}
+
+        {% if runs %}
+            <table class="data fullwidth">
+                <thead>
+                    <tr>
+                        <th>{{ "Scheduled for"|t('craft-ai') }}</th>
+                        <th>{{ "Outcome"|t('craft-ai') }}</th>
+                        <th>{{ "Detail"|t('craft-ai') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in runs %}
+                        <tr>
+                            <td>{{ run.scheduledFor ? run.scheduledFor|datetime('short') : '—' }}</td>
+                            <td>
+                                {% if run.status == 'queued' and run.sessionId %}
+                                    <a href="{{ url('ai/session/' ~ run.sessionId) }}">{{ "Ran — view session"|t('craft-ai') }}</a>
+                                {% elseif run.status == 'queued' %}
+                                    {{ "Ran"|t('craft-ai') }}
+                                {% elseif run.status == 'missed' %}
+                                    <span class="error">{{ "Missed"|t('craft-ai') }}</span>
+                                {% else %}
+                                    <span class="error">{{ "Error"|t('craft-ai') }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="light">{{ run.detail ?: '' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="light">{{ "No runs yet."|t('craft-ai') }}</p>
+        {% endif %}
+    {% endif %}
+{% endblock %}
+
+{% js %}
+(function () {
+    var frequencySelect = document.querySelector('[data-craftai-frequency]');
+    var wrap = document.querySelector('[data-craftai-schedule-wrap]');
+    if (!frequencySelect || !wrap) return;
+
+    var groups = wrap.querySelectorAll('[data-craftai-when]');
+
+    function apply() {
+        var frequency = frequencySelect.value;
+        groups.forEach(function (group) {
+            var visibleFor = group.getAttribute('data-craftai-when').split(' ');
+            group.hidden = visibleFor.indexOf(frequency) === -1;
+        });
+    }
+
+    frequencySelect.addEventListener('change', apply);
+    apply();
+})();
+{% endjs %}

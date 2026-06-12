@@ -130,6 +130,7 @@ class CommandsController extends Controller
 
         $payload = [
             'automations' => $settings->automations,
+            'scheduledAgents' => $settings->scheduledAgents,
             'commands' => $rows,
         ];
 
@@ -172,6 +173,7 @@ class CommandsController extends Controller
 
         $payload = [
             'automations' => $settings->automations,
+            'scheduledAgents' => $settings->scheduledAgents,
             'commands' => $rows,
         ];
 

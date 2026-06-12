@@ -1,17 +1,18 @@
 {% import "_includes/forms" as forms %}
 
 {#
-  CP settings form for craft-ai. Both automations and slash commands
-  render as read-only lists here; clicking a row opens a dedicated edit
-  screen where the prompt textarea has room to breathe.
+  CP settings form for craft-ai. Automations, scheduled agents, and
+  slash commands all render as read-only lists here; clicking a row
+  opens a dedicated edit screen where the prompt textarea has room to
+  breathe.
 
   Why each list still emits hidden inputs: Craft writes plugin settings
   via a project-config `set()` at `plugins.craft-ai.settings`, which is a
   full-subtree replace. The parent settings form's Save button posts the
   whole `settings[...]` payload to Craft's PluginsController. If one
-  half (automations or commands) is missing from the post, that half
-  gets wiped. So we round-trip the current state through hidden inputs
-  even though the visible UI is read-only.
+  section (automations, scheduledAgents, or commands) is missing from
+  the post, that section gets wiped. So we round-trip the current state
+  through hidden inputs even though the visible UI is read-only.
 
   See AutomationsController / CommandsController for the actual edit
   flow — each saves a single row at a time and re-emits the *other*
@@ -104,6 +105,75 @@
         overflow: hidden;
     }
     .craftai-commands__row-actions {
+        display: inline-flex;
+        gap: 6px;
+        white-space: nowrap;
+    }
+</style>
+
+<hr>
+
+<h2>{{ "Scheduled agents"|t('craft-ai') }}</h2>
+<p class="instructions">{{
+    "Each scheduled agent starts a new agent session with the prompt below on a calendar — once, or repeating hourly through monthly (or a custom cron expression). Runs require the schedule tick: add `php craft craft-ai/schedule/run` to the host crontab, every minute."|t('craft-ai')
+}}</p>
+
+<div class="craftai-scheduled-agents">
+    {% set scheduledAgents = settings.getScheduledAgents() %}
+
+    {% if scheduledAgents %}
+        <table class="data fullwidth craftai-scheduled-agents__table">
+            <thead>
+                <tr>
+                    <th>{{ "Name"|t('craft-ai') }}</th>
+                    <th>{{ "Schedule"|t('craft-ai') }}</th>
+                    <th>{{ "Next run"|t('craft-ai') }}</th>
+                    <th>{{ "Last run"|t('craft-ai') }}</th>
+                    <th>{{ "Prompt"|t('craft-ai') }}</th>
+                    <th class="thin">{{ "Enabled"|t('craft-ai') }}</th>
+                    <th class="thin"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for i, agent in scheduledAgents %}
+                    {% include 'craft-ai/_scheduled_agent_row.twig' with {
+                        index: i,
+                        agent: agent,
+                        info: scheduleInfo[agent.uid] ?? {nextRun: null, lastRun: null, lastStatus: null},
+                    } only %}
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="light">{{ "No scheduled agents yet."|t('craft-ai') }}</p>
+    {% endif %}
+
+    <div class="craftai-scheduled-agents__actions">
+        <a class="btn add icon" href="{{ url('ai/scheduled-agents/new') }}">
+            {{ "Add a scheduled agent"|t('craft-ai') }}
+        </a>
+    </div>
+</div>
+
+<style>
+    .craftai-scheduled-agents__table td,
+    .craftai-scheduled-agents__table th {
+        vertical-align: top;
+    }
+    .craftai-scheduled-agents__actions {
+        margin-top: 8px;
+    }
+    .craftai-scheduled-agents__prompt {
+        color: var(--medium-text-color);
+        max-width: 24rem;
+        /* Same two-line clamp as the other lists — the dedicated edit
+           screen is where the full prompt actually reads. */
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .craftai-scheduled-agents__row-actions {
         display: inline-flex;
         gap: 6px;
         white-space: nowrap;

@@ -140,6 +140,7 @@ class AutomationsController extends Controller
 
         $payload = [
             'automations' => $rows,
+            'scheduledAgents' => $settings->scheduledAgents,
             // Re-emit the *raw* commands payload — getCommands() would
             // materialize seeded defaults whose hardcoded UIDs we don't
             // want to bake into project config until the user actually
@@ -185,6 +186,7 @@ class AutomationsController extends Controller
 
         $payload = [
             'automations' => $rows,
+            'scheduledAgents' => $settings->scheduledAgents,
             'commands' => $settings->commands,
         ];
 

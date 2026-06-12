@@ -218,11 +218,36 @@ class Install extends Migration
             'CASCADE',
         );
 
+        // Scheduled-agent runtime state + audit log. One `pending` row per
+        // agent (the precomputed next slot) plus terminal rows for every
+        // processed slot (queued/missed/error). The agent *definitions*
+        // live in plugin settings; see ScheduledRunRecord for why state is
+        // split out here. No FK to sessions — the queued session may be
+        // pruned independently and the log row should survive it.
+        $this->createTable('{{%craftai_scheduled_runs}}', [
+            'id' => $this->primaryKey(),
+            'scheduledAgentUid' => $this->string(36)->notNull(),
+            'scheduledFor' => $this->dateTime()->notNull(),
+            'status' => $this->string(16)->notNull()->defaultValue('pending'),
+            'sessionId' => $this->string(36)->null(),
+            'detail' => $this->string()->null(),
+            'dateCreated' => $this->dateTime()->notNull(),
+            'dateUpdated' => $this->dateTime()->notNull(),
+            'uid' => $this->uid(),
+        ]);
+
+        $this->createIndex(
+            'idx_craftai_scheduled_runs_agent_status',
+            '{{%craftai_scheduled_runs}}',
+            ['scheduledAgentUid', 'status'],
+        );
+
         return true;
     }
 
     public function safeDown(): bool
     {
+        $this->dropTableIfExists('{{%craftai_scheduled_runs}}');
         $this->dropTableIfExists('{{%craftai_comparisons}}');
         $this->dropTableIfExists('{{%craftai_artifacts}}');
         $this->dropTableIfExists('{{%craftai_messages}}');

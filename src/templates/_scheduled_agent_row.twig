@@ -1,0 +1,83 @@
+{#
+  One scheduled-agent row on the plugin settings page. Read-only display
+  + edit/delete actions — the actual edit form lives on a dedicated
+  screen (`ai/scheduled-agents/<uid>`), mirroring the automations list.
+
+  The row re-emits the agent's full persisted state as hidden inputs
+  scoped under `scheduledAgents[<i>]`. Reason: the parent settings form
+  saves via Craft's PluginsController, which writes
+  `plugins.craft-ai.settings` as a full project-config replacement.
+  Without these hidden inputs, saving the automations or slash-commands
+  sections would silently wipe the persisted schedules. Note `userId`
+  rides along here too — it's stamped server-side on the dedicated edit
+  screen, but the parent form must round-trip it like everything else.
+
+  Parameters:
+    index: int|string     — row index used for the hidden-input array keys.
+    agent: ScheduledAgent — the model being displayed.
+    info:  {nextRun: DateTime|null, lastRun: DateTime|null, lastStatus: string|null}
+#}
+
+{% set base = 'scheduledAgents[' ~ index ~ ']' %}
+
+<tr>
+    <td>
+        {% if agent.name %}
+            <a href="{{ url('ai/scheduled-agents/' ~ agent.uid) }}">{{ agent.name }}</a>
+        {% else %}
+            <a href="{{ url('ai/scheduled-agents/' ~ agent.uid) }}" class="light">{{ "(no name)"|t('craft-ai') }}</a>
+        {% endif %}
+    </td>
+    <td>{{ agent.describeSchedule() }}</td>
+    <td>
+        {% if info.nextRun %}
+            {{ info.nextRun|datetime('short') }}
+        {% elseif agent.frequency == 'once' and info.lastRun %}
+            <span class="light">{{ "Completed"|t('craft-ai') }}</span>
+        {% else %}
+            <span class="light">—</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if info.lastRun %}
+            {% if info.lastStatus == 'queued' %}
+                {{ info.lastRun|datetime('short') }}
+            {% else %}
+                <span class="error">{{ info.lastRun|datetime('short') }} ({{ info.lastStatus }})</span>
+            {% endif %}
+        {% else %}
+            <span class="light">—</span>
+        {% endif %}
+    </td>
+    <td>
+        <div class="craftai-scheduled-agents__prompt">{{ agent.prompt }}</div>
+    </td>
+    <td class="thin">
+        {% if agent.enabled %}
+            <span class="status enabled" aria-label="{{ 'Enabled'|t('craft-ai') }}"></span>
+        {% else %}
+            <span class="status" aria-label="{{ 'Disabled'|t('craft-ai') }}"></span>
+        {% endif %}
+    </td>
+    <td class="thin">
+        <span class="craftai-scheduled-agents__row-actions">
+            <a class="btn small" href="{{ url('ai/scheduled-agents/' ~ agent.uid) }}">{{ "Edit"|t('craft-ai') }}</a>
+        </span>
+        {# Round-trip hidden inputs so the parent settings save doesn't
+           drop scheduled agents — see template header for the full
+           reasoning. They sit inside this cell because the table parser
+           would otherwise re-parent loose <input> elements out of <tbody>. #}
+        <input type="hidden" name="{{ base }}[uid]" value="{{ agent.uid }}">
+        <input type="hidden" name="{{ base }}[name]" value="{{ agent.name }}">
+        <input type="hidden" name="{{ base }}[prompt]" value="{{ agent.prompt }}">
+        <input type="hidden" name="{{ base }}[frequency]" value="{{ agent.frequency }}">
+        <input type="hidden" name="{{ base }}[minute]" value="{{ agent.minute }}">
+        <input type="hidden" name="{{ base }}[time]" value="{{ agent.time }}">
+        <input type="hidden" name="{{ base }}[dayOfWeek]" value="{{ agent.dayOfWeek }}">
+        <input type="hidden" name="{{ base }}[dayOfMonth]" value="{{ agent.dayOfMonth }}">
+        <input type="hidden" name="{{ base }}[runDate]" value="{{ agent.runDate }}">
+        <input type="hidden" name="{{ base }}[cronExpression]" value="{{ agent.cronExpression }}">
+        <input type="hidden" name="{{ base }}[userId]" value="{{ agent.userId ?? '' }}">
+        <input type="hidden" name="{{ base }}[enabled]" value="{{ agent.enabled ? '1' : '' }}">
+    </td>
+</tr>

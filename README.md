@@ -1,6 +1,6 @@
 # Craft AI
 
-Craft AI brings an AI agent into Craft CMS. It adds a control panel chat interface, an optional front-end widget for logged-in control panel users, an MCP server so external AI clients can safely work with your Craft content and project structure, plus first-class authoring features — inline review comments, event-driven automations, user-defined slash commands, and a Code Component field that lets the agent author Twig/CSS/JS components alongside editors.
+Craft AI brings an AI agent into Craft CMS. It adds a control panel chat interface, an optional front-end widget for logged-in control panel users, an MCP server so external AI clients can safely work with your Craft content and project structure, plus first-class authoring features — inline review comments, event-driven automations, calendar-driven scheduled agents, user-defined slash commands, and a Code Component field that lets the agent author Twig/CSS/JS components alongside editors.
 
 https://github.com/user-attachments/assets/0a96ecf0-2383-4f04-a704-6f94551977e6
 
@@ -148,6 +148,23 @@ Automations fire a new agent session whenever a Craft event matches a rule you'v
 - A **prompt** that becomes the user's first message in the resulting session.
 
 Use automations for things like "review every saved draft in the Blog section" or "alt-text any image uploaded to the Editorial volume". Like slash commands, automations live in plugin settings and are project-config-friendly.
+
+### Scheduled agents
+
+Scheduled agents are the time-triggered counterpart to automations: instead of reacting to a Craft event, each one fires its prompt on a calendar. Set them up under **Settings → Craft AI → Scheduled agents**. Each schedule pairs:
+
+- A **frequency**: once (a single, non-repeating run at a chosen date and time), hourly, daily, weekly, monthly, or a custom 5-field cron expression for anything in between.
+- A **prompt** that becomes the user's first message in the resulting session — e.g. "create a post about the latest advancements in LLM technology" on a weekly cadence.
+
+Runs execute as the admin who created the schedule, so tool permissions and content attribution flow from that user. Each run links to its session from the schedule's edit screen, and the run history records slots that were **missed** (the site or cron was down past a 15-minute grace window — missed slots are skipped, never stacked, but always logged) or **errored** (e.g. the run-as user was deleted; re-saving the schedule transfers ownership).
+
+Scheduled agents need a schedule tick. Add the console command to the host crontab, every minute, alongside your queue worker:
+
+```cron
+* * * * * /usr/bin/php /path/to/craft craft-ai/schedule/run
+```
+
+`php craft craft-ai/schedule/list` prints each schedule with its next and most recent run, handy for verifying the wiring. Schedule *definitions* live in plugin settings (project-config-friendly, like automations); run state and history live in a local table and don't sync between environments. Note the run-as user id is environment-specific — after syncing schedules to a new environment, re-save them there if user ids differ.
 
 ### Code Component field
 

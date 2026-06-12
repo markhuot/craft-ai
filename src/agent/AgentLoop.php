@@ -955,6 +955,11 @@ PROMPT;
     }
 
     /**
+     * Thin internal recorder: the loop builds content blocks in session-id
+     * terms, then hands them to {@see SessionRecord::pushMessage()} — the
+     * canonical home for encoding/persisting a transcript message — which
+     * works off the id without a record lookup on this hot per-turn path.
+     *
      * @param list<array<string, mixed>> $content
      * @param array<string, mixed>|null $rawResponse Full provider payload, persisted
      *        on assistant turns to retain provider-specific fields (e.g.
@@ -962,12 +967,6 @@ PROMPT;
      * @param list<int> $assetIds
      * @param int|null $inputTokens Prompt tokens from the provider's usage payload.
      * @param int|null $outputTokens Completion tokens from the provider's usage payload.
-     */
-    /**
-     * Thin internal recorder: the loop builds content blocks in session-id
-     * terms, then hands them to {@see SessionRecord::pushMessage()} — the
-     * canonical home for encoding/persisting a transcript message — which
-     * works off the id without a record lookup on this hot per-turn path.
      */
     private function saveMessage(
         string $sessionId,

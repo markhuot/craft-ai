@@ -14,9 +14,10 @@ use craft\helpers\StringHelper;
  * project config — so an org can version-control the prompts the same way
  * it version-controls other configuration.
  *
- * The plugin ships with two seeded commands (`translate`, `editorial-review`),
- * defined in {@see self::defaults()}. They appear pre-populated on first
- * settings load and can be edited or deleted like any other row.
+ * The plugin ships with three seeded commands (`translate`,
+ * `editorial-review`, `compare`), defined in {@see self::defaults()}. They
+ * appear pre-populated on first settings load and can be edited or deleted
+ * like any other row.
  */
 class Command extends Model
 {

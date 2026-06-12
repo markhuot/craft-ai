@@ -57,7 +57,40 @@ class TestCase extends PestTestCase
             }
         }
 
+        // Re-align the cached configVersion with the database before craft-pest
+        // opens this test's transaction (it captures the version inside
+        // parent::setUp()). A project-config write that triggers an
+        // auto-committed DDL bumps the info table's configVersion in a way that
+        // outlives the transaction rollback, while craft-pest only restores the
+        // *in-memory* Info. A fresh-install database (every CI run) hits this;
+        // a long-lived dev database usually doesn't, which is why it reproduced
+        // only in CI. Left unhandled, the next project-config write reads a DB
+        // version that no longer matches the cached one and
+        // ProjectConfig::_acquireLock() throws StaleResourceException — which
+        // then cascades across every project-config-touching test.
+        $storedConfigVersion = (new \craft\db\Query())
+            ->select(['configVersion'])
+            ->from(\craft\db\Table::INFO)
+            ->scalar();
+        if (is_string($storedConfigVersion) && $storedConfigVersion !== '') {
+            Craft::$app->getInfo()->configVersion = $storedConfigVersion;
+        }
+
         parent::setUp();
+
+        // craft-pest's Application::bootstrap() injects an `X-Debug: enable`
+        // header whenever devMode is on, which makes Craft bootstrap the
+        // yii2-debug module. Its LogTarget then buffers every log message and
+        // DB query for the life of the PHP process — there's no per-request
+        // flush in the test harness — and the debug panels try to serialize
+        // the whole accumulated pile, which blows past the memory limit partway
+        // through a full-suite run (a ~600MB single allocation in
+        // yii\debug\LogTarget::export()). Detaching the target keeps the leak
+        // from ever starting; it's idempotent, so running it each setUp is fine.
+        $log = Craft::$app->getLog();
+        if (isset($log->targets['debug'])) {
+            unset($log->targets['debug']);
+        }
 
         // Tool execution now goes through Craft permission checks. Default to
         // an admin identity so existing tests pass; tests that need to verify

@@ -147,8 +147,8 @@ class Settings extends Model
     /**
      * Resolve the list of slash commands. When the persisted list is
      * `null` (never configured), substitute the seeded defaults so a
-     * fresh install has `/translate` and `/editorial-review` available
-     * out of the box. An explicitly empty list (the editor cleared the
+     * fresh install has `/translate`, `/editorial-review`, and `/compare`
+     * available out of the box. An explicitly empty list (the editor cleared the
      * table and saved) is returned as-is.
      *
      * @return list<Command>

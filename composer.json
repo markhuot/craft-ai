@@ -38,7 +38,7 @@
         "class": "markhuot\\craftai\\Plugin"
     },
     "scripts": {
-        "test": "@php vendor/bin/pest -c phpunit.craft6.xml --test-directory=tests/craft6"
+        "test": "@php bin/craft6-tests.php"
     },
     "config": {
         "allow-plugins": {

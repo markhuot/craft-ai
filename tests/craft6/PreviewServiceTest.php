@@ -1,0 +1,221 @@
+<?php
+
+use markhuot\craftai\preview\PreviewService;
+use markhuot\craftai\records\PreviewRequestRecord;
+
+it('persists a new pending request and reads it back', function () {
+    $service = new PreviewService();
+
+    $id = $service->create('session-svc-1', 'tool-use-1', PreviewRequestRecord::TYPE_OPEN, [
+        'url' => 'https://example.com',
+    ]);
+
+    $record = $service->find($id);
+    expect($record)->not->toBeNull();
+    expect($record->sessionId)->toBe('session-svc-1');
+    expect($record->toolUseId)->toBe('tool-use-1');
+    expect($record->type)->toBe('open');
+    expect($record->status)->toBe(PreviewRequestRecord::STATUS_PENDING);
+    expect($service->decodeInput($record))->toBe(['url' => 'https://example.com']);
+});
+
+it('returns the oldest pending request as the next actionable for the session', function () {
+    $service = new PreviewService();
+
+    $first = $service->create('session-actionable', null, 'open', ['url' => '/a']);
+    // Drop a second request in for a different session — must not be returned.
+    $service->create('session-other', null, 'open', ['url' => '/x']);
+    $second = $service->create('session-actionable', null, 'get', ['fullHtml' => false]);
+
+    $next = $service->nextActionable('session-actionable');
+    expect($next)->not->toBeNull();
+    expect((int) $next->id)->toBe($first);
+    expect($next->type)->toBe('open');
+
+    // Resolve the first; now `get` should be next in line.
+    $service->complete($first, ['loadedAt' => 1, 'finalUrl' => '/a']);
+
+    $next = $service->nextActionable('session-actionable');
+    expect((int) $next->id)->toBe($second);
+    expect($next->type)->toBe('get');
+});
+
+it('skips completed and errored rows when picking the next actionable', function () {
+    $service = new PreviewService();
+
+    $a = $service->create('session-skip', null, 'open', ['url' => '/a']);
+    $service->fail($a, 'load failed');
+
+    $b = $service->create('session-skip', null, 'open', ['url' => '/b']);
+    $service->complete($b, ['loadedAt' => 1, 'finalUrl' => '/b']);
+
+    $c = $service->create('session-skip', null, 'open', ['url' => '/c']);
+
+    $next = $service->nextActionable('session-skip');
+    expect($next)->not->toBeNull();
+    expect((int) $next->id)->toBe($c);
+});
+
+it('waitFor returns immediately once the row is completed', function () {
+    $service = new PreviewService();
+
+    $id = $service->create('session-wait', null, 'open', ['url' => '/a']);
+    $service->complete($id, ['loadedAt' => 1, 'finalUrl' => '/a']);
+
+    $start = microtime(true);
+    $resolved = $service->waitFor($id, 30);
+    $elapsed = microtime(true) - $start;
+
+    expect($resolved->status)->toBe(PreviewRequestRecord::STATUS_COMPLETED);
+    // Should not have actually slept for any meaningful time on a hit.
+    expect($elapsed)->toBeLessThan(1.0);
+});
+
+it('waitFor flips the row to errored when it times out', function () {
+    $service = new PreviewService();
+
+    $id = $service->create('session-timeout', null, 'open', ['url' => '/a']);
+
+    $start = microtime(true);
+    $resolved = $service->waitFor($id, 5); // 5s is the floor we clamp to
+    $elapsed = microtime(true) - $start;
+
+    expect($resolved->status)->toBe(PreviewRequestRecord::STATUS_ERRORED);
+    expect($elapsed)->toBeGreaterThanOrEqual(4.5); // small slack for clock jitter
+    $payload = json_decode($resolved->result, true);
+    expect($payload['error'])->toContain('Timed out');
+});
+
+it('waitFor short-circuits when the abort hook returns true', function () {
+    $service = new PreviewService();
+
+    $id = $service->create('session-abort', null, 'open', ['url' => '/a']);
+
+    // Always-aborting hook resolves on the first poll, so this should return
+    // in well under the timeout floor (5s).
+    $start = microtime(true);
+    $resolved = $service->waitFor($id, 30, shouldAbort: static fn (): bool => true);
+    $elapsed = microtime(true) - $start;
+
+    expect($resolved->status)->toBe(PreviewRequestRecord::STATUS_ERRORED);
+    expect(json_decode($resolved->result, true)['error'])->toBe('Stopped by user.');
+    expect($elapsed)->toBeLessThan(1.0);
+});
+
+it('lastOpenedUrl returns the most recent completed open finalUrl for the session', function () {
+    $service = new PreviewService();
+
+    $first = $service->create('session-last-1', null, 'open', ['url' => 'https://example.com/a']);
+    $service->complete($first, ['loadedAt' => 1, 'finalUrl' => 'https://example.com/a/final']);
+
+    $second = $service->create('session-last-1', null, 'open', ['url' => 'https://example.com/b']);
+    $service->complete($second, ['loadedAt' => 2, 'finalUrl' => 'https://example.com/b/final']);
+
+    expect($service->lastOpenedUrl('session-last-1'))->toBe('https://example.com/b/final');
+});
+
+it('lastOpenedUrl falls back to the input url when finalUrl is missing', function () {
+    $service = new PreviewService();
+
+    $id = $service->create('session-last-fallback', null, 'open', ['url' => '/admin/entries/blog/42']);
+    // Simulate a thin response that didn't include finalUrl (e.g., cross-origin).
+    $service->complete($id, ['loadedAt' => 1]);
+
+    expect($service->lastOpenedUrl('session-last-fallback'))->toBe('/admin/entries/blog/42');
+});
+
+it('lastOpenedUrl ignores get requests and pending/errored opens', function () {
+    $service = new PreviewService();
+
+    // Errored open — should be skipped.
+    $errored = $service->create('session-last-skip', null, 'open', ['url' => '/errored']);
+    $service->fail($errored, 'load failed');
+
+    // get is the wrong type — also skipped.
+    $get = $service->create('session-last-skip', null, 'get', ['fullHtml' => false]);
+    $service->complete($get, ['content' => 'x', 'mode' => 'text']);
+
+    // Pending open — also skipped (only completed counts).
+    $service->create('session-last-skip', null, 'open', ['url' => '/pending']);
+
+    expect($service->lastOpenedUrl('session-last-skip'))->toBeNull();
+});
+
+it('lastOpenedUrl returns null for a session that has never had a preview', function () {
+    expect((new PreviewService())->lastOpenedUrl('session-none'))->toBeNull();
+});
+
+it('lastSurfacedPreview returns an artifact descriptor carrying its title', function () {
+    $service = new PreviewService();
+
+    $id = $service->create('session-surf-art', null, 'artifact', [
+        'artifactId' => 42,
+        'title' => 'Revision 7 → Current',
+        'url' => 'https://example.com/admin/ai/artifacts/42',
+    ]);
+    $service->complete($id, ['loadedAt' => 1]);
+
+    expect($service->lastSurfacedPreview('session-surf-art'))->toBe([
+        'url' => 'https://example.com/admin/ai/artifacts/42',
+        'kind' => 'artifact',
+        'title' => 'Revision 7 → Current',
+    ]);
+});
+
+it('lastSurfacedPreview returns the most recent across open and artifact kinds', function () {
+    $service = new PreviewService();
+
+    $open = $service->create('session-surf-mix', null, 'open', ['url' => 'https://example.com/page']);
+    $service->complete($open, ['loadedAt' => 1, 'finalUrl' => 'https://example.com/page/final']);
+
+    // A newer artifact should win over the older open.
+    $art = $service->create('session-surf-mix', null, 'artifact', [
+        'artifactId' => 9,
+        'title' => 'Diff',
+        'url' => 'https://example.com/admin/ai/artifacts/9',
+    ]);
+    $service->complete($art, ['loadedAt' => 2]);
+
+    expect($service->lastSurfacedPreview('session-surf-mix'))->toBe([
+        'url' => 'https://example.com/admin/ai/artifacts/9',
+        'kind' => 'artifact',
+        'title' => 'Diff',
+    ]);
+
+    // A still-newer open flips it back.
+    $open2 = $service->create('session-surf-mix', null, 'open', ['url' => 'https://example.com/next']);
+    $service->complete($open2, ['loadedAt' => 3, 'finalUrl' => 'https://example.com/next/final']);
+
+    expect($service->lastSurfacedPreview('session-surf-mix'))->toBe([
+        'url' => 'https://example.com/next/final',
+        'kind' => 'open',
+        'title' => null,
+    ]);
+});
+
+it('lastSurfacedPreview ignores get requests and pending/errored previews', function () {
+    $service = new PreviewService();
+
+    $get = $service->create('session-surf-skip', null, 'get', ['fullHtml' => false]);
+    $service->complete($get, ['content' => 'x', 'mode' => 'text']);
+
+    $service->create('session-surf-skip', null, 'artifact', ['artifactId' => 1, 'title' => 'x', 'url' => '/pending']);
+
+    expect($service->lastSurfacedPreview('session-surf-skip'))->toBeNull();
+});
+
+it('lastSurfacedPreview returns null for a session that has never had a preview', function () {
+    expect((new PreviewService())->lastSurfacedPreview('session-surf-none'))->toBeNull();
+});
+
+it('complete is idempotent — re-completing a finished row is a no-op', function () {
+    $service = new PreviewService();
+
+    $id = $service->create('session-idem', null, 'get', ['fullHtml' => false]);
+    $service->complete($id, ['content' => 'original']);
+    $service->complete($id, ['content' => 'overwrite-attempt']);
+
+    $record = $service->find($id);
+    expect($record->status)->toBe(PreviewRequestRecord::STATUS_COMPLETED);
+    expect(json_decode($record->result, true)['content'])->toBe('original');
+});

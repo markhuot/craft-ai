@@ -4,6 +4,7 @@
 /config/
 .phpunit.result.cache
 .phpunit.cache/
+/tests/craft6/.craft/
 .DS_Store
 .env
 /node_modules/

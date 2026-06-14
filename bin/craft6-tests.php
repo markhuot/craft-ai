@@ -1,25 +1,64 @@
 <?php
 
 /**
- * Runs the Craft 6 Pest suite one test file per process.
+ * Runs the Craft 6 Pest suite: builds the database once (committed), then runs
+ * each test file in its own process.
  *
- * Craft 6 is still an alpha and runs through craftcms/yii2-adapter, whose
- * legacy Craft::$app is a long-lived process singleton. Across a single
- * many-file Pest process its in-memory service caches (sites in particular)
- * drift out of sync with the per-test database transaction rollback and
- * eventually break site resolution for every later test. Until that settles
- * upstream, isolate each test file in its own process so no cross-file state
- * leaks. Individual files still share one process (fast enough), and the suite
- * stays deterministic.
+ * Two alpha-era constraints drive this design:
  *
- * Any file path arguments override the default glob (handy for running a
- * subset, e.g. `php bin/craft6-tests.php tests/craft6/GetSectionsTest.php`).
+ *  1. The plugin's install is a Yii-style DDL migration (CREATE TABLE /
+ *     addForeignKey → implicit COMMIT). If it runs inside LazilyRefreshDatabase's
+ *     per-test transaction it destroys the savepoint ("SAVEPOINT … does not
+ *     exist"). So we install the schema ONCE up front (Support/DatabaseSetup,
+ *     which doesn't use a transaction) and the per-test base leaves it alone —
+ *     each test's transaction then only wraps DML and rolls back cleanly.
+ *
+ *  2. The legacy Craft::$app is a long-lived process singleton whose Sites
+ *     cache gets poisoned across a single many-file run. So each test file runs
+ *     in its own process.
+ *
+ * File path arguments override the default glob (run a subset, e.g.
+ * `php bin/craft6-tests.php tests/craft6/GetSectionsTest.php`).
  */
 
 $php = PHP_BINARY;
 $root = dirname(__DIR__);
 chdir($root);
 
+$pest = fn (string $file): string => sprintf(
+    '%s vendor/bin/pest -c phpunit.craft6.xml --test-directory=tests/craft6 %s',
+    escapeshellarg($php),
+    escapeshellarg($file),
+);
+
+// 1. Ensure the test database exists (matches phpunit.craft6.xml).
+$host = '127.0.0.1';
+$port = '3306';
+$user = 'root';
+$pass = '';
+$database = 'craftai_test6';
+try {
+    $pdo = new PDO("mysql:host=$host;port=$port", $user, $pass);
+    $pdo->exec("CREATE DATABASE IF NOT EXISTS `$database` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+} catch (\Throwable $e) {
+    fwrite(STDERR, "Could not ensure database `$database`: {$e->getMessage()}\n");
+    exit(1);
+}
+
+// 2. Build the schema once (committed, no per-test transaction). The builder
+//    lives outside tests/craft6 so Pest's uses(TestCase)->in() doesn't bind it.
+echo "Building Craft 6 test database...\n";
+passthru(sprintf(
+    '%s vendor/bin/pest -c phpunit.craft6.xml %s',
+    escapeshellarg($php),
+    escapeshellarg('tests/craft6-build/DatabaseSetup.php'),
+), $code);
+if ($code !== 0) {
+    fwrite(STDERR, "\nDatabase setup failed; aborting.\n");
+    exit(1);
+}
+
+// 3. Run each test file in its own process.
 $files = array_slice($argv, 1);
 if ($files === []) {
     $files = glob('tests/craft6/*Test.php');
@@ -28,12 +67,7 @@ sort($files);
 
 $failed = [];
 foreach ($files as $file) {
-    $cmd = sprintf(
-        '%s vendor/bin/pest -c phpunit.craft6.xml --test-directory=tests/craft6 %s',
-        escapeshellarg($php),
-        escapeshellarg($file),
-    );
-    passthru($cmd, $code);
+    passthru($pest($file), $code);
     if ($code !== 0) {
         $failed[] = $file;
     }

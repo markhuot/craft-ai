@@ -5,24 +5,24 @@ use markhuot\craftai\tools\GetTemplates;
 use markhuot\craftai\tools\ToolRegistry;
 
 beforeEach(function () {
-    $this->tempTemplatesPath = sys_get_temp_dir().'/craftai-templates-'.bin2hex(random_bytes(8));
-    FileHelper::createDirectory($this->tempTemplatesPath);
-
-    $this->originalTemplatesAlias = Craft::getAlias('@templates');
-    $this->originalTemplatesPath = Craft::$app->getView()->getTemplatesPath();
-    Craft::setAlias('@templates', $this->tempTemplatesPath);
-    Craft::$app->getView()->setTemplatesPath($this->tempTemplatesPath);
+    // GetTemplates lists from the View's site template roots. Under Testbench
+    // that's the skeleton's templates dir (it overrides getSiteTemplatesPath()),
+    // so write the fixtures to the actual resolved root. Start each test empty.
+    $roots = Craft::$app->getView()->getSiteTemplateRoots();
+    $this->tempTemplatesPath = $roots[''][0] ?? Craft::$app->getPath()->getSiteTemplatesPath();
+    if (is_dir($this->tempTemplatesPath)) {
+        FileHelper::clearDirectory($this->tempTemplatesPath);
+    } else {
+        FileHelper::createDirectory($this->tempTemplatesPath);
+    }
 
     $this->registry = new ToolRegistry();
     $this->registry->register(GetTemplates::class);
 });
 
 afterEach(function () {
-    Craft::setAlias('@templates', $this->originalTemplatesAlias);
-    Craft::$app->getView()->setTemplatesPath($this->originalTemplatesPath);
-
     if (is_dir($this->tempTemplatesPath)) {
-        FileHelper::removeDirectory($this->tempTemplatesPath);
+        FileHelper::clearDirectory($this->tempTemplatesPath);
     }
 });
 

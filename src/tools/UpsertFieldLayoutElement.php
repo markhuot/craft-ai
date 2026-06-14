@@ -531,7 +531,10 @@ class UpsertFieldLayoutElement extends Tool
     private static function publicTypeName(string $class): ?string
     {
         foreach (self::TYPE_MAP as $name => $cls) {
-            if ($cls === $class) {
+            // is_a() (not ===) so the adapter's legacy class aliases
+            // (e.g. craft\fieldlayoutelements\CustomField) match the native
+            // Craft 6 class an element instance actually reports.
+            if ($class === $cls || is_a($class, $cls, true)) {
                 return $name;
             }
         }

@@ -13,6 +13,7 @@ use Inertia\ServiceProvider as InertiaServiceProvider;
 use Laravel\Tinker\TinkerServiceProvider;
 use Laravel\Wayfinder\WayfinderServiceProvider;
 use ReflectionClass;
+use ReflectionObject;
 use Yiisoft\Aliases\Aliases;
 
 /**
@@ -134,5 +135,31 @@ trait CraftSixHarness
         $basePath = dirname((new ReflectionClass($class))->getFileName());
 
         new $class('craft-ai', \Craft::$app, ['basePath' => $basePath]);
+    }
+
+    /**
+     * Log in a Craft user for the test.
+     *
+     * loginByUserId() routes to Laravel's Auth::loginUsingId(), which doesn't
+     * invalidate the legacy web User's cached `_identity`. So getId() /
+     * getIdentity() keep returning whatever was cached before login (null at
+     * boot) and user-scoped code mis-resolves the current user. Reset the cache
+     * so the next read re-derives the identity from the authenticated guard.
+     */
+    protected function loginCraftUser(int $userId): void
+    {
+        \Craft::$app->getUser()->loginByUserId($userId);
+
+        $user = \Craft::$app->getUser();
+        $ref = new ReflectionObject($user);
+        while ($ref !== false && ! $ref->hasProperty('_identity')) {
+            $ref = $ref->getParentClass();
+        }
+
+        if ($ref !== false) {
+            $property = $ref->getProperty('_identity');
+            $property->setAccessible(true);
+            $property->setValue($user, false);
+        }
     }
 }

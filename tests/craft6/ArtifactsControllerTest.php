@@ -6,12 +6,8 @@ use markhuot\craftai\records\ArtifactRecord;
 use markhuot\craftai\records\SessionRecord;
 
 beforeEach(function () {
-    $user = new User();
-    $user->id = 1;
-    $user->admin = true;
-    $user->username = 'test';
-    $user->email = 'test@example.com';
-    Craft::$app->getUser()->loginByUserId((int) $user->id);
+    $this->loginCraftUser(1);
+    $this->actingAs(\Illuminate\Support\Facades\Auth::guard('craft')->user(), 'craft');
 
     $this->session = new SessionRecord();
     $this->session->id = 'artifact-ctrl-session';

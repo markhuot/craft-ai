@@ -52,7 +52,7 @@ class TestCase extends PluginTestCase
         // identity (the user the install created). Tests verifying permission
         // denial can override the identity in the test body.
         $admin = User::find()->admin()->one();
-        Craft::$app->getUser()->loginByUserId((int) $admin->id);
+        $this->loginCraftUser((int) $admin->id);
 
         // Default the shared ToolContext to the CP surface, mirroring the
         // primary in-app chat path.

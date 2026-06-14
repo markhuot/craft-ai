@@ -109,14 +109,30 @@ trait CraftSixHarness
      */
     public function bootPluginProvider(): void
     {
-        static $booted = false;
+        $this->app->get(Plugins::class)->loadPlugins();
 
-        $plugins = $this->app->get(Plugins::class);
-        $plugins->loadPlugins();
+        // Instantiate the adapter plugin directly when it isn't already the
+        // registered instance. createPlugin()/loadPlugins() need a project-config
+        // `plugins.craft-ai` entry that the committed builder doesn't persist;
+        // constructing the Yii module runs its init() (events + container
+        // bindings) and setInstance() so Plugin::getInstance() resolves. The
+        // adapter's getInstance() return type is non-null, so probe it through
+        // the framework method (null-safe) and only build when missing — Craft
+        // resets the module instance between tests, but we avoid re-running
+        // init() (and stacking duplicate event listeners) when it survives.
+        $class = \markhuot\craftai\Plugin::class;
 
-        if (! $booted && $plugins->getPlugin('craft-ai') === null) {
-            $booted = true;
-            $plugins->createPlugin('craft-ai');
+        try {
+            // Throws (non-null return type) when no instance is registered.
+            if ($class::getInstance() instanceof $class) {
+                return;
+            }
+        } catch (\TypeError) {
+            // Not registered yet — fall through and build it.
         }
+
+        $basePath = dirname((new ReflectionClass($class))->getFileName());
+
+        new $class('craft-ai', \Craft::$app, ['basePath' => $basePath]);
     }
 }

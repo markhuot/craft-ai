@@ -63,7 +63,7 @@ class McpController extends Controller
             return ExitCode::DATAERR;
         }
 
-        Craft::$app->getUser()->setIdentity($identity);
+        Craft::$app->getUser()->loginByUserId((int) $identity->id);
 
         /** @var ToolRegistry $registry */
         $registry = Craft::$container->get(ToolRegistry::class);

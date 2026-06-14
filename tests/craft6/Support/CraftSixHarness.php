@@ -92,14 +92,31 @@ trait CraftSixHarness
     }
 
     /**
-     * The bundled plugin's Plugin class extends the Yii-style craft\base\Plugin
-     * (registers in init(), no native boot(Plugins) method). The stock
-     * bootPluginProvider() calls ->boot($plugins), which only exists on the
-     * native CraftCms\Cms\Plugin\Plugin. Override to just load the enabled
-     * plugins; instantiating the plugin runs its init() registration.
+     * Load + boot the plugin for tests.
+     *
+     * The native InstallsPlugin::bootPluginProvider() force-instantiates the
+     * plugin and calls ->boot($plugins) — but the bundled plugin runs through
+     * craftcms/yii2-adapter, so its Plugin class is the Yii-style
+     * craft\base\Plugin which registers everything in init() (run during
+     * construction) and has no boot() method. loadPlugins() alone won't load it
+     * either: under the harness the plugin isn't enabled in project config, so
+     * loadPlugins skips it.
+     *
+     * So instantiate the adapter plugin directly via createPlugin(), which runs
+     * its constructor (init() → events + container bindings, and setInstance()
+     * so Plugin::getInstance() resolves). Do it once per process — re-running
+     * init() per test would stack duplicate event listeners.
      */
     public function bootPluginProvider(): void
     {
-        $this->app->get(Plugins::class)->loadPlugins();
+        static $booted = false;
+
+        $plugins = $this->app->get(Plugins::class);
+        $plugins->loadPlugins();
+
+        if (! $booted && $plugins->getPlugin('craft-ai') === null) {
+            $booted = true;
+            $plugins->createPlugin('craft-ai');
+        }
     }
 }

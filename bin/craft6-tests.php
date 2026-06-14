@@ -45,20 +45,19 @@ try {
     exit(1);
 }
 
-// 2. Build the schema once (committed, no per-test transaction). The builder
-//    lives outside tests/craft6 so Pest's uses(TestCase)->in() doesn't bind it.
-echo "Building Craft 6 test database...\n";
-passthru(sprintf(
+// The committed builder, run before each file. It lives outside tests/craft6
+// so Pest's uses(TestCase)->in() doesn't bind it.
+$build = sprintf(
     '%s vendor/bin/pest -c phpunit.craft6.xml %s',
     escapeshellarg($php),
     escapeshellarg('tests/craft6-build/DatabaseSetup.php'),
-), $code);
-if ($code !== 0) {
-    fwrite(STDERR, "\nDatabase setup failed; aborting.\n");
-    exit(1);
-}
+);
 
-// 3. Run each test file in its own process.
+// 2. Run each test file in its own process, rebuilding the database (committed)
+//    before each. The plugin's DDL install / project-config writes commit and
+//    escape the per-test transaction, so a destructive test would otherwise
+//    poison the shared database for every later file. A fresh build per file
+//    keeps them isolated.
 $files = array_slice($argv, 1);
 if ($files === []) {
     $files = glob('tests/craft6/*Test.php');
@@ -67,6 +66,12 @@ sort($files);
 
 $failed = [];
 foreach ($files as $file) {
+    passthru($build, $code);
+    if ($code !== 0) {
+        fwrite(STDERR, "\nDatabase setup failed before {$file}; aborting.\n");
+        exit(1);
+    }
+
     passthru($pest($file), $code);
     if ($code !== 0) {
         $failed[] = $file;

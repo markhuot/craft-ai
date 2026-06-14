@@ -52,7 +52,7 @@ class McpController extends Controller
         if (! $user instanceof User) {
             return $this->unauthorized('invalid_token', 'Token is not associated with a valid user.');
         }
-        $app->getUser()->setIdentity($user);
+        $app->getUser()->loginByUserId((int) $user->id);
 
         $psr17 = new Psr17Factory();
         $creator = new ServerRequestCreator($psr17, $psr17, $psr17, $psr17);

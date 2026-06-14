@@ -35,10 +35,10 @@ function makeArtifact(string $sessionId, string $html, string $title = 'Diff'): 
 it('serves the stored HTML with a locked-down CSP', function () {
     $id = makeArtifact($this->session->id, '<!doctype html><html><body><h1>Diff body</h1></body></html>');
 
-    $response = test()->get('admin?action=craft-ai/artifacts/view&id='.$id);
+    $response = $this->get('admin?action=craft-ai/artifacts/view&id='.$id);
 
     $response->assertOk();
-    expect((string) $response->content)->toContain('Diff body');
+    expect($response->getContent())->toContain('Diff body');
 
     expect($response->headers->get('Content-Type'))->toContain('text/html');
     $csp = $response->headers->get('Content-Security-Policy');
@@ -51,20 +51,14 @@ it('serves the stored HTML with a locked-down CSP', function () {
 it('offers the artifact as a download when ?download is present', function () {
     $id = makeArtifact($this->session->id, '<html><body>x</body></html>');
 
-    $response = test()->get('admin?action=craft-ai/artifacts/view&download=1&id='.$id);
+    $response = $this->get('admin?action=craft-ai/artifacts/view&download=1&id='.$id);
 
     $response->assertOk();
     expect($response->headers->get('Content-Disposition'))->toContain('attachment');
 });
 
 it('404s for an unknown artifact id', function () {
-    $threw = false;
-    try {
-        test()->get('admin?action=craft-ai/artifacts/view&id=999999');
-    } catch (\yii\web\NotFoundHttpException) {
-        $threw = true;
-    }
-    expect($threw)->toBeTrue();
+    $this->get('admin?action=craft-ai/artifacts/view&id=999999')->assertNotFound();
 });
 
 it('refuses to serve an artifact belonging to another user', function () {
@@ -78,11 +72,5 @@ it('refuses to serve an artifact belonging to another user', function () {
 
     $id = makeArtifact($theirSession->id, '<html><body>secret</body></html>');
 
-    $threw = false;
-    try {
-        test()->get('admin?action=craft-ai/artifacts/view&id='.$id);
-    } catch (\yii\web\NotFoundHttpException) {
-        $threw = true;
-    }
-    expect($threw)->toBeTrue();
+    $this->get('admin?action=craft-ai/artifacts/view&id='.$id)->assertNotFound();
 });

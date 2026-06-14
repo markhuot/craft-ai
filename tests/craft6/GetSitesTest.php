@@ -1,6 +1,6 @@
 <?php
 
-use craft\models\Site;
+use CraftCms\Cms\Site\Models\Site;
 use markhuot\craftai\tools\GetSites;
 use markhuot\craftai\tools\ToolRegistry;
 
@@ -36,18 +36,19 @@ afterEach(function () {
 
 function createSite(string $handle, string $language, string $name): Site
 {
+    // Use the native factory rather than new Site()+saveSite(): saveSite()
+    // round-trips through Site config, which sets a `nameRaw` property the
+    // Craft 6 Site\Data DTO doesn't accept. The factory writes the row and
+    // refreshes the sites cache directly.
     $group = Craft::$app->sites->getAllGroups()[0];
-    $site = new Site([
+
+    return Site::factory()->create([
         'groupId' => $group->id,
         'handle' => $handle,
         'name' => $name,
         'language' => $language,
         'primary' => false,
-        'hasUrls' => false,
     ]);
-    Craft::$app->sites->saveSite($site);
-
-    return $site;
 }
 
 it('returns every site by default with language and group info', function () {

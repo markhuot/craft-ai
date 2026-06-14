@@ -86,5 +86,12 @@ class SetupCase extends Orchestra
 
         // Install + enable the plugin (DDL — committed here, never per test).
         $this->installAndEnablePlugin();
+
+        // Persist the project-config changes installPlugin() made (it sets
+        // plugins.craft-ai.enabled = true in memory). Without this the entry is
+        // never written to the projectconfig table, so the test/request Craft
+        // boots can't see craft-ai as enabled and loadPlugins() skips it —
+        // breaking Plugin::getInstance() and CP action routing to the plugin.
+        app(ProjectConfig::class)->saveModifiedConfigData();
     }
 }

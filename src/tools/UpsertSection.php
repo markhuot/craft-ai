@@ -105,9 +105,11 @@ class UpsertSection extends Tool
             $section->handle = $handle;
         }
 
-        if ($type === 'channel' || $type === 'single' || $type === 'structure') {
-            // Craft 6 types Section::$type as a SectionType enum; Craft 5 uses a
-            // plain string. Assign whichever the installed version expects.
+        if ($type !== null) {
+            // The `in` validator on $type already guarantees one of
+            // single/channel/structure here. Craft 6 types Section::$type as a
+            // SectionType enum; Craft 5 uses a plain string — assign whichever
+            // the installed version expects.
             $section->type = enum_exists(\CraftCms\Cms\Section\Enums\SectionType::class)
                 ? \CraftCms\Cms\Section\Enums\SectionType::from($type)
                 : $type;

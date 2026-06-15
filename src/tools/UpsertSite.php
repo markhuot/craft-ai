@@ -119,7 +119,17 @@ class UpsertSite extends Tool
             $site->groupId = $defaultGroup->id;
         }
 
-        if (! Craft::$app->sites->saveSite($site)) {
+        // Craft 6: save through the native Sites facade directly. The
+        // yii2-adapter's Sites::saveSite() reconstructs the site via
+        // `new Site($site->toArray())`, and toArray() emits a `nameRaw` key the
+        // Data\Site constructor rejects (adapter bug) — the native facade takes
+        // the Data\Site as-is and skips that round-trip. Craft 5 has no such
+        // facade, so fall back to the legacy service there.
+        $saved = class_exists(\CraftCms\Cms\Support\Facades\Sites::class)
+            ? \CraftCms\Cms\Support\Facades\Sites::saveSite($site)
+            : Craft::$app->sites->saveSite($site);
+
+        if (! $saved) {
             $errors = $site->getErrorSummary(true);
 
             return new ToolOutput(

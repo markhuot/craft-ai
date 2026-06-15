@@ -19,6 +19,13 @@ function loginTestUser(): void {
 beforeEach(function () {
     loginTestUser();
 
+    // The test queue connection runs jobs synchronously, so a pushed AgentJob
+    // would execute inline and write its own assistant/error MessageRecord —
+    // skewing the row-count assertions (the controller's job is to enqueue, not
+    // run). Fake the queue so pushes are recorded but never executed, matching a
+    // real request where the worker drains the job out of band.
+    \Illuminate\Support\Facades\Queue::fake();
+
     // SessionsController gates `actionIndex`/`actionView` behind a setup screen
     // that triggers when config/craft-ai.php has no `provider` set. Tests mock
     // the LlmProvider directly, so write a stub config to bypass that gate.
@@ -66,13 +73,10 @@ it('renders the sessions index with grouped session rows', function () {
     $c->content = json_encode([['type' => 'text', 'text' => 'yo']]);
     $c->save();
 
-    $response = test()->http('get', 'admin')
-        ->addHeader('Accept', 'application/json')
-        ->setBody(['action' => 'craft-ai/sessions/data'])
-        ->send();
+    $response = test()->getJson('admin?action=craft-ai/sessions/data');
 
     $response->assertOk();
-    $body = (string) $response->content;
+    $body = (string) $response->getContent();
     expect($body)->toContain('aaaa-1');
     expect($body)->toContain('bbbb-2');
 });
@@ -91,13 +95,10 @@ it('exposes parentSessionId on session list rows so the sidebar can nest forks',
     $child->parentSessionId = 'parent-session-id';
     $child->save();
 
-    $response = test()->http('get', 'admin')
-        ->addHeader('Accept', 'application/json')
-        ->setBody(['action' => 'craft-ai/sessions/data'])
-        ->send();
+    $response = test()->getJson('admin?action=craft-ai/sessions/data');
 
     $response->assertOk();
-    $payload = json_decode((string) $response->content, true, 32, JSON_THROW_ON_ERROR);
+    $payload = json_decode((string) $response->getContent(), true, 32, JSON_THROW_ON_ERROR);
     $rows = $payload['sessions'] ?? [];
     expect($rows)->toBeArray();
 
@@ -150,22 +151,16 @@ it('hides sessions created by other users from the index', function () {
     $theirs->userId = $otherId;
     $theirs->save();
 
-    $response = test()->http('get', 'admin')
-        ->addHeader('Accept', 'application/json')
-        ->setBody(['action' => 'craft-ai/sessions/data'])
-        ->send();
+    $response = test()->getJson('admin?action=craft-ai/sessions/data');
 
     $response->assertOk();
-    $body = (string) $response->content;
+    $body = (string) $response->getContent();
     expect($body)->toContain('mine-1');
     expect($body)->not->toContain('theirs-1');
 });
 
 it('mints a new session id and redirects to its CP page', function () {
-    $response = test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody(['action' => 'craft-ai/sessions/new'])
-        ->send();
+    $response = test()->post('admin?action=craft-ai/sessions/new');
 
     $response->assertRedirect();
     $location = $response->headers->get('Location');
@@ -187,21 +182,22 @@ it('renders the chat view with prior messages for the requested session', functi
 });
 
 it('registers the chat asset bundle so chat.css and chat.js are loaded on the session page', function () {
-    // Yii's View instance is reused across requests inside a single test
-    // process, and Craft de-dupes asset bundles whose handle is already in
-    // `Craft.registeredAssetBundles`. Reset that state so this test exercises
-    // a fresh "first load" of the page.
-    $view = Craft::$app->getView();
-    $view->assetBundles = [];
-    $view->registeredAssetBundles = [];
-
+    // Each Testbench HTTP request builds a fresh Craft view, so the asset
+    // bundle always renders as a first load — no manual reset of
+    // registeredAssetBundles needed (clearing the test-process view here would
+    // operate on a different instance than the request's and suppress the tags).
     $response = $this->get('admin/ai/session/asset-check');
 
     $response->assertOk();
-    $body = (string) $response->content;
+    $body = (string) $response->getContent();
 
-    // The compiled JS module is loaded as <script type="module" src="…/chat.js">.
-    expect($body)->toMatch('#<script[^>]+type="module"[^>]+src="[^"]+/chat\.js[^"]*"#');
+    // The compiled JS module is loaded as a <script type="module" src="…/chat.js">.
+    // Craft 6 emits the src attribute before type for this bundle, so match the
+    // tag by its src and assert type="module" separately rather than pinning the
+    // attribute order (same approach as the stylesheet check below).
+    expect(preg_match('#<script\b[^>]*\bsrc="([^"]+/chat\.js[^"]*)"[^>]*>#', $body, $js))
+        ->toBe(1, 'No <script …chat.js…> tag was rendered on the page');
+    expect($js[0])->toContain('type="module"');
 
     // The compiled CSS is loaded as a stylesheet link. Yii's tag helper emits
     // attributes in href-then-rel order, so don't pin the attribute order.
@@ -223,7 +219,7 @@ it('registers the chat asset bundle so chat.css and chat.js are loaded on the se
 });
 
 it('compiles chat.css with the Tailwind utilities the chat UI depends on', function () {
-    $distCss = dirname(__DIR__).'/src/web/assets/chat/dist/chat.css';
+    $distCss = dirname(__DIR__, 2).'/src/web/assets/chat/dist/chat.css';
     expect(file_exists($distCss))
         ->toBeTrue('Built chat.css is missing — run `bun run build` and commit the output.');
 
@@ -257,11 +253,7 @@ it('compiles chat.css with the Tailwind utilities the chat UI depends on', funct
 });
 
 function postSend(array $body) {
-    return test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->addHeader('Accept', 'application/json')
-        ->setBody(['action' => 'craft-ai/sessions/send', ...$body])
-        ->send();
+    return test()->postJson('admin?action=craft-ai/sessions/send', $body);
 }
 
 it('queues an AgentJob when the composer sends a message', function () {
@@ -403,10 +395,7 @@ it('tolerates malformed context JSON without rejecting the message', function ()
 });
 
 function postStop(array $body) {
-    return test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody(['action' => 'craft-ai/sessions/stop', ...$body])
-        ->send();
+    return test()->post('admin?action=craft-ai/sessions/stop', $body);
 }
 
 it('flips stopRequested on the session and redirects back to the session page', function () {
@@ -446,18 +435,11 @@ it('is idempotent when the session is not currently active', function () {
 });
 
 function postUpdateToolMode(array $body) {
-    return test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->addHeader('Accept', 'application/json')
-        ->setBody(['action' => 'craft-ai/sessions/update-tool-mode', ...$body])
-        ->send();
+    return test()->postJson('admin?action=craft-ai/sessions/update-tool-mode', $body);
 }
 
 function getToolMode(string $sessionId) {
-    return test()->http('get', 'admin')
-        ->addHeader('Accept', 'application/json')
-        ->setBody(['action' => 'craft-ai/sessions/tool-mode', 'sessionId' => $sessionId])
-        ->send();
+    return test()->getJson('admin?action=craft-ai/sessions/tool-mode&sessionId='.urlencode($sessionId));
 }
 
 it('persists the tool mode and returns the resulting payload', function () {
@@ -480,6 +462,8 @@ it('persists the tool mode and returns the resulting payload', function () {
 });
 
 it('rejects an unknown mode value', function () {
+    $this->withoutExceptionHandling();
+
     $session = new SessionRecord();
     $session->id = 'session-mode-bogus';
     $session->userId = 1;
@@ -549,7 +533,7 @@ it('returns the current tool mode and available tools list on GET', function () 
 
     $response->assertOk();
     $response->assertJsonPath('toolMode', 'draft');
-    $body = json_decode((string) $response->content, true);
+    $body = json_decode((string) $response->getContent(), true);
     expect($body['availableTools'])->toBeArray();
     expect($body['availableTools'])->not->toBeEmpty();
     expect($body['availableTools'][0])->toHaveKeys(['name', 'description', 'kind']);
@@ -586,14 +570,7 @@ it('refuses to read another user\'s tool mode', function () {
     $theirs->userId = $otherId;
     $theirs->save();
 
-    $threw = false;
-    try {
-        getToolMode('session-mode-theirs');
-    } catch (\yii\web\NotFoundHttpException) {
-        $threw = true;
-    }
-
-    expect($threw)->toBeTrue();
+    getToolMode('session-mode-theirs')->assertNotFound();
 });
 
 it('refuses to stop another user\'s session', function () {
@@ -629,14 +606,8 @@ it('refuses to stop another user\'s session', function () {
     $theirs->userId = $otherId;
     $theirs->save();
 
-    $threw = false;
-    try {
-        postStop(['sessionId' => 'session-stop-theirs']);
-    } catch (\yii\web\NotFoundHttpException) {
-        $threw = true;
-    }
+    postStop(['sessionId' => 'session-stop-theirs'])->assertNotFound();
 
-    expect($threw)->toBeTrue();
     $reloaded = SessionRecord::findOne(['id' => 'session-stop-theirs']);
     expect((bool) $reloaded->stopRequested)->toBeFalse();
 });

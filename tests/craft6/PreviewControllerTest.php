@@ -24,11 +24,7 @@ beforeEach(function () {
 });
 
 function postPreview(string $action, array $body) {
-    return test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->addHeader('Accept', 'application/json')
-        ->setBody(['action' => 'craft-ai/preview/'.$action, ...$body])
-        ->send();
+    return test()->postJson('admin?action=craft-ai/preview/'.$action, $body);
 }
 
 it('completes a request with the result payload the front-end posts', function () {
@@ -65,6 +61,7 @@ it('errors a request with the front-end-supplied message', function () {
 });
 
 it('rejects an unknown status value', function () {
+    $this->withoutExceptionHandling();
     $id = $this->service->create($this->session->id, 'tu-4', 'open', ['url' => 'https://example.com']);
 
     $threw = false;
@@ -115,18 +112,11 @@ it('refuses to resolve a request that belongs to another user', function () {
     $service = new PreviewService();
     $id = $service->create($theirSession->id, 'tu-5', 'open', ['url' => 'https://x.test']);
 
-    $threw = false;
-    try {
-        postPreview('respond', [
-            'id' => $id,
-            'status' => 'completed',
-            'result' => json_encode(['loadedAt' => 1, 'finalUrl' => 'https://x.test']),
-        ]);
-    } catch (\yii\web\NotFoundHttpException) {
-        $threw = true;
-    }
-
-    expect($threw)->toBeTrue();
+    postPreview('respond', [
+        'id' => $id,
+        'status' => 'completed',
+        'result' => json_encode(['loadedAt' => 1, 'finalUrl' => 'https://x.test']),
+    ])->assertNotFound();
 
     $reloaded = PreviewRequestRecord::findOne(['id' => $id]);
     expect($reloaded->status)->toBe(PreviewRequestRecord::STATUS_PENDING);

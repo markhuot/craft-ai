@@ -153,7 +153,7 @@ it('returns an error ToolOutput when no user is logged in', function () {
     $registry = new ToolRegistry();
     $registry->register(GetHealth::class);
 
-    Craft::$app->getUser()->setIdentity(null);
+    Craft::$app->getUser()->logout(false);
 
     $output = $registry->execute('get_health', []);
 
@@ -166,7 +166,7 @@ it('throws a permission exception from assertPermission for a guest', function (
     $registry = new ToolRegistry();
     $registry->register(GetHealth::class);
 
-    Craft::$app->getUser()->setIdentity(null);
+    Craft::$app->getUser()->logout(false);
 
     expect(fn () => $registry->assertPermission('get_health'))
         ->toThrow(ToolPermissionDeniedException::class);
@@ -224,33 +224,27 @@ it('emits a Craft warning that names the tool when scrubbing fires', function ()
     $registry = new ToolRegistry();
     $registry->register(ToolRegistryBadBytesFixture::class);
 
-    // Hold the logger buffer so messages don't auto-flush to targets and
-    // disappear before we can inspect them. flushInterval=10000 is well above
-    // anything a single test will produce.
-    $logger = Craft::getLogger();
-    $previousInterval = $logger->flushInterval;
-    $logger->flushInterval = 10000;
-    $logger->messages = [];
+    // Under Craft 6 the legacy Craft::warning() routes through the yii2-adapter
+    // Logger, which forwards to Laravel's Log facade rather than buffering on the
+    // Yii logger's `messages`. Capture the emitted log records via Log::listen().
+    $captured = [];
+    \Illuminate\Support\Facades\Log::listen(function ($event) use (&$captured) {
+        $captured[] = ['level' => $event->level, 'message' => $event->message];
+    });
 
-    try {
-        $registry->execute('tool_registry_bad_bytes_fixture', []);
+    $registry->execute('tool_registry_bad_bytes_fixture', []);
 
-        $messages = $logger->messages;
-        $hasWarning = false;
-        foreach ($messages as $entry) {
-            // Yii log entries are [text, level, category, timestamp, traces, memory].
-            if (is_string($entry[0])
-                && str_contains($entry[0], 'tool_registry_bad_bytes_fixture')
-                && str_contains($entry[0], 'invalid UTF-8')) {
-                $hasWarning = true;
-                break;
-            }
+    $hasWarning = false;
+    foreach ($captured as $entry) {
+        if ($entry['level'] === 'warning'
+            && str_contains($entry['message'], 'tool_registry_bad_bytes_fixture')
+            && str_contains($entry['message'], 'invalid UTF-8')) {
+            $hasWarning = true;
+            break;
         }
-
-        expect($hasWarning)->toBeTrue();
-    } finally {
-        $logger->flushInterval = $previousInterval;
     }
+
+    expect($hasWarning)->toBeTrue();
 });
 
 it('does not warn when the tool output is already clean UTF-8', function () {

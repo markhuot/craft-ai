@@ -67,29 +67,18 @@ it('renders the edit form for an existing automation', function () {
 });
 
 it('404s on an unknown uid', function () {
-    $threw = false;
-    try {
-        test()->get('admin/ai/automations/00000000-0000-0000-0000-000000000000');
-    } catch (\yii\web\NotFoundHttpException) {
-        $threw = true;
-    }
-
-    expect($threw)->toBeTrue();
+    test()->get('admin/ai/automations/00000000-0000-0000-0000-000000000000')->assertNotFound();
 });
 
 it('saves a new automation and redirects back to the plugin settings page', function () {
-    $response = test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/automations/save',
-            'name' => 'review-drafts',
-            'event' => Automation::EVENT_DRAFT_SAVED,
-            'sectionHandle' => '',
-            'volumeHandle' => '',
-            'prompt' => 'Review this draft.',
-            'enabled' => '1',
-        ])
-        ->send();
+    $response = test()->post('admin?action=craft-ai/automations/save', [
+        'name' => 'review-drafts',
+        'event' => Automation::EVENT_DRAFT_SAVED,
+        'sectionHandle' => '',
+        'volumeHandle' => '',
+        'prompt' => 'Review this draft.',
+        'enabled' => '1',
+    ]);
 
     $response->assertRedirect();
     $location = $response->headers->get('Location');
@@ -112,19 +101,15 @@ it('updates an existing automation in place rather than appending a duplicate', 
     ]);
     $uid = automationsBySettings()[0]->uid;
 
-    test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/automations/save',
-            'uid' => $uid,
-            'name' => 'review-drafts',
-            'event' => Automation::EVENT_DRAFT_SAVED,
-            'sectionHandle' => '',
-            'volumeHandle' => '',
-            'prompt' => 'Rewritten prompt.',
-            'enabled' => '1',
-        ])
-        ->send();
+    test()->post('admin?action=craft-ai/automations/save', [
+        'uid' => $uid,
+        'name' => 'review-drafts',
+        'event' => Automation::EVENT_DRAFT_SAVED,
+        'sectionHandle' => '',
+        'volumeHandle' => '',
+        'prompt' => 'Rewritten prompt.',
+        'enabled' => '1',
+    ]);
 
     $automations = automationsBySettings();
     expect($automations)->toHaveCount(1);
@@ -151,16 +136,12 @@ it('preserves existing slash commands across a single-automation save', function
         ],
     ]);
 
-    test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/automations/save',
-            'name' => 'new-rule',
-            'event' => Automation::EVENT_ENTRY_SAVED,
-            'prompt' => 'New automation prompt.',
-            'enabled' => '1',
-        ])
-        ->send();
+    test()->post('admin?action=craft-ai/automations/save', [
+        'name' => 'new-rule',
+        'event' => Automation::EVENT_ENTRY_SAVED,
+        'prompt' => 'New automation prompt.',
+        'enabled' => '1',
+    ]);
 
     /** @var Settings $settings */
     $settings = $plugin->getSettings();
@@ -172,16 +153,12 @@ it('preserves existing slash commands across a single-automation save', function
 it('re-renders the edit form on validation failure rather than persisting bad data', function () {
     $before = automationsBySettings();
 
-    $response = test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/automations/save',
-            'name' => 'invalid',
-            'event' => 'not.a.real.event',
-            'prompt' => 'p',
-            'enabled' => '1',
-        ])
-        ->send();
+    $response = test()->post('admin?action=craft-ai/automations/save', [
+        'name' => 'invalid',
+        'event' => 'not.a.real.event',
+        'prompt' => 'p',
+        'enabled' => '1',
+    ]);
 
     // A failed save renders the form template directly (200) instead of
     // redirecting, so the user keeps their in-flight edits.
@@ -206,13 +183,9 @@ it('deletes an automation and redirects back to the settings page', function () 
     }
     expect($deleteMe)->not->toBeNull();
 
-    $response = test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/automations/delete',
-            'uid' => $deleteMe->uid,
-        ])
-        ->send();
+    $response = test()->post('admin?action=craft-ai/automations/delete', [
+        'uid' => $deleteMe->uid,
+    ]);
 
     $response->assertRedirect();
 
@@ -232,13 +205,9 @@ it('preserves existing slash commands across an automation delete', function () 
     ]);
     $uid = automationsBySettings()[0]->uid;
 
-    test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/automations/delete',
-            'uid' => $uid,
-        ])
-        ->send();
+    test()->post('admin?action=craft-ai/automations/delete', [
+        'uid' => $uid,
+    ]);
 
     /** @var Settings $settings */
     $settings = $plugin->getSettings();

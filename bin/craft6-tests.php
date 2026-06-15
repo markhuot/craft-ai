@@ -36,7 +36,10 @@ $host = '127.0.0.1';
 $port = '3306';
 $user = 'root';
 $pass = '';
-$database = 'craftai_test6';
+// Honor a DB_DATABASE override so parallel runs (e.g. several agents) can each
+// own an isolated database; phpunit.craft6.xml's <env> doesn't force, so the
+// same override flows through to the Pest processes below.
+$database = getenv('DB_DATABASE') ?: 'craftai_test6';
 try {
     $pdo = new PDO("mysql:host=$host;port=$port", $user, $pass);
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `$database` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");

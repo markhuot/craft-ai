@@ -157,10 +157,10 @@ class Plugin extends BasePlugin
         // still fires" surprises). Registered after registerContainerBindings()
         // above so the dispatcher singleton resolves, and the dispatchers
         // re-resolve it per fire so a test container rebind is honored.
-        Event::on(Entry::class, Entry::EVENT_AFTER_SAVE, new DispatchEntrySaveAutomation());
-        Event::on(Entry::class, Entry::EVENT_AFTER_DELETE, new DispatchEntryDeleteAutomation());
-        Event::on(Drafts::class, Drafts::EVENT_AFTER_APPLY_DRAFT, new DispatchDraftAppliedAutomation());
-        Event::on(Asset::class, Asset::EVENT_AFTER_SAVE, new DispatchAssetSaveAutomation());
+        Event::on(self::eventClass(Entry::class), Entry::EVENT_AFTER_SAVE, new DispatchEntrySaveAutomation());
+        Event::on(self::eventClass(Entry::class), Entry::EVENT_AFTER_DELETE, new DispatchEntryDeleteAutomation());
+        Event::on(self::eventClass(Drafts::class), Drafts::EVENT_AFTER_APPLY_DRAFT, new DispatchDraftAppliedAutomation());
+        Event::on(self::eventClass(Asset::class), Asset::EVENT_AFTER_SAVE, new DispatchAssetSaveAutomation());
 
         Event::on(
             UpsertField::class,
@@ -173,7 +173,7 @@ class Plugin extends BasePlugin
         // Adds a "Compare…" button to the entry-edit action buttons, next to
         // Preview, opening the revision compare screen. See {@see DefineCompareButton}.
         Event::on(
-            Entry::class,
+            self::eventClass(Entry::class),
             Element::EVENT_DEFINE_ADDITIONAL_BUTTONS,
             new DefineCompareButton(),
         );
@@ -484,6 +484,23 @@ class Plugin extends BasePlugin
      * `register()` directly. Duplicate registrations clobber by name;
      * listeners that need cpOnly semantics opt in per entry.
      */
+    /**
+     * Resolve a (possibly {@see class_alias()}'d) class name to the canonical
+     * name Yii's event system matches against.
+     *
+     * Under craftcms/yii2-adapter the legacy `craft\…` element/service classes
+     * are class_alias()es of the native `CraftCms\Cms\…` classes. An
+     * `Event::on()` keyed by the *alias* string never fires on Craft 6, because
+     * the triggering object's real class hierarchy only contains the canonical
+     * names. ReflectionClass resolves either form (alias → canonical, real
+     * class → itself), so registering under this name is correct on both Craft
+     * 5 (where the legacy name *is* canonical) and Craft 6.
+     */
+    private static function eventClass(string $class): string
+    {
+        return (new \ReflectionClass($class))->getName();
+    }
+
     private function dispatchAgentToolRegistration(): void
     {
         $event = new RegisterAgentToolsEvent();

@@ -4,7 +4,7 @@ namespace markhuot\craftai\diff;
 
 use craft\behaviors\DraftBehavior;
 use craft\behaviors\RevisionBehavior;
-use craft\elements\db\EntryQuery;
+use craft\elements\db\ElementQueryInterface;
 use craft\elements\Entry;
 
 /**
@@ -103,7 +103,7 @@ final class VersionRef
      * attach key, so {@see revisionNum} etc. are reachable in a way PHPStan can
      * type.
      */
-    public static function revisionBehavior(Entry $entry): ?RevisionBehavior
+    public static function revisionBehavior(Entry $entry): ?object
     {
         foreach ($entry->getBehaviors() as $behavior) {
             if ($behavior instanceof RevisionBehavior) {
@@ -111,7 +111,10 @@ final class VersionRef
             }
         }
 
-        return null;
+        // Craft 6 dropped the Yii behaviors — revisionNum / getCreator() are
+        // native members of the element itself, which exposes the same surface
+        // the callers read (`?->revisionNum`, `?->getCreator()`).
+        return $entry->getIsRevision() ? $entry : null;
     }
 
     /**
@@ -119,7 +122,7 @@ final class VersionRef
      * {@see revisionBehavior}), exposing `draftName`, the creator, etc. in a
      * way PHPStan can type. Returns null on non-draft elements.
      */
-    public static function draftBehavior(Entry $entry): ?DraftBehavior
+    public static function draftBehavior(Entry $entry): ?object
     {
         foreach ($entry->getBehaviors() as $behavior) {
             if ($behavior instanceof DraftBehavior) {
@@ -127,13 +130,15 @@ final class VersionRef
             }
         }
 
-        return null;
+        // Craft 6: draftName / draftNotes / getCreator() are native members of
+        // the draft element, mirroring the Craft 5 DraftBehavior surface.
+        return $entry->getIsDraft() ? $entry : null;
     }
 
     /**
-     * @return EntryQuery<int, Entry>
+     * @return ElementQueryInterface<int, Entry>
      */
-    private static function base(?int $siteId): EntryQuery
+    private static function base(?int $siteId): ElementQueryInterface
     {
         $query = Entry::find()->status(null);
         if ($siteId !== null) {
@@ -144,9 +149,9 @@ final class VersionRef
     }
 
     /**
-     * @param  EntryQuery<int, Entry>  $query
+     * @param  ElementQueryInterface<int, Entry>  $query
      */
-    private static function one(EntryQuery $query): ?Entry
+    private static function one(ElementQueryInterface $query): ?Entry
     {
         $entry = $query->one();
 

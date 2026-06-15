@@ -1,0 +1,247 @@
+<?php
+
+use CraftCms\Cms\Section\Enums\SectionType;
+
+use craft\elements\Entry;
+use markhuot\craftai\agent\ClientType;
+use markhuot\craftai\agent\ToolContext;
+use markhuot\craftai\tools\ToolRegistry;
+use markhuot\craftai\tools\UpsertEntry;
+
+/**
+ * Give a seeded section a per-site URI format so created entries expose a
+ * front-end URL — seedSection() leaves a random hasUrls and a null uriFormat,
+ * so getUrl() returns null and the tool falls back to the cpEditUrl branch
+ * instead of the open_preview prompt.
+ */
+if (! function_exists('enableSectionUrls')) {
+    function enableSectionUrls(string $handle, string $uriFormat = '{slug}'): void
+    {
+        $section = \CraftCms\Cms\Section\Models\Section::query()->where('handle', $handle)->firstOrFail();
+        \CraftCms\Cms\Section\Models\SectionSiteSettings::query()
+            ->where('sectionId', $section->id)
+            ->update(['hasUrls' => true, 'uriFormat' => $uriFormat, 'template' => '_entry']);
+        \CraftCms\Cms\Support\Facades\Sections::refreshSections();
+    }
+}
+
+beforeEach(function () {
+    seedSection('posts', 'Posts');
+    enableSectionUrls('posts');
+
+    $this->registry = new ToolRegistry();
+    $this->registry->register(UpsertEntry::class);
+});
+
+it('creates an entry with a title', function () {
+    $output = $this->registry->execute('upsert_entry', ['section' => 'posts', 'title' => 'Hello World']);
+
+    expect($output->isError)->toBeFalse();
+    $result = decode($output)['data']['entry'];
+    expect($result['title'])->toBe('Hello World');
+
+    $entry = Entry::find()->id($result['id'])->status(null)->one();
+    expect($entry->title)->toBe('Hello World');
+});
+
+it('creates an entry with a custom slug', function () {
+    $output = $this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => 'My Article', 'slug' => 'my-custom-slug',
+    ]);
+
+    expect(decode($output)['data']['entry']['slug'])->toBe('my-custom-slug');
+});
+
+it('creates a disabled entry when enabled is false', function () {
+    $output = $this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => 'Draft Post', 'enabled' => false,
+    ]);
+
+    $entry = Entry::find()->id(decode($output)['data']['entry']['id'])->status(null)->one();
+    expect($entry->enabled)->toBeFalse();
+});
+
+it('returns an error for an unknown section', function () {
+    $result = $this->registry->execute('upsert_entry', ['section' => 'nope', 'title' => 'Whatever']);
+
+    expect($result->isError)->toBeTrue();
+    expect($result->text)->toContain('nope');
+});
+
+it('returns an error for an unknown entry type', function () {
+    $result = $this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => 'Whatever', 'type' => 'nonsense',
+    ]);
+
+    expect($result->isError)->toBeTrue();
+    expect($result->text)->toContain('nonsense');
+});
+
+it('creates an entry with a specific entry type handle', function () {
+    $section = Craft::$app->entries->getSectionByHandle('posts');
+    $entryType = $section->getEntryTypes()[0];
+
+    $output = $this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => 'Typed', 'type' => $entryType->handle,
+    ]);
+
+    $result = decode($output)['data']['entry'];
+    expect($result['title'])->toBe('Typed');
+    expect($result['typeId'])->toBe($entryType->id);
+});
+
+it('creates an entry with a postDate', function () {
+    $output = $this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => 'Dated', 'postDate' => '2024-01-15 10:30:00',
+    ]);
+
+    $entry = Entry::find()->id(decode($output)['data']['entry']['id'])->status(null)->one();
+    expect($entry->postDate->format('Y-m-d H:i:s'))->toBe('2024-01-15 10:30:00');
+});
+
+it('rejects titles longer than 255 characters', function () {
+    $result = $this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => str_repeat('a', 256),
+    ]);
+
+    expect($result->isError)->toBeTrue();
+    expect($result->text)->toContain('Validation failed');
+});
+
+it('rejects an unknown site handle', function () {
+    $result = $this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => 'Hi', 'site' => 'klingon',
+    ]);
+
+    expect($result->isError)->toBeTrue();
+    expect($result->text)->toContain('klingon');
+});
+
+it('exposes section and type as string-or-integer in the JSON schema', function () {
+    $descriptor = $this->registry->describe('upsert_entry');
+    $schema = $descriptor->inputSchema;
+
+    expect($schema['properties']['section']['oneOf'])->toBe([['type' => 'string'], ['type' => 'integer']]);
+    expect($schema['properties']['type']['oneOf'])->toBe([['type' => 'string'], ['type' => 'integer']]);
+});
+
+it('updates an existing entry by id', function () {
+    $created = decode($this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => 'Original',
+    ]))['data']['entry'];
+
+    $output = $this->registry->execute('upsert_entry', [
+        'id' => $created['id'], 'title' => 'Updated',
+    ]);
+
+    expect($output->isError)->toBeFalse();
+    expect(decode($output)['data']['entry']['id'])->toBe($created['id']);
+
+    $entry = Entry::find()->id($created['id'])->status(null)->one();
+    expect($entry->title)->toBe('Updated');
+});
+
+it('leaves untouched fields alone on update', function () {
+    $created = decode($this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => 'Keep Slug', 'slug' => 'keep-slug',
+    ]))['data']['entry'];
+
+    $this->registry->execute('upsert_entry', [
+        'id' => $created['id'], 'title' => 'New Title',
+    ]);
+
+    $entry = Entry::find()->id($created['id'])->status(null)->one();
+    expect($entry->title)->toBe('New Title');
+    expect($entry->slug)->toBe('keep-slug');
+});
+
+it('returns an error for an unknown entry id', function () {
+    $result = $this->registry->execute('upsert_entry', ['id' => 999999, 'title' => 'Nope']);
+
+    expect($result->isError)->toBeTrue();
+    expect($result->text)->toContain('999999');
+});
+
+it('requires section and title when no id is given', function () {
+    $result = $this->registry->execute('upsert_entry', []);
+
+    expect($result->isError)->toBeTrue();
+});
+
+it('collects missing section and title into a single error response', function () {
+    $result = $this->registry->execute('upsert_entry', []);
+
+    expect($result->isError)->toBeTrue();
+    expect($result->text)->toContain('Section');
+    expect($result->text)->toContain('Title');
+});
+
+it('skips create-only required rules when updating', function () {
+    $created = decode($this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => 'Original',
+    ]))['data']['entry'];
+
+    $output = $this->registry->execute('upsert_entry', ['id' => $created['id']]);
+
+    expect($output->isError)->toBeFalse();
+});
+
+it('binds a section by numeric ID', function () {
+    $section = Craft::$app->entries->getSectionByHandle('posts');
+
+    $output = $this->registry->execute('upsert_entry', [
+        'section' => $section->id,
+        'title' => 'By ID',
+    ]);
+
+    expect($output->isError)->toBeFalse();
+    expect(decode($output)['data']['entry']['title'])->toBe('By ID');
+});
+
+it('folds the open_preview prompt into _notes when the entry has a URL', function () {
+    $payload = decode($this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => 'Previewable',
+    ]));
+
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    expect($payload['data'])->toHaveKey('entry');
+    expect($payload['data'])->not->toHaveKey('notes');
+
+    expect($payload['_notes'])->toContain('open_preview');
+    expect($payload['_notes'])->toContain($payload['data']['entry']['url']);
+});
+
+it('folds the cpEditUrl guidance into _notes when there is no front-end URL on CP', function () {
+    // Sections that lack URI formats can't be previewed, but on CP
+    // the editor can still click through to the entry's edit screen
+    // to review. The envelope surfaces the cpEditUrl link in `_notes`
+    // but omits the open_preview prompt (there's no front-end URL).
+    seedSection('hidden', 'Hidden', SectionType::Channel, [], false);
+
+    $payload = decode($this->registry->execute('upsert_entry', [
+        'section' => 'hidden', 'title' => 'Invisible',
+    ]));
+
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    expect($payload['_notes'])->not->toContain('open_preview');
+    expect($payload['_notes'])->toContain('review and edit');
+    expect($payload['data']['entry']['title'])->toBe('Invisible');
+    expect($payload['data']['entry']['url'])->toBeNull();
+});
+
+it('skips the open_preview prompt on MCP and keeps _notes scoped to the tool narration', function () {
+    /** @var ToolContext $context */
+    $context = Craft::$container->get(ToolContext::class);
+    $context->begin(null, null, ClientType::MCP);
+
+    $payload = decode($this->registry->execute('upsert_entry', [
+        'section' => 'posts', 'title' => 'For MCP',
+    ]));
+
+    expect($payload)->toHaveKeys(['_notes', 'data']);
+    expect($payload['_notes'])->not->toContain('open_preview');
+    expect($payload['_notes'])->not->toContain('review and edit');
+    // The tool's own narration still flows through unchanged.
+    expect($payload['_notes'])->toMatch('/(Created|Updated) entry id=/');
+    expect($payload['data']['entry']['title'])->toBe('For MCP');
+});

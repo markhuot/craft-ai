@@ -48,6 +48,18 @@ class TestCase extends PluginTestCase
     {
         parent::setUp();
 
+        // Laravel's global TrimStrings + ConvertEmptyStringsToNull middleware
+        // rewrite empty/whitespace request params to null before a controller
+        // sees them, so actions that intentionally accept "" or "   " (e.g.
+        // SessionsController treating a blank message as "no message, don't
+        // queue") instead blow up on getRequiredBodyParam(). Craft's own request
+        // pipeline restores these; the Testbench HTTP client doesn't. Skip them
+        // so controllers receive the raw values the front-end posts.
+        $this->withoutMiddleware([
+            \Illuminate\Foundation\Http\Middleware\TrimStrings::class,
+            \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
+        ]);
+
         // Tool execution runs Craft permission checks, so default to an admin
         // identity (the user the install created). Tests verifying permission
         // denial can override the identity in the test body.

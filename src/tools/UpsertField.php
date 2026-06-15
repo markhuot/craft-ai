@@ -167,6 +167,17 @@ class UpsertField extends Tool
                 isError: true,
             );
         }
+        // Craft 6 keys fields by UID and no longer rejects a duplicate handle at
+        // save time, but this tool documents handles as unique within the global
+        // field context. Enforce it on create so agents get a clear error rather
+        // than silently minting a second field with a colliding handle. (Harmless
+        // on Craft 5, which would reject the save anyway.)
+        if (! $isUpdate && Craft::$app->fields->getFieldByHandle($config['handle']) !== null) {
+            return new ToolOutput(
+                sprintf('Could not save field: a field with the handle "%s" already exists.', $config['handle']),
+                isError: true,
+            );
+        }
         // Instantiate the field type directly so its constructor runs the
         // Typecast pass that converts serialized-enum strings (e.g.
         // propagationMethod = 'all') back into the real BackedEnum instances.

@@ -235,14 +235,16 @@ class UpsertDraft extends Tool
         }
 
         if ($isUpdate && ($name !== null || $notes !== null)) {
+            // Craft 5 keeps draft metadata on a 'draft' Yii behavior; Craft 6
+            // moved draftName/draftNotes onto the element itself. Write to
+            // whichever exposes them.
             $behavior = $draft->getBehavior('draft');
-            if ($behavior instanceof DraftBehavior) {
-                if ($name !== null) {
-                    $behavior->draftName = $name;
-                }
-                if ($notes !== null) {
-                    $behavior->draftNotes = $notes;
-                }
+            $target = $behavior instanceof DraftBehavior ? $behavior : $draft;
+            if ($name !== null) {
+                $target->draftName = $name;
+            }
+            if ($notes !== null) {
+                $target->draftNotes = $notes;
             }
         }
 

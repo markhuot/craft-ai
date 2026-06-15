@@ -42,28 +42,20 @@ function ensureOauthTables(): void
 
 /**
  * POST to an OAuth endpoint that reads `parseJsonBody` (e.g. /register).
- * JSON content-type means the `action` query param can't ride in the body,
- * so we POST against the actual URL rule registered by Plugin.php.
+ * `$action` is the controller action route (e.g. craft-ai/oauth/register);
+ * it rides in the `?action=` query param while the JSON payload is the body.
  */
-function postOauthJson(string $url, array $payload) {
-    return test()->http('post', $url)
-        ->withCsrfToken()
-        ->addHeader('Accept', 'application/json')
-        ->addHeader('Content-Type', 'application/json')
-        ->setBody($payload)
-        ->send();
+function postOauthJson(string $action, array $payload) {
+    return test()->postJson('?action='.$action, $payload);
 }
 
 /**
  * POST to an OAuth endpoint that reads body params via getBodyParam (e.g.
- * /token, /authorize POST). Uses the harness's default form-encoded body.
+ * /token, /authorize POST). Form-encoded body; the controller action rides
+ * in the `?action=` query param.
  */
 function postOauthForm(string $action, array $payload) {
-    return test()->http('post', '.well-known/dummy')
-        ->withCsrfToken()
-        ->addHeader('Accept', 'application/json')
-        ->setBody(['action' => $action] + $payload)
-        ->send();
+    return test()->post('?action='.$action, $payload);
 }
 
 /**
@@ -109,8 +101,8 @@ it('registers a public MCP client and returns its identifier', function () {
         'client_name' => 'MCP Inspector',
     ]);
 
-    expect($response->getStatusCode())->toBe(201);
-    $payload = json_decode((string) $response->content, true, 16, JSON_THROW_ON_ERROR);
+    $response->assertStatus(201);
+    $payload = $response->json();
 
     expect($payload['client_id'])->toStartWith('cai_');
     expect($payload['client_name'])->toBe('MCP Inspector');
@@ -132,8 +124,8 @@ it('mints a hashed secret for confidential clients', function () {
         'token_endpoint_auth_method' => 'client_secret_basic',
     ]);
 
-    expect($response->getStatusCode())->toBe(201);
-    $payload = json_decode((string) $response->content, true, 16, JSON_THROW_ON_ERROR);
+    $response->assertStatus(201);
+    $payload = $response->json();
 
     expect($payload)->toHaveKey('client_secret');
     expect($payload['client_secret'])->toBeString();
@@ -146,6 +138,7 @@ it('mints a hashed secret for confidential clients', function () {
 });
 
 it('rejects registration without redirect_uris', function () {
+    $this->withoutExceptionHandling();
     $threw = false;
     try {
         postOauthJson('craft-ai/oauth/register', []);
@@ -156,6 +149,7 @@ it('rejects registration without redirect_uris', function () {
 });
 
 it('rejects registration with a non-http(s) redirect uri scheme', function () {
+    $this->withoutExceptionHandling();
     $threw = false;
     try {
         postOauthJson('craft-ai/oauth/register', [
@@ -193,7 +187,7 @@ it('exchanges a valid authorization code (PKCE) for an access + refresh token', 
     ]);
 
     $response->assertOk();
-    $payload = json_decode((string) $response->content, true, 16, JSON_THROW_ON_ERROR);
+    $payload = $response->json();
 
     expect($payload['token_type'])->toBe('Bearer');
     expect($payload['access_token'])->toBeString();
@@ -203,7 +197,11 @@ it('exchanges a valid authorization code (PKCE) for an access + refresh token', 
 
     // The Cache-Control / Pragma headers protect tokens from intermediary caches.
     // A regression that drops them would leak bearer tokens into reverse-proxy logs.
-    expect($response->headers->get('Cache-Control'))->toBe('no-store');
+    // Laravel's response pipeline merges its own directives in alongside the
+    // controller's `no-store` (e.g. "must-revalidate, no-cache, no-store,
+    // private"), so assert the token-protecting directive is present rather than
+    // pinning the exact header value.
+    expect($response->headers->get('Cache-Control'))->toContain('no-store');
     expect($response->headers->get('Pragma'))->toBe('no-cache');
 
     // Authorization codes are one-shot — the row must be marked consumed so
@@ -243,8 +241,8 @@ it('rejects a token exchange with a mismatched PKCE verifier', function () {
         'code_verifier' => $other['verifier'],
     ]);
 
-    expect($response->getStatusCode())->toBe(400);
-    $payload = json_decode((string) $response->content, true, 16, JSON_THROW_ON_ERROR);
+    $response->assertStatus(400);
+    $payload = $response->json();
     expect($payload['error'])->toBe('invalid_grant');
 
     // The auth code must remain unconsumed so the client can retry with
@@ -278,8 +276,8 @@ it('rejects a token exchange with an expired authorization code', function () {
         'code_verifier' => $pkce['verifier'],
     ]);
 
-    expect($response->getStatusCode())->toBe(400);
-    $payload = json_decode((string) $response->content, true, 16, JSON_THROW_ON_ERROR);
+    $response->assertStatus(400);
+    $payload = $response->json();
     expect($payload['error'])->toBe('invalid_grant');
     expect($payload['error_description'])->toContain('expired');
 });
@@ -307,8 +305,8 @@ it('rejects a token exchange whose redirect_uri does not match the auth code', f
         'code_verifier' => $pkce['verifier'],
     ]);
 
-    expect($response->getStatusCode())->toBe(400);
-    $payload = json_decode((string) $response->content, true, 16, JSON_THROW_ON_ERROR);
+    $response->assertStatus(400);
+    $payload = $response->json();
     expect($payload['error'])->toBe('invalid_grant');
 });
 
@@ -336,8 +334,8 @@ it('rejects a token exchange against an already-consumed authorization code', fu
         'code_verifier' => $pkce['verifier'],
     ]);
 
-    expect($response->getStatusCode())->toBe(400);
-    $payload = json_decode((string) $response->content, true, 16, JSON_THROW_ON_ERROR);
+    $response->assertStatus(400);
+    $payload = $response->json();
     expect($payload['error'])->toBe('invalid_grant');
 });
 
@@ -361,7 +359,7 @@ it('rotates the refresh token on the refresh_token grant', function () {
     ]);
 
     $response->assertOk();
-    $payload = json_decode((string) $response->content, true, 16, JSON_THROW_ON_ERROR);
+    $payload = $response->json();
 
     expect($payload['access_token'])->toBeString();
     expect($payload['refresh_token'])->toBeString();
@@ -394,8 +392,8 @@ it('rejects a refresh_token grant after the original has been revoked', function
         'refresh_token' => $token->refreshToken,
     ]);
 
-    expect($response->getStatusCode())->toBe(400);
-    $payload = json_decode((string) $response->content, true, 16, JSON_THROW_ON_ERROR);
+    $response->assertStatus(400);
+    $payload = $response->json();
     expect($payload['error'])->toBe('invalid_grant');
 });
 
@@ -406,8 +404,8 @@ it('rejects an unsupported grant_type', function () {
         'password' => 'admin',
     ]);
 
-    expect($response->getStatusCode())->toBe(400);
-    $payload = json_decode((string) $response->content, true, 16, JSON_THROW_ON_ERROR);
+    $response->assertStatus(400);
+    $payload = $response->json();
     expect($payload['error'])->toBe('unsupported_grant_type');
 });
 
@@ -442,19 +440,16 @@ it('rejects a confidential client without valid credentials on token exchange', 
         'code_verifier' => $pkce['verifier'],
     ]);
 
-    expect($response->getStatusCode())->toBe(401);
-    $payload = json_decode((string) $response->content, true, 16, JSON_THROW_ON_ERROR);
+    $response->assertStatus(401);
+    $payload = $response->json();
     expect($payload['error'])->toBe('invalid_client');
 });
 
 it('exposes the authorization-server metadata document', function () {
-    $response = test()->http('get', '.well-known/dummy')
-        ->addHeader('Accept', 'application/json')
-        ->setBody(['action' => 'craft-ai/oauth/authorization-server-metadata'])
-        ->send();
+    $response = test()->get('?action=craft-ai/oauth/authorization-server-metadata');
 
     $response->assertOk();
-    $payload = json_decode((string) $response->content, true, 16, JSON_THROW_ON_ERROR);
+    $payload = $response->json();
 
     expect($payload['issuer'])->toBeString();
     expect($payload['authorization_endpoint'])->toBeString();

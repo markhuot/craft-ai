@@ -71,29 +71,19 @@ it('renders the edit form for an existing scheduled agent', function () {
 });
 
 it('404s on an unknown scheduled-agent uid', function () {
-    $threw = false;
-    try {
-        test()->get('admin/ai/scheduled-agents/00000000-0000-0000-0000-000000000000');
-    } catch (\yii\web\NotFoundHttpException) {
-        $threw = true;
-    }
-
-    expect($threw)->toBeTrue();
+    test()->get('admin/ai/scheduled-agents/00000000-0000-0000-0000-000000000000')
+        ->assertNotFound();
 });
 
 it('saves a new scheduled agent, stamping the creating admin as run-as user', function () {
-    $response = test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/scheduled-agents/save',
-            'name' => 'weekly-roundup',
-            'frequency' => 'weekly',
-            'time' => '09:00',
-            'dayOfWeek' => '1',
-            'prompt' => 'Create a post about LLM news.',
-            'enabled' => '1',
-        ])
-        ->send();
+    $response = test()->post('admin?action=craft-ai/scheduled-agents/save', [
+        'name' => 'weekly-roundup',
+        'frequency' => 'weekly',
+        'time' => '09:00',
+        'dayOfWeek' => '1',
+        'prompt' => 'Create a post about LLM news.',
+        'enabled' => '1',
+    ]);
 
     $response->assertRedirect();
     $location = $response->headers->get('Location');
@@ -123,18 +113,14 @@ it('updates an existing scheduled agent in place, preserving the creator', funct
     ]);
     $uid = scheduledAgentsBySettings()[0]->uid;
 
-    test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/scheduled-agents/save',
-            'uid' => $uid,
-            'name' => 'weekly-roundup',
-            'frequency' => 'daily',
-            'time' => '08:00',
-            'prompt' => 'Rewritten prompt.',
-            'enabled' => '1',
-        ])
-        ->send();
+    test()->post('admin?action=craft-ai/scheduled-agents/save', [
+        'uid' => $uid,
+        'name' => 'weekly-roundup',
+        'frequency' => 'daily',
+        'time' => '08:00',
+        'prompt' => 'Rewritten prompt.',
+        'enabled' => '1',
+    ]);
 
     $agents = scheduledAgentsBySettings();
     expect($agents)->toHaveCount(1);
@@ -164,18 +150,14 @@ it('clears the staged pending slot on save so the schedule recomputes', function
     $history->status = ScheduledRunRecord::STATUS_QUEUED;
     $history->save();
 
-    test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/scheduled-agents/save',
-            'uid' => $uid,
-            'name' => 'r',
-            'frequency' => 'daily',
-            'time' => '10:00',
-            'prompt' => 'p',
-            'enabled' => '1',
-        ])
-        ->send();
+    test()->post('admin?action=craft-ai/scheduled-agents/save', [
+        'uid' => $uid,
+        'name' => 'r',
+        'frequency' => 'daily',
+        'time' => '10:00',
+        'prompt' => 'p',
+        'enabled' => '1',
+    ]);
 
     // The stale precomputed slot is gone; the run history is preserved.
     expect(ScheduledRunRecord::find()->where(['scheduledAgentUid' => $uid, 'status' => ScheduledRunRecord::STATUS_PENDING])->all())->toHaveCount(0);
@@ -196,17 +178,13 @@ it('preserves automations and slash commands across a scheduled-agent save', fun
         ],
     ]);
 
-    test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/scheduled-agents/save',
-            'name' => 'new-schedule',
-            'frequency' => 'daily',
-            'time' => '09:00',
-            'prompt' => 'Scheduled prompt.',
-            'enabled' => '1',
-        ])
-        ->send();
+    test()->post('admin?action=craft-ai/scheduled-agents/save', [
+        'name' => 'new-schedule',
+        'frequency' => 'daily',
+        'time' => '09:00',
+        'prompt' => 'Scheduled prompt.',
+        'enabled' => '1',
+    ]);
 
     /** @var Settings $settings */
     $settings = $plugin->getSettings();
@@ -225,16 +203,12 @@ it('preserves scheduled agents across an automation save', function () {
         ],
     ]);
 
-    test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/automations/save',
-            'name' => 'new-rule',
-            'event' => Automation::EVENT_DRAFT_SAVED,
-            'prompt' => 'Automation prompt.',
-            'enabled' => '1',
-        ])
-        ->send();
+    test()->post('admin?action=craft-ai/automations/save', [
+        'name' => 'new-rule',
+        'event' => Automation::EVENT_DRAFT_SAVED,
+        'prompt' => 'Automation prompt.',
+        'enabled' => '1',
+    ]);
 
     /** @var Settings $settings */
     $settings = $plugin->getSettings();
@@ -249,15 +223,11 @@ it('preserves scheduled agents across a slash-command save', function () {
         ],
     ]);
 
-    test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/commands/save',
-            'name' => 'summarize',
-            'prompt' => 'Summarize {args}.',
-            'enabled' => '1',
-        ])
-        ->send();
+    test()->post('admin?action=craft-ai/commands/save', [
+        'name' => 'summarize',
+        'prompt' => 'Summarize {args}.',
+        'enabled' => '1',
+    ]);
 
     /** @var Settings $settings */
     $settings = $plugin->getSettings();
@@ -267,17 +237,13 @@ it('preserves scheduled agents across a slash-command save', function () {
 it('re-renders the edit form on validation failure rather than persisting bad data', function () {
     $before = scheduledAgentsBySettings();
 
-    $response = test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/scheduled-agents/save',
-            'name' => 'invalid',
-            'frequency' => 'custom',
-            'cronExpression' => 'definitely not cron',
-            'prompt' => 'p',
-            'enabled' => '1',
-        ])
-        ->send();
+    $response = test()->post('admin?action=craft-ai/scheduled-agents/save', [
+        'name' => 'invalid',
+        'frequency' => 'custom',
+        'cronExpression' => 'definitely not cron',
+        'prompt' => 'p',
+        'enabled' => '1',
+    ]);
 
     // A failed save renders the form template directly (200) instead of
     // redirecting, so the user keeps their in-flight edits.
@@ -308,13 +274,9 @@ it('deletes a scheduled agent along with its run state and history', function ()
     $run->status = ScheduledRunRecord::STATUS_QUEUED;
     $run->save();
 
-    $response = test()->http('post', 'admin')
-        ->withCsrfToken()
-        ->setBody([
-            'action' => 'craft-ai/scheduled-agents/delete',
-            'uid' => $deleteMe->uid,
-        ])
-        ->send();
+    $response = test()->post('admin?action=craft-ai/scheduled-agents/delete', [
+        'uid' => $deleteMe->uid,
+    ]);
 
     $response->assertRedirect();
 
